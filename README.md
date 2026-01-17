@@ -8,13 +8,26 @@ A unified web application hosting two platforms:
 
 ```
 Rooted-Web-App/
-├── machines/          # Machine IoT platform (BLE provisioning)
-│   ├── src/          # Web frontend (React + Web Bluetooth)
-│   └── pi-src/       # Raspberry Pi BLE service (Python)
-├── planner/          # Rooted Planner platform (Farm ERP)
-│   └── src/          # Farm management features
-├── shared/           # Shared components and utilities
-└── docs/             # Documentation
+├── src/                    # Frontend source
+│   ├── machines/          # Machine IoT platform
+│   │   ├── device-discovery/
+│   │   ├── wifi-provisioning/
+│   │   ├── dashboard/
+│   │   └── lib/
+│   ├── planner/           # Rooted Planner platform
+│   └── lib/               # Shared frontend utilities
+├── apps/
+│   └── api/               # Backend API server
+│       ├── src/
+│       │   ├── machine-domain/
+│       │   ├── planner-domain/
+│       │   └── lib/
+│       └── prisma/        # Database schema
+├── shared/                # Shared UI components
+│   └── ui/
+├── pi-src/                # Raspberry Pi BLE service
+├── docker/                # Docker configuration
+└── docs/                  # Documentation
 ```
 
 See [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md) for detailed structure.
@@ -39,21 +52,23 @@ Microgreen farm management application for production workflow management.
 
 ```mermaid
 graph TB
-    subgraph "Web Application"
+    subgraph "Frontend (Vite)"
         ROUTER[React Router]
-        MACHINES[Machine IoT Platform]
-        PLANNER[Rooted Planner Platform]
-        SHARED[Shared Components]
+        MACHINES[Machine IoT]
+        PLANNER[Rooted Planner]
+        SHARED[Shared UI]
     end
     
-    subgraph "Machine IoT Backend"
+    subgraph "Backend API (Fastify)"
+        API[tRPC Server]
+        MACHINE_DOMAIN[Machine Domain]
+        PLANNER_DOMAIN[Planner Domain]
+    end
+    
+    subgraph "Infrastructure"
         PI[Raspberry Pi + BLE]
-    end
-    
-    subgraph "Planner Backend"
-        API[tRPC + Fastify]
         DB[(PostgreSQL)]
-        REDIS[(Redis)]
+        REDIS[(Redis Cache)]
     end
     
     ROUTER --> MACHINES
@@ -62,11 +77,21 @@ graph TB
     PLANNER --> SHARED
     MACHINES -.BLE.-> PI
     PLANNER --> API
-    API --> DB
+    API --> MACHINE_DOMAIN
+    API --> PLANNER_DOMAIN
+    MACHINE_DOMAIN --> DB
+    PLANNER_DOMAIN --> DB
     API --> REDIS
 ```
 
 ## Setup
+
+### Prerequisites
+- Node.js 18+
+- pnpm 9+
+- Docker & Docker Compose
+
+### Quick Start
 
 ```bash
 # Clone repository
@@ -76,8 +101,76 @@ cd Rooted-Web-App
 # Install dependencies
 pnpm install
 
-# Start development
-pnpm dev
+# Start infrastructure (PostgreSQL + Redis)
+docker compose -f docker/docker-compose.yml up -d
+
+# Setup environment
+cp .env.example .env
+cp apps/api/.env.example apps/api/.env
+
+# Run database migrations
+cd apps/api
+pnpm prisma migrate dev
+cd ../..
+
+# Start development servers
+pnpm dev              # Frontend (port 5173)
+cd apps/api && pnpm dev  # Backend API (port 3001)
+```
+
+### Environment Variables
+
+**Root `.env`:**
+```env
+VITE_API_URL=http://localhost:3001
+VITE_CLERK_PUBLISHABLE_KEY=your_clerk_key
+```
+
+**`apps/api/.env`:**
+```env
+DATABASE_URL=postgresql://rooted:rooted_dev_password@localhost:5433/rooted_planner
+REDIS_URL=redis://localhost:6379
+CLERK_SECRET_KEY=your_clerk_secret
+PORT=3001
+```
+
+## Development
+
+### Frontend Development
+```bash
+pnpm dev  # Starts Vite dev server on port 5173
+```
+
+### Backend Development
+```bash
+cd apps/api
+pnpm dev  # Starts Fastify server on port 3001
+```
+
+### Docker Commands
+```bash
+# Start all services
+docker compose -f docker/docker-compose.yml up -d
+
+# View logs
+docker compose -f docker/docker-compose.yml logs -f
+
+# Stop services
+docker compose -f docker/docker-compose.yml down
+```
+
+### Database Management
+```bash
+cd apps/api
+
+# Generate Prisma client
+pnpm prisma generate
+
+# Create migration
+pnpm prisma migrate dev --name migration_name
+
+# Reset database
+pnpm prisma migrate reset
 ```
 
 ## Documentation
@@ -85,6 +178,7 @@ pnpm dev
 - [Project Structure](docs/PROJECT_STRUCTURE.md) - Detailed file organization
 - [Style Guide](docs/STYLE.md) - Code conventions and patterns
 - [Agent Guide](docs/AGENT.md) - Development workflow
+- [Database Schema](docs/DATABASE_SCHEMA.md) - Database design
 
 ### Machine IoT
 - [Requirements](docs/machine-iot/REQUIREMENTS.md) - Business requirements
@@ -96,25 +190,24 @@ pnpm dev
 
 ## Tech Stack
 
-### Frontend (Both Platforms)
+### Frontend
 - React 18 + TypeScript
 - Vite
 - TailwindCSS + Shadcn UI
 - React Router
+- Zustand (state management)
+
+### Backend
+- Fastify
+- tRPC
+- Prisma ORM
+- PostgreSQL
+- Redis
+- Clerk (authentication)
 
 ### Machine IoT Specific
 - Web Bluetooth API
-- Zustand (state)
-- IndexedDB (persistence)
 - Python + bluezero (Raspberry Pi)
-
-### Rooted Planner Specific
-- tRPC + React Query
-- Fastify (backend)
-- Prisma ORM
-- PostgreSQL + RLS
-- Clerk (auth)
-- Redis (cache)
 
 ## Contributing
 
