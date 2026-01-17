@@ -3,13 +3,15 @@ import 'dotenv/config';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { clerkPlugin } from '@clerk/fastify';
+import { fastifyTRPCPlugin } from '@trpc/server/adapters/fastify';
 
-import { createLogger } from './lib/logger/index.js';
+import { createLogger } from './lib/logger/logger.js';
 import { errorHandler, NotFoundError } from './lib/errors/index.js';
-import { farmAuthMiddleware } from './lib/auth/index.js';
-import { machineRouter } from './machine-domain/router/router.js';
+import { farmAuthMiddleware } from './lib/auth/middleware.js';
+import { createContext } from './lib/trpc/context.js';
+import { appRouter } from './lib/trpc/router.js';
 
-import type { LogLevel, Environment } from './lib/logger/index.js';
+import type { LogLevel, Environment } from './lib/logger/types.js';
 
 const PORT = parseInt(process.env.PORT || '8000', 10);
 const HOST = process.env.HOST || '0.0.0.0';
@@ -64,13 +66,13 @@ async function main() {
     return { status: 'ok', timestamp: new Date().toISOString() };
   });
 
-  await app.register(machineRouter);
-
-  // TODO: Add tRPC router
-  // app.register(fastifyTRPCPlugin, {
-  //   prefix: '/trpc',
-  //   trpcOptions: { router: appRouter, createContext },
-  // });
+  await app.register(fastifyTRPCPlugin, {
+    prefix: '/trpc',
+    trpcOptions: {
+      router: appRouter,
+      createContext,
+    },
+  });
 
   try {
     await app.listen({ port: PORT, host: HOST });

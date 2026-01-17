@@ -26,7 +26,6 @@ Rooted-Web-App/
 ├── shared/                # Shared UI components
 │   └── ui/
 ├── pi-src/                # Raspberry Pi BLE service
-├── docker/                # Docker configuration
 └── docs/                  # Documentation
 ```
 

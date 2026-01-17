@@ -1,2 +1,1 @@
-// Machine IoT platform placeholder
-export {};
+export { MachinesPage } from './MachinesPage';

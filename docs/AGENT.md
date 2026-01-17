@@ -571,6 +571,8 @@ AWS_SECRET_ACCESS_KEY=""
 
 ### 1. Session Documentation
 - **Document all work**: Create session logs in `docs/agentic-sessions/`
+- **Research Best Practice**: When starting a new session
+search the internet for best practices related to the task at hand.
 - **Session format**: `YYYY-MM-DD-session-name.md` (e.g., `2024-01-15-product-feature-implementation.md`)
 - **Include user name**: Document which user/developer the agent was assisting
 - **Include**: All prompts, responses, code changes, and decisions made during the session

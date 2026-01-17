@@ -1,2 +1,1 @@
-// Rooted Planner platform placeholder
-export {};
+export { PlannerPage } from './PlannerPage';

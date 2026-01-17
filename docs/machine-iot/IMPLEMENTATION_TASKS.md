@@ -162,7 +162,7 @@ Sequential tasks to implement machine onboarding functionality.
 ## Phase 7: Pi Integration (Minimal for Onboarding)
 
 ### Task 7.1: Update Pi BLE Service
-**File**: `machines/pi-src/provisioner.py`
+**File**: `pi-src/provisioner.py`
 
 - [ ] Ensure device name is set correctly (will show in BLE picker)
 - [ ] Verify service UUID matches: `322486ee-3b18-476d-86ae-2481eafaea9a`

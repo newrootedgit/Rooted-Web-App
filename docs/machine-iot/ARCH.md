@@ -380,27 +380,15 @@ export class MachineGATTClient {
 ### Python Service Structure
 
 ```
-machines/pi-src/
-├── main.py                 # Service entry point
-├── ble/
-│   ├── __init__.py
-│   ├── peripheral.py       # bluezero GATT server
-│   ├── characteristics.py  # GATT characteristic handlers
-│   └── constants.py        # UUIDs and configuration
-├── wifi/
-│   ├── __init__.py
-│   ├── manager.py          # WiFi configuration logic
-│   └── status.py           # Connection status monitoring
-├── config/
-│   ├── __init__.py
-│   └── settings.py         # Service configuration
-└── requirements.txt        # Python dependencies
+pi-src/
+├── provisioner.py                 # Service entry point
+└── requirements.txt               # Python dependencies
 ```
 
 ### BLE Peripheral Implementation
 
 ```python
-# machines/pi-src/ble/peripheral.py
+# pi-src/provisioner.py
 from bluezero import peripheral
 from bluezero import adapter
 
@@ -475,7 +463,7 @@ class MachinePeripheral:
 ### WiFi Management
 
 ```python
-# machines/pi-src/wifi/manager.py
+# pi-src/provisioner.py (WiFi manager functions)
 import subprocess
 import json
 
@@ -628,8 +616,7 @@ sudo apt install -y python3-pip bluez
 pip3 install bluezero
 
 # Copy service files
-sudo cp machine-iot.service /etc/systemd/system/
-sudo cp -r machines/pi-src /opt/machine-iot/
+sudo cp -r pi-src /opt/machine-iot/
 
 # Enable and start service
 sudo systemctl enable machine-iot

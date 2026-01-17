@@ -99,23 +99,9 @@ Rooted-Web-App/
 │           ├── pages/
 │           └── types.ts
 │
-├── machines/                          # Raspberry Pi BLE service (Python)
-│   └── pi-src/
-│       ├── main.py                    # Service entry point
-│       ├── ble/
-│       │   ├── __init__.py
-│       │   ├── peripheral.py          # bluezero GATT server
-│       │   ├── characteristics.py     # GATT characteristic handlers
-│       │   └── constants.py           # Service UUIDs
-│       ├── wifi/
-│       │   ├── __init__.py
-│       │   ├── manager.py             # WiFi configuration (NetworkManager)
-│       │   └── status.py              # Connection status monitoring
-│       ├── config/
-│       │   ├── __init__.py
-│       │   └── settings.py            # Service configuration
-│       ├── requirements.txt           # Python dependencies
-│       └── machine-iot.service        # systemd service file
+├── pi-src/                            # Raspberry Pi BLE service (Python)
+│   ├── provisioner.py                 # Service entry point
+│   └── requirements.txt               # Python dependencies
 │
 ├── apps/                              # Backend services
 │   └── api/                           # Fastify + tRPC API
@@ -157,9 +143,9 @@ Rooted-Web-App/
 - **Route**: `/machines/*`
 - **Technology**: Pure frontend (React + Web Bluetooth API)
 - **State**: Client-side only (Zustand/Context + IndexedDB)
-- **Backend**: None (direct BLE communication to devices)
-- **Authentication**: Not required (local device management)
-- **Pi Service**: `machines/pi-src/` (Python, deployed to Raspberry Pi)
+- **Backend**: tRPC API for device management (`apps/api/src/machine-domain/`)
+- **Authentication**: Clerk (shared with Planner)
+- **Pi Service**: `pi-src/` (Python, deployed to Raspberry Pi)
 
 ### Rooted Planner
 - **Source**: `src/planner/`

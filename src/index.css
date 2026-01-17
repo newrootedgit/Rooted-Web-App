@@ -1,5 +1,5 @@
 @import "tailwindcss";
-@import '../shared/src/styles/tokens.css';
+@import '../shared/ui/styles/tokens.css';
 @import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
@@ -99,7 +99,7 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: var(--font-family);
+    font-family: 'Bai Jamjuree', sans-serif;
     line-height: var(--line-height-normal);
   }
 
