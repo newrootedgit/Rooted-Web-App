@@ -1,46 +1,69 @@
-# Rooted Planner
+# Rooted Web App
 
-A streamlined microgreen farm management application for single-farm operations. Manage your complete production workflow from order creation to harvest completion.
+A unified web application hosting two platforms:
+1. **Machine IoT** - BLE-based device provisioning for Raspberry Pi machines
+2. **Rooted Planner** - Microgreen farm management ERP system
+
+## Project Structure
+
+```
+Rooted-Web-App/
+├── machines/          # Machine IoT platform (BLE provisioning)
+│   ├── src/          # Web frontend (React + Web Bluetooth)
+│   └── pi-src/       # Raspberry Pi BLE service (Python)
+├── planner/          # Rooted Planner platform (Farm ERP)
+│   └── src/          # Farm management features
+├── shared/           # Shared components and utilities
+└── docs/             # Documentation
+```
+
+See [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md) for detailed structure.
+
+## Platforms
+
+### Machine IoT
+Web-based BLE provisioning for IoT devices. Scan, connect, and configure WiFi on Raspberry Pi machines directly from your browser.
+
+- **Technology**: React + Web Bluetooth API + Python (bluezero)
+- **Routes**: `/machines/*`
+- **Browser Support**: Chrome, Edge (desktop & Android)
+
+### Rooted Planner
+Microgreen farm management application for production workflow management.
+
+- **Technology**: React + tRPC + Fastify + PostgreSQL
+- **Routes**: `/planner/*`
+- **Authentication**: Clerk
 
 ## Architecture
 
 ```mermaid
 graph TB
-    subgraph "Client Layer"
-        WEB[React + Vite Web App]
+    subgraph "Web Application"
+        ROUTER[React Router]
+        MACHINES[Machine IoT Platform]
+        PLANNER[Rooted Planner Platform]
+        SHARED[Shared Components]
     end
     
-    subgraph "Authentication"
-        CLERK[Clerk Auth Provider]
+    subgraph "Machine IoT Backend"
+        PI[Raspberry Pi + BLE]
     end
     
-    subgraph "Application Layer"
-        tRPC[tRPC Router + Fastify]
-        CACHE[Redis Cache]
+    subgraph "Planner Backend"
+        API[tRPC + Fastify]
+        DB[(PostgreSQL)]
+        REDIS[(Redis)]
     end
     
-    subgraph "Data Layer"
-        DB[(PostgreSQL + RLS)]
-        FILES[Local File Storage]
-    end
-    
-    subgraph "Infrastructure"
-        CF[Cloudflare CDN/SSL]
-        EC2[AWS EC2 Container]
-        DOCKER[Docker Compose]
-    end
-    
-    WEB --> CF
-    CF --> tRPC
-    WEB --> CLERK
-    tRPC --> CLERK
-    tRPC --> CACHE
-    tRPC --> DB
-    tRPC --> FILES
-    EC2 --> DOCKER
-    DOCKER --> tRPC
-    DOCKER --> DB
-    DOCKER --> CACHE
+    ROUTER --> MACHINES
+    ROUTER --> PLANNER
+    MACHINES --> SHARED
+    PLANNER --> SHARED
+    MACHINES -.BLE.-> PI
+    PLANNER --> API
+    API --> DB
+    API --> REDIS
 ```
 
 ## Setup
@@ -48,38 +71,55 @@ graph TB
 ```bash
 # Clone repository
 git clone <repo-url>
-cd rooted-planner-erp
+cd Rooted-Web-App
 
 # Install dependencies
 pnpm install
 
-# Setup environment
-cp .env.example .env.local
-# Configure your environment variables
-
-# Start development environment
-docker-compose up -d postgres redis
+# Start development
 pnpm dev
 ```
 
-## Contributing
+## Documentation
 
-1. Read the documentation in `docs/`:
-   - `ARCH.md` - System architecture
-   - `STYLE.md` - Coding standards
-   - `REQUIREMENTS.md` - Business requirements
-   - `AGENT.md` - Development guide
+- [Project Structure](docs/PROJECT_STRUCTURE.md) - Detailed file organization
+- [Style Guide](docs/STYLE.md) - Code conventions and patterns
+- [Agent Guide](docs/AGENT.md) - Development workflow
 
-2. Create feature branch from `main`
-3. Follow the style guide and patterns
-4. Document your session in `docs/agentic-sessions/`
-5. Submit pull request
+### Machine IoT
+- [Requirements](docs/machine-iot/REQUIREMENTS.md) - Business requirements
+- [Architecture](docs/machine-iot/ARCH.md) - Technical design
+
+### Rooted Planner
+- [Requirements](docs/rooted-planner/REQUIREMENTS.md) - Business requirements
+- [Architecture](docs/rooted-planner/ARCH.md) - Technical design
 
 ## Tech Stack
 
-- **Frontend**: React + Vite + TailwindCSS + Shadcn
-- **Backend**: Fastify + tRPC + Prisma
-- **Database**: PostgreSQL with Row-Level Security
-- **Auth**: Clerk
-- **Cache**: Redis
-- **Deployment**: Docker + AWS EC2
+### Frontend (Both Platforms)
+- React 18 + TypeScript
+- Vite
+- TailwindCSS + Shadcn UI
+- React Router
+
+### Machine IoT Specific
+- Web Bluetooth API
+- Zustand (state)
+- IndexedDB (persistence)
+- Python + bluezero (Raspberry Pi)
+
+### Rooted Planner Specific
+- tRPC + React Query
+- Fastify (backend)
+- Prisma ORM
+- PostgreSQL + RLS
+- Clerk (auth)
+- Redis (cache)
+
+## Contributing
+
+1. Read documentation in `docs/`
+2. Create feature branch from `main`
+3. Follow style guide and patterns
+4. Document session in `docs/agentic-sessions/`
+5. Submit pull request
