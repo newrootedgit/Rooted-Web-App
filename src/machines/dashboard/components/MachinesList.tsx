@@ -1,9 +1,18 @@
 import type { ScanState } from '../hooks/useBluetoothScanner';
 import type { MachineGATTClient } from '../../lib/bluetooth';
-import { Wifi, WifiOff } from 'lucide-react';
+import { Wifi, WifiOff, Loader2 } from 'lucide-react';
 import styles from '../styles/MachinesList.module.css';
 
+interface Machine {
+  id: string;
+  name: string;
+  deviceId: string;
+  createdAt: Date | null;
+}
+
 interface MachinesListProps {
+  machines: Machine[];
+  isLoading: boolean;
   isBluetoothSupported: boolean;
   scanState: ScanState;
   scanError: string | null;
@@ -13,6 +22,8 @@ interface MachinesListProps {
 }
 
 export default function MachinesList({
+  machines,
+  isLoading,
   isBluetoothSupported,
   scanState,
   scanError,
@@ -30,27 +41,41 @@ export default function MachinesList({
         <p className={styles.error}>{scanError}</p>
       )}
 
-      {connectedDevice ? (
+      {isLoading ? (
+        <div className={styles.loadingWrapper}>
+          <Loader2 className={styles.spinner} size={24} />
+          <p>Loading machines...</p>
+        </div>
+      ) : machines.length > 0 ? (
+        <div className={styles.machinesList}>
+          {machines.map((machine) => (
+            <div key={machine.id} className={styles.deviceCard}>
+              <div className={styles.deviceInfo}>
+                <span className={styles.deviceName}>{machine.name}</span>
+                <span className={styles.deviceId}>{machine.deviceId}</span>
+              </div>
+              <div className={styles.provisionWrapper}>
+                <Wifi size={20} />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className={styles.emptyMessage}>
+          No machines registered yet. Click "Add Machine" to get started.
+        </p>
+      )}
+
+      {connectedDevice && (
         <div className={styles.deviceCard}>
           <div className={styles.deviceInfo}>
             <span className={styles.deviceName}>{connectedDevice.name}</span>
-            <span className={styles.deviceStatus}>Connected</span>
-          </div>
-          <div className={styles.provisionWrapper}>
-            <button className={styles.provisionButton}>
-              Provision WiFi
-              <span className={styles.provisioningDot} />
-            </button>
-            {true ? <Wifi size={20} /> : <WifiOff size={20} />}
+            <span className={styles.deviceStatus}>Connected via Bluetooth</span>
           </div>
           <button onClick={onDisconnect} className={styles.disconnectButton}>
             Disconnect
           </button>
         </div>
-      ) : (
-        <p className={styles.emptyMessage}>
-          No machines connected yet. Click "Scan for Devices" to get started.
-        </p>
       )}
 
       <button

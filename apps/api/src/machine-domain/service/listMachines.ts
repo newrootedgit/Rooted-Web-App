@@ -7,5 +7,11 @@ export async function listMachines(
   tenantId: string,
   farmId: string
 ): Promise<Machine[]> {
+  // If no tenant/farm context, return empty list
+  // (user needs to set X-Farm-Id header for farm-specific queries)
+  if (!tenantId || !farmId) {
+    return [];
+  }
+
   return getMachinesByFarm(prisma, tenantId, farmId);
 }

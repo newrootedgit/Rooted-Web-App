@@ -1,0 +1,189 @@
+import { useState, useCallback, useRef, useEffect } from 'react';
+import { scanForDevice, MachineGATTClient } from '../../lib/bluetooth';
+import { STATUS_CODES, StatusCode } from '../../lib/bluetooth/constants';
+import { trpc } from '../../../lib/trpc';
+
+export type OnboardStep = 'scan' | 'onboarding' | 'wifi' | 'connecting' | 'registering' | 'success' | 'failed';
+
+interface UseOnboardMachineOptions {
+  tenantId: string;
+  farmId: string;
+  onSuccess?: () => void;
+}
+
+export function useOnboardMachine({ tenantId, farmId, onSuccess }: UseOnboardMachineOptions) {
+  const [step, setStep] = useState<OnboardStep>('scan');
+  const [statusMessage, setStatusMessage] = useState('');
+  const [device, setDevice] = useState<MachineGATTClient | null>(null);
+  const [isScanning, setIsScanning] = useState(false);
+  const [deviceName, setDeviceName] = useState('');
+
+  const createMachine = trpc.machines.create.useMutation();
+  const trpcUtils = trpc.useUtils();
+
+  const stepRef = useRef(step);
+  useEffect(() => {
+    stepRef.current = step;
+  }, [step]);
+
+  const deviceInfoRef = useRef<{ name: string; id: string } | null>(null);
+
+  const isDeviceRegistered = useCallback(async (deviceId: string): Promise<boolean> => {
+    const existingMachine = await trpcUtils.machines.byDeviceId.fetch({ deviceId });
+    return existingMachine !== null;
+  }, [trpcUtils]);
+
+  const registerMachine = useCallback(async () => {
+    if (!deviceInfoRef.current) return;
+
+    setStep('registering');
+    setStatusMessage('Checking if device is already registered...');
+
+    try {
+      const alreadyRegistered = await isDeviceRegistered(deviceInfoRef.current.id);
+      if (alreadyRegistered) {
+        setStatusMessage('This device is already registered');
+        setStep('failed');
+        return;
+      }
+
+      setStatusMessage('Registering machine...');
+      await createMachine.mutateAsync({
+        name: deviceInfoRef.current.name,
+        deviceId: deviceInfoRef.current.id,
+      });
+      setStatusMessage('Machine registered successfully!');
+      setStep('success');
+      onSuccess?.();
+    } catch (err) {
+      const error = err as Error;
+      setStatusMessage(error.message || 'Failed to register machine');
+      setStep('failed');
+    }
+  }, [createMachine, isDeviceRegistered, onSuccess]);
+
+  const handleStatusChange = useCallback((status: StatusCode) => {
+    const currentStep = stepRef.current;
+    console.log('Status received:', status, 'Current step:', currentStep);
+
+    switch (status) {
+      case STATUS_CODES.ONBOARDED:
+        setStatusMessage('Device onboarded successfully');
+        setStep('wifi');
+        break;
+      case STATUS_CODES.CONNECTING:
+        setStatusMessage('Connecting to WiFi...');
+        break;
+      case STATUS_CODES.CONNECTED:
+        setStatusMessage('WiFi connected! Registering machine...');
+        registerMachine();
+        break;
+      case STATUS_CODES.FAILED:
+        if (currentStep === 'connecting') {
+          setStatusMessage('Connection failed. Please try again.');
+          setStep('failed');
+        }
+        break;
+    }
+  }, [registerMachine]);
+
+  const handleOnboarding = useCallback(async (client: MachineGATTClient) => {
+    setStatusMessage('Sending onboarding code...');
+
+    try {
+      await client.writeOnboardingCode();
+      setStatusMessage('Sending user info...');
+      await client.writeUserInfo({ tenant_id: tenantId, farm_id: farmId });
+      setStatusMessage('Waiting for device confirmation...');
+    } catch (err) {
+      const error = err as Error;
+      setStatusMessage(error.message || 'Onboarding failed');
+      setStep('failed');
+    }
+  }, [tenantId, farmId]);
+
+  const scan = useCallback(async () => {
+    setIsScanning(true);
+    setStatusMessage('');
+
+    try {
+      const bluetoothDevice = await scanForDevice();
+
+      deviceInfoRef.current = {
+        name: bluetoothDevice.name || 'Unknown Device',
+        id: bluetoothDevice.id,
+      };
+      setDeviceName(bluetoothDevice.name || 'Unknown Device');
+
+      const client = new MachineGATTClient(bluetoothDevice, {
+        onStatusChange: handleStatusChange,
+        onDisconnect: () => {
+          const currentStep = stepRef.current;
+          console.log('BLE disconnected, current step:', currentStep);
+          setDevice(null);
+          if (currentStep !== 'success') {
+            setStatusMessage('Device disconnected');
+          }
+        },
+      });
+
+      await client.connect();
+      await client.subscribeToStatus();
+
+      setDevice(client);
+      setStep('onboarding');
+
+      await handleOnboarding(client);
+    } catch (err) {
+      const error = err as Error;
+      if (error.message?.includes('cancelled')) {
+        setIsScanning(false);
+        return;
+      }
+      setStatusMessage(error.message || 'Failed to connect');
+      setStep('failed');
+    } finally {
+      setIsScanning(false);
+    }
+  }, [handleStatusChange, handleOnboarding]);
+
+  const submitWifi = useCallback(async (ssid: string, password: string) => {
+    if (!device || !ssid) return;
+
+    setStep('connecting');
+    setStatusMessage('Sending WiFi credentials...');
+
+    try {
+      await device.writeWiFiCredentials(ssid, password);
+    } catch (err) {
+      const error = err as Error;
+      setStatusMessage(error.message || 'Failed to send credentials');
+      setStep('failed');
+    }
+  }, [device]);
+
+  const reset = useCallback(() => {
+    device?.disconnect();
+    setDevice(null);
+    setStep('scan');
+    setStatusMessage('');
+    deviceInfoRef.current = null;
+  }, [device]);
+
+  const retry = useCallback(() => {
+    setStep('scan');
+    setStatusMessage('');
+  }, []);
+
+  return {
+    step,
+    statusMessage,
+    isScanning,
+    isConnected: !!device,
+    deviceName,
+    scan,
+    submitWifi,
+    reset,
+    retry,
+  };
+}

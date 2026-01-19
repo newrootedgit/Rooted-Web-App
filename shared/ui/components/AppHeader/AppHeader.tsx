@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
-import { ChevronDown, Cpu, Calendar } from 'lucide-react';
+import { ChevronDown, Cpu, Calendar, User } from 'lucide-react';
+import { UserButton } from '@clerk/clerk-react';
 import { Logo } from '../Logo';
 
 export type AppType = 'machines' | 'planner';
@@ -69,6 +70,22 @@ export function AppHeader({ currentApp, onAppChange }: AppHeaderProps) {
             </ul>
           )}
         </div>
+      </div>
+      <div className="relative flex items-center justify-center">
+        <UserButton
+          appearance={{
+            elements: {
+              userButtonTrigger: 'focus:shadow-none focus:outline-none',
+              avatarBox: 'h-11 w-11 rounded-full bg-white/10 hover:bg-white/20 transition-colors',
+              avatarImage: 'opacity-0',
+              userButtonPopoverCard: 'shadow-lg border border-border',
+              userButtonPopoverActionButton: 'hover:bg-muted',
+              userButtonPopoverActionButtonText: 'text-foreground',
+              userButtonPopoverFooter: 'hidden',
+            },
+          }}
+        />
+        <User size={20} className="absolute text-white pointer-events-none" />
       </div>
     </header>
   );

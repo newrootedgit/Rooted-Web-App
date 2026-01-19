@@ -6,9 +6,9 @@ export const SSID_UUID = '322486ee-3b18-476d-86ae-2481eafaea9b';
 export const PASS_UUID = '322486ee-3b18-476d-86ae-2481eafaea9c';
 export const STATUS_UUID = '322486ee-3b18-476d-86ae-2481eafaea9d';
 export const ONBOARD_UUID = '322486ee-3b18-476d-86ae-2481eafaea9e';
-
+export const USER_INFO_UUID = '322486ee-3b18-476d-86ae-2481eafaea9f';
 // Hardcoded onboarding code - must match Pi
-export const ONBOARDING_CODE = 'Rooted-Robotics';
+export const ONBOARDING_CODE = 'RootedRobotics123';
 
 // Status codes from device
 export const STATUS_CODES = {

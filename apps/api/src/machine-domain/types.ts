@@ -9,6 +9,10 @@ export const getMachineParamsSchema = z.object({
   id: z.string().uuid(),
 });
 
+export const getByDeviceIdSchema = z.object({
+  deviceId: z.string().min(1),
+});
+
 export type AddMachineInput = z.infer<typeof addMachineSchema>;
 export type GetMachineParams = z.infer<typeof getMachineParamsSchema>;
 

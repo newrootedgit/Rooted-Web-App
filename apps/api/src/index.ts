@@ -2,7 +2,6 @@ import 'dotenv/config';
 
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
-import { clerkPlugin } from '@clerk/fastify';
 import { fastifyTRPCPlugin } from '@trpc/server/adapters/fastify';
 
 import { createLogger } from './lib/logger/logger.js';
@@ -31,7 +30,8 @@ async function main() {
 
   await app.register(cors, { origin: true });
   await app.register(errorHandler, { logger });
-  await app.register(clerkPlugin);
+  // Note: Not using clerkPlugin as it doesn't support clock skew configuration
+  // Our farmAuthMiddleware handles auth with clock skew tolerance
   await app.register(farmAuthMiddleware, { logger });
 
   app.addHook('onRequest', (request, _reply, done) => {

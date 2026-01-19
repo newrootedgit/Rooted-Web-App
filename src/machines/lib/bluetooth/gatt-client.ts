@@ -1,4 +1,4 @@
-import { SERVICE_UUID, SSID_UUID, PASS_UUID, STATUS_UUID, ONBOARD_UUID, ONBOARDING_CODE, StatusCode } from './constants';
+import { SERVICE_UUID, SSID_UUID, PASS_UUID, STATUS_UUID, ONBOARD_UUID, ONBOARDING_CODE, StatusCode, USER_INFO_UUID } from './constants';
 
 export type ConnectionState = 'disconnected' | 'connecting' | 'connected';
 
@@ -43,9 +43,6 @@ export class MachineGATTClient {
     return this.server?.connected ?? false;
   }
 
-  /**
-   * Connect to the device's GATT server and get the provisioning service.
-   */
   async connect(): Promise<void> {
     if (!this.device.gatt) {
       throw new Error('GATT not available on this device');
@@ -55,17 +52,10 @@ export class MachineGATTClient {
     this.service = await this.server.getPrimaryService(SERVICE_UUID);
   }
 
-  /**
-   * Disconnect from the device.
-   */
   disconnect(): void {
     this.device.gatt?.disconnect();
   }
 
-  /**
-   * Send the onboarding code to the device.
-   * Device must be onboarded before WiFi provisioning will work.
-   */
   async writeOnboardingCode(): Promise<void> {
     if (!this.service) {
       throw new Error('Not connected to device');
@@ -76,10 +66,6 @@ export class MachineGATTClient {
     await onboardChar.writeValue(encoder.encode(ONBOARDING_CODE));
   }
 
-  /**
-   * Write WiFi credentials to the device.
-   * The device will attempt to connect after receiving the password.
-   */
   async writeWiFiCredentials(ssid: string, password: string): Promise<void> {
     if (!this.service) {
       throw new Error('Not connected to device');
@@ -94,10 +80,19 @@ export class MachineGATTClient {
     await passChar.writeValue(encoder.encode(password));
   }
 
-  /**
-   * Subscribe to status notifications from the device.
-   * The device will notify when WiFi connection status changes.
-   */
+  // Need to remove any here
+
+  async writeUserInfo(userInfo: Record<string, any>): Promise<void> {
+    if (!this.service) {
+      throw new Error('Not connected to device');
+    }
+
+    const encoder = new TextEncoder();
+    const userInfoChar = await this.service.getCharacteristic(USER_INFO_UUID);
+    const userInfoStr = JSON.stringify(userInfo);
+    await userInfoChar.writeValue(encoder.encode(userInfoStr));
+  }
+
   async subscribeToStatus(): Promise<void> {
     if (!this.service) {
       throw new Error('Not connected to device');
