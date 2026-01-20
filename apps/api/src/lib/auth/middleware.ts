@@ -106,14 +106,37 @@ const farmAuthPlugin: FastifyPluginAsync<AuthMiddlewareOptions> = async (fastify
           role: authContext.role,
         });
       } else {
-        // Basic auth without farm context
-        request.auth = {
-          userId,
-          tenantId: '',
-          farmId: '',
-          role: 'FARM_OPERATOR' as UserRole,
-        };
-        logger.debug('Basic auth set (no farm)', { userId });
+        // No farm header - look up user's default tenant from their farm access
+        const farmUser = await prisma.farm_users.findFirst({
+          where: {
+            clerk_user_id: userId,
+            is_active: true,
+          },
+          include: { farms: true },
+        });
+
+        if (farmUser?.farms?.tenant_id) {
+          // User has farm access - set tenant context
+          request.auth = {
+            userId,
+            tenantId: farmUser.farms.tenant_id,
+            farmId: '',
+            role: farmUser.role as UserRole,
+          };
+          logger.debug('Auth set with tenant (no farm filter)', {
+            userId,
+            tenantId: farmUser.farms.tenant_id,
+          });
+        } else {
+          // User has no farm access yet - basic auth only
+          request.auth = {
+            userId,
+            tenantId: '',
+            farmId: '',
+            role: 'FARM_OPERATOR' as UserRole,
+          };
+          logger.debug('Basic auth set (no farm access)', { userId });
+        }
       }
     } catch (err) {
       if (err instanceof UnauthorizedError || err instanceof ForbiddenError) {

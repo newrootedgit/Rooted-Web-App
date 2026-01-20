@@ -6,7 +6,7 @@ export async function createOrUpdateMachine(
   prisma: PrismaClient,
   input: AddMachineInput,
   tenantId: string,
-  farmId: string
+  farmId: string | null
 ): Promise<Machine> {
   const existing = await findMachineByDeviceId(prisma, input.deviceId);
 

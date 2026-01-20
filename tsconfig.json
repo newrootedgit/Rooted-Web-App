@@ -18,6 +18,7 @@
       "@/*": ["./src/*"],
       "@auth/*": ["./src/auth/*"],
       "@machines/*": ["./src/machines/*"],
+      "@onboarding/*": ["./src/onboarding/*"],
       "@planner/*": ["./src/planner/*"],
       "@shared/*": ["./shared/*"]
     }

@@ -16,7 +16,7 @@ export default function MachinesDashboard() {
   const { state, error, device, scan, disconnect } = useBluetoothScanner();
   const [isOnboardModalOpen, setIsOnboardModalOpen] = useState(false);
 
-  const { data: machines, isLoading: isMachinesLoading } = trpc.machines.list.useQuery();
+  const { data: machinesData, isLoading: isMachinesLoading } = trpc.machines.list.useQuery({});
   const trpcUtils = trpc.useUtils();
 
   const handleOnboardSuccess = () => {
@@ -42,7 +42,7 @@ export default function MachinesDashboard() {
       </div>
       <StatusBanner isSupported={isBluetoothSupported} />
       <MachinesList
-        machines={machines ?? []}
+        machines={machinesData?.items ?? []}
         isLoading={isMachinesLoading}
         isBluetoothSupported={isBluetoothSupported}
         scanState={state}

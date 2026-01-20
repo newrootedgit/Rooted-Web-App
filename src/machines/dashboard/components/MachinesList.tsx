@@ -7,7 +7,7 @@ interface Machine {
   id: string;
   name: string;
   deviceId: string;
-  createdAt: Date | null;
+  createdAt: string | Date | null;
 }
 
 interface MachinesListProps {

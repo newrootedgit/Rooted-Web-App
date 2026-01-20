@@ -107,6 +107,35 @@ describe('createOrUpdateMachine', () => {
     expect(result.farmId).toBe('specific-farm');
   });
 
+  it('should create machine with null farmId', async () => {
+    mockPrisma.machines.findFirst.mockResolvedValue(null);
+    const createdMachine = createMockDbMachine({
+      id: 'new-machine-id',
+      tenant_id: 'tenant-1',
+      farm_id: null,
+      name: 'No Farm Machine',
+      device_id: 'device-123',
+    });
+    mockPrisma.machines.create.mockResolvedValue(createdMachine);
+
+    const result = await createOrUpdateMachine(
+      mockPrisma as unknown as PrismaClient,
+      { name: 'No Farm Machine', deviceId: 'device-123' },
+      'tenant-1',
+      null
+    );
+
+    expect(mockPrisma.machines.create).toHaveBeenCalledWith({
+      data: {
+        tenant_id: 'tenant-1',
+        farm_id: null,
+        name: 'No Farm Machine',
+        device_id: 'device-123',
+      },
+    });
+    expect(result.farmId).toBeNull();
+  });
+
   it('should return properly formatted Machine object', async () => {
     mockPrisma.machines.findFirst.mockResolvedValue(null);
     const createdAt = new Date('2024-06-15T10:00:00Z');

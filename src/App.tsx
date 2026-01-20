@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from '@clerk/clerk-react';
 import { MachinesPage } from '@machines/MachinesPage';
 import { PlannerPage } from '@planner/PlannerPage';
+import { OnboardingPage } from '@onboarding/OnboardingPage';
 import { AuthPage, ProtectedRoute } from '@auth/index';
 import { TRPCProvider } from './lib/trpc';
 
@@ -20,6 +21,14 @@ function AppRoutes() {
     <Routes>
       <Route path="/" element={<RootRedirect />} />
       <Route path="/auth" element={<AuthPage />} />
+      <Route
+        path="/onboarding"
+        element={
+          <ProtectedRoute>
+            <OnboardingPage />
+          </ProtectedRoute>
+        }
+      />
       <Route
         path="/machines"
         element={

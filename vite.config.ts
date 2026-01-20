@@ -9,6 +9,7 @@ export default defineConfig({
     alias: {
       '@auth': path.resolve(__dirname, './src/auth'),
       '@machines': path.resolve(__dirname, './src/machines'),
+      '@onboarding': path.resolve(__dirname, './src/onboarding'),
       '@planner': path.resolve(__dirname, './src/planner'),
       '@shared': path.resolve(__dirname, './shared'),
       '@': path.resolve(__dirname, './src'),

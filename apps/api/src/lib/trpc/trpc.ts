@@ -1,4 +1,5 @@
 import { initTRPC, TRPCError } from '@trpc/server';
+import { z } from 'zod';
 import type { Context } from './context.js';
 
 const t = initTRPC.context<Context>().create();
@@ -48,3 +49,39 @@ export const farmProcedure = t.procedure.use(async ({ ctx, next }) => {
     },
   });
 });
+
+/**
+ * Optional farm filter input schema
+ */
+export const farmFilterInputSchema = z.object({
+  farmId: z.string().uuid().optional(),
+});
+
+export type FarmFilterInput = z.infer<typeof farmFilterInputSchema>;
+
+/**
+ * Requires tenant context, optional farm filter
+ *
+ * - Requires tenantId (throws FORBIDDEN if missing)
+ * - Accepts optional farmId input for filtering
+ * - farmId: null means "don't filter by farm" (query all tenant data)
+ * - farmId: 'uuid' means filter by both tenantId and farmId
+ */
+export const tenantProcedure = authedProcedure
+  .input(farmFilterInputSchema)
+  .use(async ({ ctx, input, next }) => {
+    if (!ctx.auth?.tenantId) {
+      throw new TRPCError({
+        code: 'FORBIDDEN',
+        message: 'Tenant context required',
+      });
+    }
+
+    return next({
+      ctx: {
+        ...ctx,
+        tenantId: ctx.auth.tenantId,
+        farmId: input.farmId ?? null,
+      },
+    });
+  });

@@ -30,8 +30,6 @@ async function main() {
 
   await app.register(cors, { origin: true });
   await app.register(errorHandler, { logger });
-  // Note: Not using clerkPlugin as it doesn't support clock skew configuration
-  // Our farmAuthMiddleware handles auth with clock skew tolerance
   await app.register(farmAuthMiddleware, { logger });
 
   app.addHook('onRequest', (request, _reply, done) => {
