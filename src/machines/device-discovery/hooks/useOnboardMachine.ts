@@ -9,11 +9,12 @@ export type { OnboardStep } from '../../../../shared';
 
 interface UseOnboardMachineOptions {
   tenantId: string;
-  farmId: string;
+  userEmail: string;
+  farmId?: string;
   onSuccess?: () => void;
 }
 
-export function useOnboardMachine({ tenantId, farmId, onSuccess }: UseOnboardMachineOptions) {
+export function useOnboardMachine({ tenantId, userEmail, farmId, onSuccess }: UseOnboardMachineOptions) {
   const [step, setStep] = useState<OnboardStep>('scan');
   const [statusMessage, setStatusMessage] = useState('');
   const [device, setDevice] = useState<MachineGATTClient | null>(null);
@@ -103,7 +104,11 @@ export function useOnboardMachine({ tenantId, farmId, onSuccess }: UseOnboardMac
     try {
       await client.writeOnboardingCode();
       setStatusMessage('Sending user info...');
-      await client.writeUserInfo({ tenant_id: tenantId, farm_id: farmId });
+      await client.writeUserInfo({ 
+        tenant_id: tenantId, 
+        user_email: userEmail,
+        ...(farmId && { farm_id: farmId })
+      });
       setStatusMessage('Waiting for device confirmation...');
       const id = await client.read_device_id();
       deviceIdRef.current = id;
@@ -112,7 +117,7 @@ export function useOnboardMachine({ tenantId, farmId, onSuccess }: UseOnboardMac
       setStatusMessage(error.message || 'Onboarding failed');
       setStep('failed');
     }
-  }, [tenantId, farmId]);
+  }, [tenantId, userEmail, farmId]);
 
   const scan = useCallback(async () => {
     setIsScanning(true);

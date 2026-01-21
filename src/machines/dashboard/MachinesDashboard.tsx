@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Plus } from 'lucide-react';
+import { useUser } from '@clerk/clerk-react';
 import { useBluetoothSupport } from './hooks/useBluetoothSupport';
 import { useBluetoothScanner } from './hooks/useBluetoothScanner';
 import BluetoothIndicator from './components/BluetoothIndicator';
@@ -7,11 +8,8 @@ import MachinesList from './components/MachinesList';
 import { OnboardMachine } from '../device-discovery/components/OnboardMachine';
 import { trpc } from '../../lib/trpc';
 
-// TODO: Replace with real auth context
-const FAKE_TENANT_ID = 'test-tenant-123';
-const FAKE_FARM_ID = 'test-farm-456';
-
 export default function MachinesDashboard() {
+  const { user } = useUser();
   const isBluetoothSupported = useBluetoothSupport();
   const { state, error, device, scan, disconnect } = useBluetoothScanner();
   const [isOnboardModalOpen, setIsOnboardModalOpen] = useState(false);
@@ -64,8 +62,8 @@ export default function MachinesDashboard() {
         isOpen={isOnboardModalOpen}
         onClose={() => setIsOnboardModalOpen(false)}
         onSuccess={handleOnboardSuccess}
-        tenantId={FAKE_TENANT_ID}
-        farmId={FAKE_FARM_ID}
+        tenantId={user?.id ?? ''}
+        userEmail={user?.primaryEmailAddress?.emailAddress ?? ''}
       />
     </div>
   );

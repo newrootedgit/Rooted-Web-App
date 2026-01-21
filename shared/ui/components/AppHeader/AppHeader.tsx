@@ -85,7 +85,6 @@ export function AppHeader({ currentApp, onAppChange }: AppHeaderProps) {
             },
           }}
         />
-        <User size={20} className="absolute text-white pointer-events-none" />
       </div>
     </header>
   );

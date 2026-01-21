@@ -7,10 +7,11 @@ interface OnboardMachineProps {
   onClose: () => void;
   onSuccess?: () => void;
   tenantId: string;
-  farmId: string;
+  userEmail: string;
+  farmId?: string;
 }
 
-export function OnboardMachine({ isOpen, onClose, onSuccess, tenantId, farmId }: OnboardMachineProps) {
+export function OnboardMachine({ isOpen, onClose, onSuccess, tenantId, userEmail, farmId }: OnboardMachineProps) {
   const [ssid, setSsid] = useState('');
   const [password, setPassword] = useState('');
 
@@ -22,7 +23,7 @@ export function OnboardMachine({ isOpen, onClose, onSuccess, tenantId, farmId }:
     submitWifi,
     reset,
     retry,
-  } = useOnboardMachine({ tenantId, farmId, onSuccess });
+  } = useOnboardMachine({ tenantId, userEmail, farmId, onSuccess });
 
   const handleClose = () => {
     reset();

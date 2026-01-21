@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronUp, Trash2, Settings, Calendar, Cpu, Wifi } from 'lucide-react';
 import type { Machine } from '../../../../shared';
-import { getMachineImage } from '../../lib/machine-images';
+import { getMachineImage } from '../../utils/machine-images';
 
 interface MachineCardProps {
   machine: Machine;
@@ -43,11 +43,16 @@ export default function MachineCard({ machine, onDelete }: MachineCardProps) {
     >
       <div className="flex items-center justify-between p-4">
         <div className="flex flex-col gap-0.5">
-          <span className="font-semibold text-foreground">{machine.name}</span>
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-foreground">{machine.name}</span>
+            <span className="w-2 h-2 rounded-full bg-green-500" />
+          </div>
           <span className="text-sm text-muted-foreground font-mono">{machine.deviceId}</span>
         </div>
-        <div className="flex items-center justify-center w-8 h-8 rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors">
-          {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+        <div className="flex items-center gap-3">
+          <div className="flex items-center justify-center w-8 h-8 rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors">
+            {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+          </div>
         </div>
       </div>
 
