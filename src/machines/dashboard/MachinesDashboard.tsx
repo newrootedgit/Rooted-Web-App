@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { useBluetoothSupport } from './hooks/useBluetoothSupport';
 import { useBluetoothScanner } from './hooks/useBluetoothScanner';
-import StatusBanner from './components/StatusBanner';
+import BluetoothIndicator from './components/BluetoothIndicator';
 import MachinesList from './components/MachinesList';
 import { OnboardMachine } from '../device-discovery/components/OnboardMachine';
 import { trpc } from '../../lib/trpc';
@@ -18,18 +18,27 @@ export default function MachinesDashboard() {
 
   const { data: machinesData, isLoading: isMachinesLoading } = trpc.machines.list.useQuery({});
   const trpcUtils = trpc.useUtils();
+  const deleteMutation = trpc.machines.delete.useMutation({
+    onSuccess: () => {
+      trpcUtils.machines.list.invalidate();
+    },
+  });
 
   const handleOnboardSuccess = () => {
     trpcUtils.machines.list.invalidate();
     setIsOnboardModalOpen(false);
   };
 
+  const handleDelete = (deviceId: string) => {
+    deleteMutation.mutate({ deviceId });
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div>
+        <div className="flex items-center gap-2">
           <h1 className="text-2xl font-semibold text-foreground">Machine Management</h1>
-          <p className="text-muted-foreground mt-1">WiFi Provisioning for Raspberry Pi Devices</p>
+          <BluetoothIndicator isSupported={isBluetoothSupported} />
         </div>
         <button
           onClick={() => setIsOnboardModalOpen(true)}
@@ -40,7 +49,6 @@ export default function MachinesDashboard() {
           Add Machine
         </button>
       </div>
-      <StatusBanner isSupported={isBluetoothSupported} />
       <MachinesList
         machines={machinesData?.items ?? []}
         isLoading={isMachinesLoading}
@@ -50,6 +58,7 @@ export default function MachinesDashboard() {
         connectedDevice={device}
         onScanClick={scan}
         onDisconnect={disconnect}
+        onDelete={handleDelete}
       />
       <OnboardMachine
         isOpen={isOnboardModalOpen}

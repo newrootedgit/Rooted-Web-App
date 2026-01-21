@@ -2,6 +2,7 @@
 import subprocess
 import os
 import threading
+import uuid
 from bluezero import peripheral
 from bluezero import adapter
 import json
@@ -12,8 +13,9 @@ SSID_UUID    = "322486ee-3b18-476d-86ae-2481eafaea9b"
 PASS_UUID    = "322486ee-3b18-476d-86ae-2481eafaea9c"
 STATUS_UUID  = "322486ee-3b18-476d-86ae-2481eafaea9d"
 
-ONBOARD_UUID   = "322486ee-3b18-476d-86ae-2481eafaea9e"
-USER_INFO_UUID = "322486ee-3b18-476d-86ae-2481eafaea9f"
+ONBOARD_UUID     = "322486ee-3b18-476d-86ae-2481eafaea9e"
+USER_INFO_UUID   = "322486ee-3b18-476d-86ae-2481eafaea9f"
+DEVICE_ID_UUID   = "322486ee-3b18-476d-86ae-2481eafeaea0"
 
 ONBOARD_CODE = "RootedRobotics123"
 
@@ -21,7 +23,21 @@ ONBOARD_STATUS = 0x04
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 STATE_FILE = os.path.join(SCRIPT_DIR, 'onboard_state.json')
+DEVICE_FILE = os.path.join(SCRIPT_DIR, 'device_config.json')
 
+
+def get_device_config():
+    """Load device config, auto-generating device_id if missing."""
+    config = {}
+
+    if os.path.exists(DEVICE_FILE):
+        try:
+            with open(DEVICE_FILE, 'r') as f:
+                config = json.load(f)
+        except (JSONDecodeError, IOError) as e:
+            print(f"Error loading device config: {e}")
+
+    return config
 
 
 class MachineBLE:
@@ -44,13 +60,13 @@ class MachineBLE:
         self.ssid = bytes(value).decode('utf-8')
         print(f"SSID received: {self.ssid}")
 
-    def on_onboard_write(self, value, options): 
+    def on_onboard_write(self, value, options):
         code = bytes(value).decode('utf-8')
         if code == ONBOARD_CODE:
             self.is_onboarded = True
             # Send back onboarding success status (Ox04)
             if self.status_chr:
-                self.status_chr.set_value([ONBOARD_STATUS]) 
+                self.status_chr.set_value([ONBOARD_STATUS])
             print("Device successfully onboarded.")
         else:
             print("Invalid onboarding code received.")
@@ -80,11 +96,11 @@ class MachineBLE:
         if not self.is_onboarded:
             print("Device not onboarded. Cannot connect to Wi-Fi.")
             return
-        
+
         if not self.ssid:
             print("SSID not set.")
             return
-        
+
         if self.status_chr:
             self.status_chr.set_value([0x01])  # Connecting
 
@@ -104,9 +120,17 @@ class MachineBLE:
             if self.status_chr:
                 self.status_chr.set_value([0x03])
 
+
 def start_ble():
     machine = MachineBLE()
-    hostname = "TEST_DEVICE"
+    config = get_device_config()
+
+    if not config.get('device_name') or not config.get('device_id'):
+        print("Device configuration incomplete. Please ensure device_name and device_id are set.")
+        return
+
+    device_name = config['device_name']
+    device_id = config['device_id']
 
     adapters = list(adapter.Adapter.available())
     if not adapters:
@@ -115,8 +139,9 @@ def start_ble():
 
     adapter_address = adapters[0].address
     print(f"Using adapter: {adapter_address}")
+    print(f"Device ID: {device_id}")
 
-    app = peripheral.Peripheral(adapter_address, local_name=hostname)
+    app = peripheral.Peripheral(adapter_address, local_name=device_name)
     app.add_service(srv_id=1, uuid=SERVICE_UUID, primary=True)
 
     app.add_characteristic(srv_id=1, chr_id=1, uuid=SSID_UUID,
@@ -126,23 +151,28 @@ def start_ble():
     app.add_characteristic(srv_id=1, chr_id=2, uuid=PASS_UUID,
                            value=[], notifying=False, flags=['write'],
                            write_callback=machine.on_pass_write)
-    
+
     app.add_characteristic(srv_id=1, chr_id=4, uuid=ONBOARD_UUID,
                            value=[], notifying=False, flags=['write'],
-                            write_callback=machine.on_onboard_write)
-    
+                           write_callback=machine.on_onboard_write)
+
     app.add_characteristic(srv_id=1, chr_id=5, uuid=USER_INFO_UUID,
                            value=[], notifying=False, flags=['write'],
-                            write_callback=machine.on_user_info_write)
-    
+                           write_callback=machine.on_user_info_write)
+
+    # Device ID characteristic - readable by frontend
+    app.add_characteristic(srv_id=1, chr_id=6, uuid=DEVICE_ID_UUID,
+                           value=list(device_id.encode('utf-8')),
+                           notifying=False, flags=['read'])
 
     app.add_characteristic(srv_id=1, chr_id=3, uuid=STATUS_UUID,
                            value=[0x00], notifying=False,
                            flags=['notify'],
                            notify_callback=machine.on_status_notify)
 
-    print(f"GATT Server running. Advertising as: {hostname}")
+    print(f"GATT Server running. Advertising as: {device_name}")
     app.publish()
+
 
 if __name__ == '__main__':
     start_ble()

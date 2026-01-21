@@ -1,9 +1,11 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { scanForDevice, MachineGATTClient } from '../../lib/bluetooth';
-import { STATUS_CODES, StatusCode } from '../../lib/bluetooth/constants';
+import { scanForDevice, MachineGATTClient } from '../../../lib/bluetooth';
 import { trpc } from '../../../lib/trpc';
+import { STATUS_CODES } from '../../../../shared';
+import type { OnboardStep, StatusCode } from '../../../../shared';
 
-export type OnboardStep = 'scan' | 'onboarding' | 'wifi' | 'connecting' | 'registering' | 'success' | 'failed';
+// Re-export type from shared for convenience
+export type { OnboardStep } from '../../../../shared';
 
 interface UseOnboardMachineOptions {
   tenantId: string;
@@ -27,6 +29,7 @@ export function useOnboardMachine({ tenantId, farmId, onSuccess }: UseOnboardMac
   }, [step]);
 
   const deviceInfoRef = useRef<{ name: string; id: string } | null>(null);
+  const deviceIdRef = useRef<string | null>(null);
 
   const isDeviceRegistered = useCallback(async (deviceId: string): Promise<boolean> => {
     const existingMachine = await trpcUtils.machines.byDeviceId.fetch({ deviceId });
@@ -40,9 +43,16 @@ export function useOnboardMachine({ tenantId, farmId, onSuccess }: UseOnboardMac
     setStatusMessage('Checking if device is already registered...');
 
     try {
-      const alreadyRegistered = await isDeviceRegistered(deviceInfoRef.current.id);
+      const currentDeviceId = deviceIdRef.current;
+      if (!currentDeviceId) {
+        setStatusMessage('Device ID not available');
+        setStep('failed');
+        return;
+      }
+
+      const alreadyRegistered = await isDeviceRegistered(currentDeviceId);
       if (alreadyRegistered) {
-        setStatusMessage('This device is already registered');
+        setStatusMessage('This device is already registered, If you believe this is an error, please contact support. ');
         setStep('failed');
         return;
       }
@@ -50,7 +60,7 @@ export function useOnboardMachine({ tenantId, farmId, onSuccess }: UseOnboardMac
       setStatusMessage('Registering machine...');
       await createMachine.mutateAsync({
         name: deviceInfoRef.current.name,
-        deviceId: deviceInfoRef.current.id,
+        deviceId: currentDeviceId,
       });
       setStatusMessage('Machine registered successfully!');
       setStep('success');
@@ -95,6 +105,8 @@ export function useOnboardMachine({ tenantId, farmId, onSuccess }: UseOnboardMac
       setStatusMessage('Sending user info...');
       await client.writeUserInfo({ tenant_id: tenantId, farm_id: farmId });
       setStatusMessage('Waiting for device confirmation...');
+      const id = await client.read_device_id();
+      deviceIdRef.current = id;
     } catch (err) {
       const error = err as Error;
       setStatusMessage(error.message || 'Onboarding failed');

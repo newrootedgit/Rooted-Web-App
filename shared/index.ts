@@ -10,3 +10,16 @@ export { Sidebar } from './ui/components/Sidebar';
 export type { NavItem } from './ui/components/Sidebar';
 export { AppLayout } from './ui/components/AppLayout';
 export { ComingSoon } from './ui/components/ComingSoon';
+
+// Domain types
+export type {
+  Machine,
+  ScanState,
+  OnboardStep,
+  ConnectionState,
+  ScanErrorType,
+  ScanError,
+  StatusCode,
+  GATTClientEvents,
+} from './types';
+export { STATUS_CODES } from './types';

@@ -5,12 +5,15 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:api": "pnpm --filter @rooted/api dev",
+    "dev:full": "pnpm docker:services && (pnpm dev:api & pnpm dev)",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "lint": "eslint . --ext ts,tsx",
-    "docker:up": "docker-compose up -d",
-    "docker:down": "docker-compose down",
-    "docker:logs": "docker-compose logs -f"
+    "docker:up": "cd docker && docker compose up -d --build",
+    "docker:down": "cd docker && docker compose down",
+    "docker:logs": "cd docker && docker compose logs -f",
+    "docker:services": "cd docker && docker compose up -d postgres redis"
   },
   "dependencies": {
     "@clerk/clerk-react": "^5.59.4",

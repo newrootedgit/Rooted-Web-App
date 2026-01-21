@@ -1,7 +1,9 @@
 import { useState, useCallback } from 'react';
-import { scanForDevice, MachineGATTClient, ScanError } from '../../lib/bluetooth';
+import { scanForDevice, MachineGATTClient } from '../../../lib/bluetooth';
+import type { ScanState, ScanError } from '../../../../shared';
 
-export type ScanState = 'idle' | 'scanning' | 'connecting' | 'connected' | 'error';
+// Re-export type from shared for convenience
+export type { ScanState } from '../../../../shared';
 
 interface UseBluetoothScannerResult {
   state: ScanState;
