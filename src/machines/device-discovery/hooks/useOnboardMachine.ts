@@ -41,19 +41,11 @@ export function useOnboardMachine({ tenantId, userEmail, farmId, onSuccess }: Us
     if (!deviceInfoRef.current) return;
 
     setStep('registering');
-    setStatusMessage('Checking if device is already registered...');
 
     try {
       const currentDeviceId = deviceIdRef.current;
       if (!currentDeviceId) {
         setStatusMessage('Device ID not available');
-        setStep('failed');
-        return;
-      }
-
-      const alreadyRegistered = await isDeviceRegistered(currentDeviceId);
-      if (alreadyRegistered) {
-        setStatusMessage('This device is already registered, If you believe this is an error, please contact support. ');
         setStep('failed');
         return;
       }
@@ -71,7 +63,7 @@ export function useOnboardMachine({ tenantId, userEmail, farmId, onSuccess }: Us
       setStatusMessage(error.message || 'Failed to register machine');
       setStep('failed');
     }
-  }, [createMachine, isDeviceRegistered, onSuccess]);
+  }, [createMachine, onSuccess]);
 
   const handleStatusChange = useCallback((status: StatusCode) => {
     const currentStep = stepRef.current;
@@ -91,7 +83,8 @@ export function useOnboardMachine({ tenantId, userEmail, farmId, onSuccess }: Us
         break;
       case STATUS_CODES.FAILED:
         if (currentStep === 'connecting') {
-          setStatusMessage('Connection failed. Please try again.');
+          console.log('WiFi connection failed');
+          setStatusMessage('Wifi connection failed. Please try again.');
           setStep('failed');
         }
         break;
@@ -99,25 +92,38 @@ export function useOnboardMachine({ tenantId, userEmail, farmId, onSuccess }: Us
   }, [registerMachine]);
 
   const handleOnboarding = useCallback(async (client: MachineGATTClient) => {
-    setStatusMessage('Sending onboarding code...');
-
     try {
+      // First, read the device ID to check if already registered
+      setStatusMessage('Reading device ID...');
+      const id = await client.read_device_id();
+      deviceIdRef.current = id;
+
+      // Check if device is already registered before proceeding
+      setStatusMessage('Checking if device is already registered...');
+      const alreadyRegistered = await isDeviceRegistered(id);
+      if (alreadyRegistered) {
+        setStatusMessage('This device is already registered. If you believe this is an error, please contact support.');
+        setStep('failed');
+        return;
+      }
+
+      // Device not registered, proceed with onboarding
+      setStatusMessage('Sending onboarding code...');
       await client.writeOnboardingCode();
+
       setStatusMessage('Sending user info...');
-      await client.writeUserInfo({ 
-        tenant_id: tenantId, 
+      await client.writeUserInfo({
+        tenant_id: tenantId,
         user_email: userEmail,
         ...(farmId && { farm_id: farmId })
       });
       setStatusMessage('Waiting for device confirmation...');
-      const id = await client.read_device_id();
-      deviceIdRef.current = id;
     } catch (err) {
       const error = err as Error;
       setStatusMessage(error.message || 'Onboarding failed');
       setStep('failed');
     }
-  }, [tenantId, userEmail, farmId]);
+  }, [tenantId, userEmail, farmId, isDeviceRegistered]);
 
   const scan = useCallback(async () => {
     setIsScanning(true);

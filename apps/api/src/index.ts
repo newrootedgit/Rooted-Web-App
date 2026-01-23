@@ -9,6 +9,7 @@ import { errorHandler, NotFoundError } from './lib/errors/index.js';
 import { farmAuthMiddleware } from './lib/auth/middleware.js';
 import { createContext } from './lib/trpc/context.js';
 import { appRouter } from './lib/trpc/router.js';
+import { registerInternalRoutes } from './domains/machine-domain/internal-routes.js';
 
 import type { LogLevel, Environment } from './lib/logger/types.js';
 
@@ -63,6 +64,8 @@ async function main() {
   app.get('/health', async () => {
     return { status: 'ok', timestamp: new Date().toISOString() };
   });
+
+  await registerInternalRoutes(app);
 
   await app.register(fastifyTRPCPlugin, {
     prefix: '/trpc',

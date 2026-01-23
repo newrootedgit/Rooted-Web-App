@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { trpc } from '../lib/trpc';
 import { Logo } from '@shared/ui/components/Logo';
+import { useUser } from '@clerk/clerk-react';
 
 export function OnboardingPage() {
   const [farmName, setFarmName] = useState('');
   const [error, setError] = useState('');
+  const { user } = useUser();
 
   const createMutation = trpc.onboarding.createTenantAndFarm.useMutation({
     onSuccess: () => {
@@ -24,7 +26,10 @@ export function OnboardingPage() {
       return;
     }
 
-    createMutation.mutate({ farmName: farmName.trim() });
+    createMutation.mutate({ 
+      farmName: farmName.trim(), 
+      userEmail: user?.primaryEmailAddress?.emailAddress ?? '' 
+    });
   };
 
   return (

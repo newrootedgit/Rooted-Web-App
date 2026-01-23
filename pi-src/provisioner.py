@@ -1,4 +1,4 @@
-#!/home/rooted/pi-ble-src/.venv/bin/python3
+#!/opt/rooted-ble/.venv/bin/python3
 import subprocess
 import os
 import threading
@@ -111,6 +111,19 @@ class MachineBLE:
                 print("Success!")
                 if self.status_chr:
                     self.status_chr.set_value([0x02])  # Success
+                
+                # Register with AWS IoT and connect
+                try:
+                    from aws_iot_registration import register_with_aws_iot, connect_to_aws_iot
+                    
+                    thing_name = register_with_aws_iot()
+                    mqtt_connection = connect_to_aws_iot()
+                    
+                    print("AWS IoT connection established. Lifecycle events enabled.")
+                    
+                except Exception as e:
+                    print(f"AWS IoT setup failed: {e}")
+                    # Continue anyway - WiFi is connected
             else:
                 print(f"Failed: {result.stderr}")
                 if self.status_chr:

@@ -5,7 +5,7 @@ export async function findMachineByDeviceId(
   prisma: PrismaClient,
   deviceId: string
 ): Promise<Machine | null> {
-  const machine = await prisma.machines.findFirst({
+  const machine= await prisma.machines.findFirst({
     where: { device_id: deviceId },
   });
 

@@ -27,4 +27,8 @@ export interface Machine {
   name: string;
   deviceId: string;
   createdAt: Date | null;
+  awsIotThingName?: string | null;
+  status?: 'online' | 'offline';
+  lastSeenAt?: Date | null;
+  currentWifiSsid?: string | null;
 }

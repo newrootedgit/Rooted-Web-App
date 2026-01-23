@@ -1,1 +1,3 @@
 bluezero
+awsiotsdk
+boto3

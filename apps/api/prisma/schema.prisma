@@ -144,14 +144,18 @@ model farms {
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model machines {
-  id         String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  tenant_id  String?   @db.Uuid
-  farm_id    String?   @db.Uuid
-  name       String    @db.VarChar(255)
-  device_id  String    @db.VarChar(255)
-  created_at DateTime? @default(now()) @db.Timestamp(6)
-  farms      farms?    @relation(fields: [farm_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  tenants    tenants?  @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  id                 String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenant_id          String?   @db.Uuid
+  farm_id            String?   @db.Uuid
+  name               String    @db.VarChar(255)
+  device_id          String    @db.VarChar(255)
+  created_at         DateTime? @default(now()) @db.Timestamp(6)
+  aws_iot_thing_name String?   @unique @db.VarChar(255)
+  status             String?   @default("offline") @db.VarChar(50)
+  last_seen_at       DateTime? @db.Timestamp(6)
+  current_wifi_ssid  String?   @db.VarChar(255)
+  farms              farms?    @relation(fields: [farm_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tenants            tenants?  @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@index([device_id], map: "idx_machines_device_id")
   @@index([farm_id], map: "idx_machines_farm_id")

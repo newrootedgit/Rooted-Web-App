@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronUp, Trash2, Settings, Calendar, Cpu, Wifi } from 'lucide-react';
+import { ChevronDown, ChevronUp, Trash2, Settings, Calendar, Cpu, Wifi, WifiOff } from 'lucide-react';
 import type { Machine } from '../../../../shared';
 import { getMachineImage } from '../../utils/machine-images';
 
@@ -11,6 +11,7 @@ interface MachineCardProps {
 export default function MachineCard({ machine, onDelete }: MachineCardProps) {
   const machineImage = getMachineImage(machine.name);
   const [isExpanded, setIsExpanded] = useState(false);
+  const isOnline = machine.status === 'online';
 
   const formatDate = (date: string | Date | null) => {
     if (!date) return 'Unknown';
@@ -19,6 +20,17 @@ export default function MachineCard({ machine, onDelete }: MachineCardProps) {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
+    });
+  };
+
+  const formatDateTime = (date: string | Date | null) => {
+    if (!date) return 'Never';
+    const d = new Date(date);
+    return d.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
     });
   };
 
@@ -45,7 +57,7 @@ export default function MachineCard({ machine, onDelete }: MachineCardProps) {
         <div className="flex flex-col gap-0.5">
           <div className="flex items-center gap-2">
             <span className="font-semibold text-foreground">{machine.name}</span>
-            <span className="w-2 h-2 rounded-full bg-green-500" />
+            <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500' : 'bg-gray-400'}`} />
           </div>
           <span className="text-sm text-muted-foreground font-mono">{machine.deviceId}</span>
         </div>
@@ -70,7 +82,7 @@ export default function MachineCard({ machine, onDelete }: MachineCardProps) {
                 <Cpu size={16} className="text-muted-foreground mt-0.5 flex-shrink-0" />
                 <div className="flex flex-col gap-0.5 min-w-0">
                   <span className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Machine ID</span>
-                  <span className="text-sm text-foreground break-all">{machine.id}</span>
+                  <span className="text-sm text-foreground break-all">{machine.deviceId}</span>
                 </div>
               </div>
               <div className="flex items-start gap-2">
@@ -85,11 +97,38 @@ export default function MachineCard({ machine, onDelete }: MachineCardProps) {
                 <div className="flex flex-col gap-0.5">
                   <span className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Status</span>
                   <span className="flex items-center gap-1.5 text-sm text-foreground">
-                    <span className="w-2 h-2 rounded-full bg-green-500" />
-                    Online
+                    {isOnline ? (
+                      <>
+                        <Wifi size={14} className="text-green-500" />
+                        <span className="text-green-600 font-medium">Online</span>
+                      </>
+                    ) : (
+                      <>
+                        <WifiOff size={14} className="text-gray-400" />
+                        <span className="text-gray-500">Offline</span>
+                      </>
+                    )}
                   </span>
                 </div>
               </div>
+              {machine.currentWifiSsid && (
+                <div className="flex items-start gap-2">
+                  <Wifi size={16} className="text-muted-foreground mt-0.5 flex-shrink-0" />
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Network</span>
+                    <span className="text-sm text-foreground font-mono">{machine.currentWifiSsid}</span>
+                  </div>
+                </div>
+              )}
+              {machine.lastSeenAt && (
+                <div className="flex items-start gap-2">
+                  <Calendar size={16} className="text-muted-foreground mt-0.5 flex-shrink-0" />
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Last Seen</span>
+                    <span className="text-sm text-foreground">{formatDateTime(machine.lastSeenAt)}</span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

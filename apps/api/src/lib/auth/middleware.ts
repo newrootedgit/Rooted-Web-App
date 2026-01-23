@@ -7,7 +7,7 @@ import { UnauthorizedError, ForbiddenError } from '../errors/index.js';
 import type { FastifyPluginAsync } from 'fastify';
 import type { AuthContext, AuthMiddlewareOptions, UserRole } from './types.js';
 
-const PUBLIC_ROUTES = ['/health'];
+const PUBLIC_ROUTES = ['/health', '/internal'];
 
 const isPublicRoute = (url: string): boolean => {
   return PUBLIC_ROUTES.some((route) => url.startsWith(route));

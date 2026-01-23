@@ -6,14 +6,6 @@ export interface GetMachinesByTenantOptions extends PrismaPaginationOptions {
   orderBy: Prisma.machinesOrderByWithRelationInput;
 }
 
-/**
- * Fetches machines for a tenant with optional farm filtering and pagination
- *
- * @param prisma - Prisma client
- * @param tenantId - Tenant ID (required)
- * @param farmId - Farm ID (optional, null = don't filter by farm)
- * @param options - Pagination and ordering options
- */
 export async function getMachinesByTenant(
   prisma: PrismaClient,
   tenantId: string,
@@ -40,5 +32,9 @@ export async function getMachinesByTenant(
     name: m.name,
     deviceId: m.device_id,
     createdAt: m.created_at,
+    awsIotThingName: m.aws_iot_thing_name,
+    status: m.status as 'online' | 'offline' | undefined,
+    lastSeenAt: m.last_seen_at,
+    currentWifiSsid: m.current_wifi_ssid,
   }));
 }
