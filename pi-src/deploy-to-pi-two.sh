@@ -56,21 +56,21 @@ PI_USER=${PI_USER:-$DEFAULT_USERNAME}
 read -s -p "Enter the SSH password for ${PI_USER}@${PI_HOST}: " SSH_PASSWORD
 echo ""
 
-# Verify SSH credentials work
-echo ""
-echo "Verifying SSH credentials..."
-SSH_RESULT=$(sshpass -p "${SSH_PASSWORD}" ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 "${PI_USER}@${PI_HOST}" "echo 'SSH OK'" 2>&1)
-if [ $? -ne 0 ]; then
-    echo -e "${RED}SSH authentication failed.${NC}"
-    echo "Error: ${SSH_RESULT}"
-    echo ""
-    echo "Troubleshooting:"
-    echo "  - Check that sshpass is installed: brew install hudochenkov/sshpass/sshpass"
-    echo "  - Verify you can SSH manually: ssh ${PI_USER}@${PI_HOST}"
-    echo "  - If password has special characters, try escaping them"
-    exit 1
-fi
-echo -e "${GREEN}SSH authentication successful${NC}"
+# # Verify SSH credentials work
+# echo ""
+# echo "Verifying SSH credentials..."
+# SSH_RESULT=$(sshpass -p "${SSH_PASSWORD}" ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 "${PI_USER}@${PI_HOST}" "echo 'SSH OK'" 2>&1)
+# if [ $? -ne 0 ]; then
+#     echo -e "${RED}SSH authentication failed.${NC}"
+#     echo "Error: ${SSH_RESULT}"
+#     echo ""
+#     echo "Troubleshooting:"
+#     echo "  - Check that sshpass is installed: brew install hudochenkov/sshpass/sshpass"
+#     echo "  - Verify you can SSH manually: ssh ${PI_USER}@${PI_HOST}"
+#     echo "  - If password has special characters, try escaping them"
+#     exit 1
+# fi
+# echo -e "${GREEN}SSH authentication successful${NC}"
 
 # =============================================================================
 # STEP 2: Machine Name Selection
@@ -193,30 +193,49 @@ chmod +x \${REMOTE_DIR}/ble-wrapper.sh
 chmod +x \${REMOTE_DIR}/setup-scripts/*.sh 2>/dev/null || true
 
 # =============================================================================
-# Run NetworkManager setup
+# Create Python virtual environment and install dependencies
 # =============================================================================
-echo "  Setting up NetworkManager for WiFi provisioning..."
-echo "${SSH_PASSWORD}" | sudo -S bash \${REMOTE_DIR}/setup-scripts/setup-nm.sh
-
-# Note: All apt packages and Python venv were installed in deploy-to-pi-one.sh (while internet was available)
-
-# Verify Python venv exists
+echo "  Creating Python virtual environment..."
 if [ ! -d "\${REMOTE_DIR}/.venv" ]; then
-    echo "  ERROR: Python venv not found. Did you run deploy-to-pi-one.sh first?"
-    exit 1
+    python3 -m venv \${REMOTE_DIR}/.venv
 fi
-echo "  Python virtual environment found."
+
+echo "  Installing Python dependencies (this may take a minute)..."
+\${REMOTE_DIR}/.venv/bin/pip install --upgrade pip --quiet
+\${REMOTE_DIR}/.venv/bin/pip install -r \${REMOTE_DIR}/requirements.txt --quiet
 
 # =============================================================================
 # Set Bluetooth adapter name
 # =============================================================================
 echo "  Setting Bluetooth adapter name to '${MACHINE_NAME}'..."
-echo "${SSH_PASSWORD}" | sudo -S sed -i "s/^#Name = .*/Name = ${MACHINE_NAME}/" /etc/bluetooth/main.conf
-echo "${SSH_PASSWORD}" | sudo -S sed -i "s/^Name = .*/Name = ${MACHINE_NAME}/" /etc/bluetooth/main.conf
-# Add Name if it doesn't exist in [General] section
-if ! grep -q "^Name = " /etc/bluetooth/main.conf; then
-    echo "${SSH_PASSWORD}" | sudo -S sed -i '/^\[General\]/a Name = ${MACHINE_NAME}' /etc/bluetooth/main.conf
+
+# Check if bluetooth config exists, create if not
+if [ ! -f /etc/bluetooth/main.conf ]; then
+    echo "  Creating /etc/bluetooth/main.conf..."
+    echo "${SSH_PASSWORD}" | sudo -S mkdir -p /etc/bluetooth
+    echo "${SSH_PASSWORD}" | sudo -S tee /etc/bluetooth/main.conf > /dev/null << BTCONF
+[General]
+Name = ${MACHINE_NAME}
+DiscoverableTimeout = 0
+PairableTimeout = 0
+
+[Policy]
+AutoEnable=true
+BTCONF
+else
+    # File exists, update the Name setting
+    echo "${SSH_PASSWORD}" | sudo -S sed -i "s/^#Name = .*/Name = ${MACHINE_NAME}/" /etc/bluetooth/main.conf
+    echo "${SSH_PASSWORD}" | sudo -S sed -i "s/^Name = .*/Name = ${MACHINE_NAME}/" /etc/bluetooth/main.conf
+    # Add Name if it doesn't exist in [General] section
+    if ! grep -q "^Name = " /etc/bluetooth/main.conf; then
+        echo "${SSH_PASSWORD}" | sudo -S sed -i '/^\[General\]/a Name = ${MACHINE_NAME}' /etc/bluetooth/main.conf
+    fi
 fi
+
+# Set PRETTY_HOSTNAME to override BlueZ hostname plugin
+echo "  Setting PRETTY_HOSTNAME for Bluetooth..."
+echo "${SSH_PASSWORD}" | sudo -S bash -c "echo 'PRETTY_HOSTNAME=${MACHINE_NAME}' > /etc/machine-info"
+
 # Restart bluetooth service to apply the name change
 echo "${SSH_PASSWORD}" | sudo -S systemctl restart bluetooth
 

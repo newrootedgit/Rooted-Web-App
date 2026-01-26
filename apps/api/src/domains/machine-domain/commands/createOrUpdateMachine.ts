@@ -16,6 +16,7 @@ export async function createOrUpdateMachine(
       where: { id: existing.id },
       data: {
         name: input.name,
+        display_name: input.displayName ?? input.name,
         tenant_id: tenantId,
         farm_id: farmId,
       },
@@ -26,6 +27,7 @@ export async function createOrUpdateMachine(
         tenant_id: tenantId,
         farm_id: farmId,
         name: input.name,
+        display_name: input.displayName ?? input.name,
         device_id: input.deviceId,
       },
     });
@@ -36,6 +38,7 @@ export async function createOrUpdateMachine(
     tenantId: machine.tenant_id,
     farmId: machine.farm_id,
     name: machine.name,
+    displayName: machine.display_name,
     deviceId: machine.device_id,
     createdAt: machine.created_at,
   };

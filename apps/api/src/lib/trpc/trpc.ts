@@ -1,6 +1,7 @@
 import { initTRPC, TRPCError } from '@trpc/server';
 import { z } from 'zod';
 import type { Context } from './context.js';
+import { requireAdmin } from '../auth/admin.js';
 
 const t = initTRPC.context<Context>().create();
 
@@ -22,6 +23,12 @@ export const authedProcedure = t.procedure.use(async ({ ctx, next }) => {
       userId: ctx.auth.userId,
     },
   });
+});
+
+// Requires admin access
+export const adminProcedure = authedProcedure.use(async ({ ctx, next }) => {
+  await requireAdmin(ctx.userId);
+  return next({ ctx });
 });
 
 // Requires authenticated user WITH farm context (tenantId + farmId)

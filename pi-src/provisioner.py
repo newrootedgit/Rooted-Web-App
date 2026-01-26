@@ -1,12 +1,14 @@
-#!/opt/rooted-ble/.venv/bin/python3
+#!/opt/rooted-ble/.venv/bin/python3 -u
 import subprocess
 import os
+import sys
 import threading
 import uuid
 from bluezero import peripheral
 from bluezero import adapter
 import json
 from json import JSONDecodeError
+import dbus
 
 SERVICE_UUID = "322486ee-3b18-476d-86ae-2481eafaea9a"
 SSID_UUID    = "322486ee-3b18-476d-86ae-2481eafaea9b"
@@ -48,6 +50,23 @@ class MachineBLE:
         self.is_onboarded = False
         self.user_info = None
 
+    def _safe_notify(self, value):
+        """Safely send notification, handling client disconnection gracefully."""
+        if not self.status_chr:
+            return False
+        try:
+            self.status_chr.set_value(value)
+            return True
+        except dbus.exceptions.DBusException as e:
+            # Client disconnected - this is expected when phone moves away or app closes
+            print(f"Client disconnected (notification failed): {e.get_dbus_name()}")
+            self.status_chr = None
+            return False
+        except Exception as e:
+            print(f"Unexpected error sending notification: {e}")
+            self.status_chr = None
+            return False
+
     def on_status_notify(self, notifying, characteristic):
         """Called when client subscribes/unsubscribes to status notifications"""
         if notifying:
@@ -64,23 +83,25 @@ class MachineBLE:
         code = bytes(value).decode('utf-8')
         if code == ONBOARD_CODE:
             self.is_onboarded = True
-            # Send back onboarding success status (Ox04)
-            if self.status_chr:
-                self.status_chr.set_value([ONBOARD_STATUS])
+            # Send back onboarding success status (0x04)
+            self._safe_notify([ONBOARD_STATUS])
             print("Device successfully onboarded.")
         else:
             print("Invalid onboarding code received.")
 
     def on_user_info_write(self, value, options):
-        user_info = bytes(value).decode('utf-8')
         try:
+            user_info = bytes(value).decode('utf-8')
             self.user_info = json.loads(user_info)
             with open(STATE_FILE, 'w') as f:
                 json.dump(self.user_info, f)
+            print(f"User info received: {self.user_info}")
         except JSONDecodeError:
             print("Invalid JSON received for user info.")
-            return
-        print(f"User info received: {self.user_info}")
+        except dbus.exceptions.DBusException as e:
+            print(f"Client disconnected during user_info write: {e.get_dbus_name()}")
+        except Exception as e:
+            print(f"Error in user_info write: {e}")
 
     def on_pass_write(self, value, options):
         if not self.is_onboarded:
@@ -101,37 +122,33 @@ class MachineBLE:
             print("SSID not set.")
             return
 
-        if self.status_chr:
-            self.status_chr.set_value([0x01])  # Connecting
+        self._safe_notify([0x01])  # Connecting
 
         cmd = ["sudo", "nmcli", "device", "wifi", "connect", self.ssid, "password", self.password]
         try:
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
             if result.returncode == 0:
                 print("Success!")
-                if self.status_chr:
-                    self.status_chr.set_value([0x02])  # Success
-                
+                self._safe_notify([0x02])  # Success
+
                 # Register with AWS IoT and connect
                 try:
                     from aws_iot_registration import register_with_aws_iot, connect_to_aws_iot
-                    
+
                     thing_name = register_with_aws_iot()
                     mqtt_connection = connect_to_aws_iot()
-                    
+
                     print("AWS IoT connection established. Lifecycle events enabled.")
-                    
+
                 except Exception as e:
                     print(f"AWS IoT setup failed: {e}")
                     # Continue anyway - WiFi is connected
             else:
                 print(f"Failed: {result.stderr}")
-                if self.status_chr:
-                    self.status_chr.set_value([0x03])  # Failure
+                self._safe_notify([0x03])  # Failure
         except Exception as e:
             print(f"Error: {e}")
-            if self.status_chr:
-                self.status_chr.set_value([0x03])
+            self._safe_notify([0x03])
 
 
 def start_ble():
@@ -184,8 +201,22 @@ def start_ble():
                            notify_callback=machine.on_status_notify)
 
     print(f"GATT Server running. Advertising as: {device_name}")
-    app.publish()
+
+    try:
+        app.publish()
+    except dbus.exceptions.DBusException as e:
+        # Handle client disconnection gracefully - this is normal behavior
+        error_name = e.get_dbus_name()
+        if "ServiceUnknown" in error_name or "NoReply" in error_name:
+            print(f"BLE client disconnected: {error_name}")
+        else:
+            print(f"DBus error: {e}")
+            raise
+    except KeyboardInterrupt:
+        print("Shutting down BLE server...")
 
 
 if __name__ == '__main__':
+    print("=== Rooted BLE Provisioner Starting ===")
+    print(f"Python version: {sys.version}")
     start_ble()

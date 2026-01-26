@@ -22,6 +22,7 @@ export async function getMachineById(
     tenantId: machine.tenant_id,
     farmId: machine.farm_id,
     name: machine.name,
+    displayName: machine.display_name,
     deviceId: machine.device_id,
     createdAt: machine.created_at,
   };

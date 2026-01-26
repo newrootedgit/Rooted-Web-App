@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 export const addMachineSchema = z.object({
   name: z.string().min(1).max(255),
+  displayName: z.string().min(1).max(255).optional(),
   deviceId: z.string().min(1).max(255),
 });
 
@@ -25,6 +26,7 @@ export interface Machine {
   tenantId: string | null;
   farmId: string | null;
   name: string;
+  displayName: string | null;
   deviceId: string;
   createdAt: Date | null;
   awsIotThingName?: string | null;

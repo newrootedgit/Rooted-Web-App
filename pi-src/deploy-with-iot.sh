@@ -15,11 +15,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEFAULT_HOSTNAME="192.168.10.1"
 DEFAULT_USERNAME="rooted"
 
-echo -e "${BLUE}============================================${NC}"
-echo -e "${BLUE}  Rooted Robotics - AWS IoT Setup (Step 3)${NC}"
-echo -e "${BLUE}============================================${NC}"
+echo -e "${BLUE}================================================${NC}"
+echo -e "${BLUE}  Rooted Robotics - AWS IoT Setup (Optional)  ${NC}"
+echo -e "${BLUE}================================================${NC}"
 echo ""
 echo "This script adds AWS IoT connectivity to your Pi."
+echo -e "${YELLOW}Run this AFTER deploy-to-pi-two.sh completes.${NC}"
 echo ""
 
 # Get Pi connection info

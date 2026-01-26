@@ -1,8 +1,8 @@
 import { router, authedProcedure } from '../../lib/trpc/trpc.js';
 import { createTenantAndFarmSchema } from './types.js';
-import { createTenantAndFarm } from './service/createTenantAndFarm.js';
-import { getOnboardingStatus } from './service/getOnboardingStatus.js';
-import { getUserFarms } from '../user-domain/service/getUserFarms.js';
+import { createTenantAndFarm } from './commands/createTenantAndFarm.js';
+import { getOnboardingStatus } from './commands/getOnboardingStatus.js';
+import { getUserFarms } from '../user-domain/commands/getUserFarms.js';
 
 export const onboardingRouter = router({
   status: authedProcedure.query(({ ctx }) =>

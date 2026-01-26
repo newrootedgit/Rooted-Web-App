@@ -30,6 +30,7 @@ export async function getMachinesByTenant(
     tenantId: m.tenant_id,
     farmId: m.farm_id,
     name: m.name,
+    displayName: m.display_name,
     deviceId: m.device_id,
     createdAt: m.created_at,
     awsIotThingName: m.aws_iot_thing_name,

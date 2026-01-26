@@ -600,3 +600,425 @@ export default defineConfig({
   }
 }
 ```
+
+---
+
+## Deployment Guide
+
+### Local Development
+
+#### 1. Setup Clerk Admin User
+
+1. Go to [Clerk Dashboard](https://dashboard.clerk.com)
+2. Navigate to your application
+3. Go to **Users** section
+4. Find or create user with email: `support@rootedrobotics.com`
+5. Click on the user → **Metadata** tab
+6. Under **Public metadata**, add:
+   ```json
+   {
+     "isAdmin": true
+   }
+   ```
+7. Save changes
+
+#### 2. Start Development Servers
+
+```bash
+# Terminal 1: Start backend API
+cd apps/api
+pnpm dev
+
+# Terminal 2: Start user frontend
+pnpm dev
+
+# Terminal 3: Start admin frontend (optional - same dev server serves both)
+# Access at http://localhost:5173/admin.html
+```
+
+#### 3. Access Admin Portal
+
+- Navigate to: `http://localhost:5173/admin.html`
+- Sign in with: `support@rootedrobotics.com`
+- You should see the admin dashboard
+
+---
+
+### Production Deployment
+
+#### Option A: Same Server, Different Paths
+
+Deploy both apps to same server with nginx routing:
+
+**Nginx Configuration:**
+
+```nginx
+server {
+    listen 80;
+    server_name yourdomain.com;
+
+    # User app
+    location / {
+        root /var/www/user-app;
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Admin app
+    location /admin {
+        alias /var/www/admin-app;
+        try_files $uri $uri/ /admin.html;
+    }
+
+    # API
+    location /trpc {
+        proxy_pass http://localhost:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+```
+
+**Build & Deploy:**
+
+```bash
+# Build both apps
+pnpm build
+
+# Deploy files
+scp -r dist/* user@server:/var/www/user-app/
+scp -r dist/admin.html dist/assets/* user@server:/var/www/admin-app/
+```
+
+---
+
+#### Option B: Separate Subdomains (Recommended)
+
+Deploy admin to separate subdomain with additional security.
+
+**DNS Configuration:**
+
+```
+A    yourdomain.com        → Server IP
+A    admin.yourdomain.com  → Server IP (or different server)
+```
+
+**Nginx Configuration:**
+
+```nginx
+# User app
+server {
+    listen 80;
+    server_name yourdomain.com;
+
+    location / {
+        root /var/www/user-app;
+        try_files $uri $uri/ /index.html;
+    }
+
+    location /trpc {
+        proxy_pass http://localhost:3001;
+    }
+}
+
+# Admin app
+server {
+    listen 80;
+    server_name admin.yourdomain.com;
+
+    # Optional: IP whitelist
+    allow 1.2.3.4;  # Your office IP
+    deny all;
+
+    location / {
+        root /var/www/admin-app;
+        try_files $uri $uri/ /index.html;
+    }
+
+    location /trpc {
+        proxy_pass http://localhost:3001;
+    }
+}
+```
+
+**Build & Deploy:**
+
+```bash
+# Build user app
+pnpm build
+
+# Build admin app separately
+pnpm build:admin
+
+# Deploy to separate locations
+scp -r dist/* user@server:/var/www/user-app/
+scp -r dist-admin/* user@server:/var/www/admin-app/
+```
+
+---
+
+#### Option C: AWS S3 + CloudFront
+
+Deploy static files to S3 with CloudFront distribution.
+
+**S3 Buckets:**
+- `yourdomain.com` - User app
+- `admin.yourdomain.com` - Admin app
+
+**CloudFront Distributions:**
+
+1. **User Distribution:**
+   - Origin: `yourdomain.com.s3.amazonaws.com`
+   - Alternate domain: `yourdomain.com`
+   - SSL Certificate: ACM certificate
+
+2. **Admin Distribution:**
+   - Origin: `admin.yourdomain.com.s3.amazonaws.com`
+   - Alternate domain: `admin.yourdomain.com`
+   - SSL Certificate: ACM certificate
+   - **Security:** Add WAF with IP whitelist rule
+
+**Deploy Script:**
+
+```bash
+#!/bin/bash
+
+# Build apps
+pnpm build
+pnpm build:admin
+
+# Deploy user app
+aws s3 sync dist/ s3://yourdomain.com --delete
+aws cloudfront create-invalidation --distribution-id E1234567890ABC --paths "/*"
+
+# Deploy admin app
+aws s3 sync dist-admin/ s3://admin.yourdomain.com --delete
+aws cloudfront create-invalidation --distribution-id E0987654321XYZ --paths "/*"
+```
+
+---
+
+## Security Considerations
+
+### 1. Authentication Layers
+
+**Layer 1: Clerk Authentication**
+- User must be signed in with valid Clerk session
+- Session token validated on every API request
+
+**Layer 2: Admin Metadata Check**
+- Backend validates `publicMetadata.isAdmin === true`
+- Enforced on all `/admin/*` routes via `adminProcedure`
+
+**Layer 3 (Optional): Infrastructure**
+- IP whitelist at nginx/CloudFront level
+- Restrict admin subdomain to known IPs
+- Add WAF rules for additional protection
+
+### 2. API Route Protection
+
+All admin routes use `adminProcedure` which:
+1. Requires valid authentication (`authedProcedure`)
+2. Validates admin status via Clerk API
+3. Throws `ForbiddenError` if not admin
+
+### 3. Frontend Protection
+
+Admin frontend checks `user.publicMetadata.isAdmin`:
+- Shows "Access Denied" if not admin
+- Prevents UI rendering for non-admins
+- Note: This is UX only, real security is backend
+
+### 4. Audit Trail
+
+Clerk provides audit logs for:
+- User sign-ins
+- Metadata changes
+- API token usage
+
+Access via Clerk Dashboard → Logs
+
+---
+
+## Testing
+
+### 1. Test Admin Authentication
+
+```bash
+# Get auth token from Clerk
+TOKEN="your_clerk_session_token"
+
+# Test admin endpoint
+curl -H "Authorization: Bearer $TOKEN" \
+  http://localhost:3001/trpc/admin.getAllTenants
+```
+
+**Expected:**
+- Admin user: Returns tenant list
+- Non-admin user: Returns 403 Forbidden
+
+### 2. Test Admin UI
+
+1. Sign in as admin user
+2. Verify dashboard loads
+3. Click on tenant → verify machines load
+4. Check machine status display
+
+### 3. Test Non-Admin Access
+
+1. Sign in as regular user
+2. Navigate to admin portal
+3. Verify "Access Denied" message
+4. Attempt API call → verify 403 error
+
+---
+
+## Monitoring & Maintenance
+
+### 1. Admin User Management
+
+**Add new admin:**
+1. Go to Clerk Dashboard → Users
+2. Find user
+3. Add `"isAdmin": true` to public metadata
+
+**Remove admin:**
+1. Go to Clerk Dashboard → Users
+2. Find user
+3. Remove or set `"isAdmin": false` in public metadata
+
+### 2. Logging
+
+Add logging to admin routes:
+
+```typescript
+export const adminRouter = router({
+  getAllTenants: adminProcedure.query(async ({ ctx }) => {
+    ctx.logger.info('Admin accessed tenant list', { 
+      userId: ctx.auth.userId 
+    });
+    return getAllTenants();
+  }),
+});
+```
+
+### 3. Metrics
+
+Track admin portal usage:
+- Number of admin logins
+- API calls to admin endpoints
+- Response times
+- Error rates
+
+---
+
+## Troubleshooting
+
+### Issue: "Access Denied" for admin user
+
+**Check:**
+1. User has `isAdmin: true` in Clerk public metadata
+2. Metadata is saved (refresh Clerk dashboard)
+3. User signed out and back in (to refresh token)
+4. Browser cache cleared
+
+### Issue: Admin routes return 403
+
+**Check:**
+1. `requireAdmin()` function is working
+2. Clerk API key is correct in `.env`
+3. User token is being sent in request headers
+4. Backend logs for specific error
+
+### Issue: Admin app not loading
+
+**Check:**
+1. `admin.html` exists in project root
+2. Vite config has multi-page setup
+3. Build output includes admin files
+4. Nginx/server routing is correct
+
+---
+
+## Future Enhancements
+
+### Phase 4: Advanced Features
+
+1. **Real-time Updates**
+   - WebSocket connection for live machine status
+   - Push notifications for offline machines
+
+2. **Advanced Filtering**
+   - Search machines by name/ID
+   - Filter by status (online/offline)
+   - Sort by last seen date
+
+3. **Machine Actions**
+   - Trigger machine restart
+   - Update machine configuration
+   - View machine logs
+
+4. **Analytics Dashboard**
+   - Machine uptime statistics
+   - Tenant usage metrics
+   - Historical status charts
+
+5. **Multi-Admin Support**
+   - Admin roles (super admin, viewer)
+   - Activity audit log
+   - Admin user management UI
+
+---
+
+## Checklist
+
+### Backend Implementation
+- [ ] Create `apps/api/src/lib/auth/admin.ts`
+- [ ] Add `adminProcedure` to `apps/api/src/lib/trpc/trpc.ts`
+- [ ] Create admin service functions in `apps/api/src/domains/admin-domain/service/`
+- [ ] Create `apps/api/src/domains/admin-domain/router.ts`
+- [ ] Register admin router in `apps/api/src/router/index.ts`
+- [ ] Test admin endpoints with Postman/curl
+
+### Frontend Implementation
+- [ ] Create `admin.html` in project root
+- [ ] Create `src/admin/main.tsx`
+- [ ] Create `src/admin/App.tsx`
+- [ ] Create `src/admin/lib/api-client.ts`
+- [ ] Create `src/admin/pages/Dashboard.tsx`
+- [ ] Create `src/admin/components/TenantList.tsx`
+- [ ] Update `vite.config.ts` for multi-page build
+- [ ] Test admin UI locally
+
+### Clerk Setup
+- [ ] Create/locate admin user in Clerk Dashboard
+- [ ] Add `isAdmin: true` to user's public metadata
+- [ ] Test authentication with admin user
+- [ ] Test access denial with non-admin user
+
+### Deployment
+- [ ] Build both user and admin apps
+- [ ] Deploy to server/S3
+- [ ] Configure nginx/CloudFront routing
+- [ ] Set up SSL certificates
+- [ ] (Optional) Configure IP whitelist
+- [ ] Test production deployment
+- [ ] Verify admin access in production
+
+### Documentation
+- [ ] Document admin user credentials (secure location)
+- [ ] Create runbook for adding new admins
+- [ ] Document deployment process
+- [ ] Set up monitoring/alerts
+
+---
+
+## Support
+
+For issues or questions:
+- Check troubleshooting section above
+- Review Clerk documentation: https://clerk.com/docs
+- Check application logs in `apps/api/logs/`
+- Contact: support@rootedrobotics.com

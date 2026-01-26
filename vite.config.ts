@@ -11,8 +11,17 @@ export default defineConfig({
       '@machines': path.resolve(__dirname, './src/machines'),
       '@onboarding': path.resolve(__dirname, './src/onboarding'),
       '@planner': path.resolve(__dirname, './src/planner'),
+      '@admin': path.resolve(__dirname, './src/admin'),
       '@shared': path.resolve(__dirname, './shared'),
       '@': path.resolve(__dirname, './src'),
+    },
+  },
+  build: {
+    rollupOptions: {
+      input: {
+        main: path.resolve(__dirname, 'index.html'),
+        admin: path.resolve(__dirname, 'admin.html'),
+      },
     },
   },
   server: {

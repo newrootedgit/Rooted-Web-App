@@ -20,6 +20,7 @@
       "@machines/*": ["./src/machines/*"],
       "@onboarding/*": ["./src/onboarding/*"],
       "@planner/*": ["./src/planner/*"],
+      "@admin/*": ["./src/admin/*"],
       "@shared/*": ["./shared/*"]
     }
   },

@@ -3,6 +3,7 @@
 export interface Machine {
   id: string;
   name: string;
+  displayName?: string | null;
   deviceId: string;
   createdAt: string | Date | null;
   awsIotThingName?: string | null;

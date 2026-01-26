@@ -8,8 +8,10 @@ export type { ScanError } from '../../../shared';
  * Request a BLE device using Web Bluetooth API.
  * Opens the browser's native device picker filtered to devices
  * advertising our service UUID.
+ * 
+ * @param deviceName - Optional device name to filter by
  */
-export async function scanForDevice(): Promise<BluetoothDevice> {
+export async function scanForDevice(deviceName?: string): Promise<BluetoothDevice> {
   if (!navigator.bluetooth) {
     throw {
       type: 'not_supported',
@@ -18,9 +20,11 @@ export async function scanForDevice(): Promise<BluetoothDevice> {
   }
 
   try {
-    const device = await navigator.bluetooth.requestDevice({
-      filters: [{ services: [SERVICE_UUID] }],
-    });
+    const filters: BluetoothLEScanFilter[] = deviceName
+      ? [{ name: deviceName, services: [SERVICE_UUID] }]
+      : [{ services: [SERVICE_UUID] }];
+
+    const device = await navigator.bluetooth.requestDevice({ filters });
     console.log('[BLE] Device selected:', {
       name: device.name,
       id: device.id,

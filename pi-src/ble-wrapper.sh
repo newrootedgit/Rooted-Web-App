@@ -40,9 +40,14 @@ log "=========================================="
 log "Starting BLE provisioner (${DURATION}s window)..."
 
 # Ensure Bluetooth adapter is up
+log "Powering on Bluetooth adapter..."
+rfkill unblock bluetooth 2>/dev/null || true
+sleep 1
 if ! hciconfig hci0 up 2>/dev/null; then
-    log "Warning: Could not bring up Bluetooth adapter"
+    log "Warning: Could not bring up Bluetooth adapter with hciconfig, trying bluetoothctl..."
+    bluetoothctl power on 2>/dev/null || true
 fi
+sleep 1
 
 # Start the provisioner in background
 "${VENV_PYTHON}" "${PROVISIONER}" >> "${LOG_FILE}" 2>&1 &

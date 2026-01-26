@@ -89,16 +89,20 @@ export class MachineGATTClient {
       throw new Error('Not connected to device');
     }
 
-    console.log('[BLE] Writing WiFi credentials:', { ssid, password: '***' });
+    console.log('[BLE] Writing WiFi credentials:', { ssid, password: '***', connected: this.isConnected });
     const encoder = new TextEncoder();
 
     const ssidChar = await this.service.getCharacteristic(SSID_UUID);
-    await ssidChar.writeValue(encoder.encode(ssid));
-    console.log('[BLE] SSID written');
+    const ssidBytes = encoder.encode(ssid);
+    console.log('[BLE] SSID bytes:', Array.from(ssidBytes));
+    await ssidChar.writeValue(ssidBytes);
+    console.log('[BLE] SSID written successfully');
 
     const passChar = await this.service.getCharacteristic(PASS_UUID);
-    await passChar.writeValue(encoder.encode(password));
-    console.log('[BLE] Password written');
+    const passBytes = encoder.encode(password);
+    console.log('[BLE] Password bytes length:', passBytes.length);
+    await passChar.writeValue(passBytes);
+    console.log('[BLE] Password written successfully');
   }
 
   // Need to remove any here

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ChevronDown, ChevronUp, Trash2, Settings, Calendar, Cpu, Wifi, WifiOff } from 'lucide-react';
 import type { Machine } from '../../../../shared';
 import { getMachineImage } from '../../utils/machine-images';
+import ChangeWifiModal from '../../wifi-provisioning/components/ChangeWifiModal';
 
 interface MachineCardProps {
   machine: Machine;
@@ -11,6 +12,7 @@ interface MachineCardProps {
 export default function MachineCard({ machine, onDelete }: MachineCardProps) {
   const machineImage = getMachineImage(machine.name);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [showChangeWifi, setShowChangeWifi] = useState(false);
   const isOnline = machine.status === 'online';
 
   const formatDate = (date: string | Date | null) => {
@@ -36,14 +38,14 @@ export default function MachineCard({ machine, onDelete }: MachineCardProps) {
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (confirm(`Are you sure you want to delete "${machine.name}"?`)) {
+    if (confirm(`Are you sure you want to delete "${machine.displayName || machine.name}"?`)) {
       onDelete(machine.deviceId);
     }
   };
 
   const handleUpdate = (e: React.MouseEvent) => {
     e.stopPropagation();
-    // TODO: Implement update functionality
+    setShowChangeWifi(true);
   };
 
   return (
@@ -56,7 +58,7 @@ export default function MachineCard({ machine, onDelete }: MachineCardProps) {
       <div className="flex items-center justify-between p-4">
         <div className="flex flex-col gap-0.5">
           <div className="flex items-center gap-2">
-            <span className="font-semibold text-foreground">{machine.name}</span>
+            <span className="font-semibold text-foreground">{machine.displayName || machine.name}</span>
             <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500' : 'bg-gray-400'}`} />
           </div>
           <span className="text-sm text-muted-foreground font-mono">{machine.deviceId}</span>
@@ -149,6 +151,13 @@ export default function MachineCard({ machine, onDelete }: MachineCardProps) {
             </button>
           </div>
         </div>
+      )}
+
+      {showChangeWifi && (
+        <ChangeWifiModal
+          machineName={machine.name}
+          onClose={() => setShowChangeWifi(false)}
+        />
       )}
     </div>
   );

@@ -19,6 +19,9 @@ export function OnboardMachine({ isOpen, onClose, onSuccess, tenantId, userEmail
     step,
     statusMessage,
     isScanning,
+    deviceName,
+    displayName,
+    setDisplayName,
     scan,
     submitWifi,
     reset,
@@ -87,8 +90,22 @@ export function OnboardMachine({ isOpen, onClose, onSuccess, tenantId, userEmail
         {step === 'wifi' && (
           <form onSubmit={handleWifiSubmit} className="flex flex-col gap-4">
             <p className="text-muted-foreground text-center">
-              Enter WiFi credentials to connect the device to your network.
+              Configure your machine and connect it to your network.
             </p>
+            <div className="flex flex-col gap-1">
+              <label htmlFor="displayName" className="text-sm font-medium text-foreground">
+                Machine Name
+              </label>
+              <input
+                id="displayName"
+                type="text"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder={`e.g., ${deviceName} - Main Floor`}
+                className="px-3 py-2 bg-secondary border border-border rounded-md text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                required
+              />
+            </div>
             <div className="flex flex-col gap-1">
               <label htmlFor="ssid" className="text-sm font-medium text-foreground">
                 Network Name (SSID)
