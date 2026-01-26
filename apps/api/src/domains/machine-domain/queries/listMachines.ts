@@ -1,6 +1,6 @@
 import type { PrismaClient } from '../../../generated/prisma/client.js';
 import type { Machine } from '../types.js';
-import { getMachinesByTenant } from '../queries/getMachinesByTenant.js';
+import { getMachinesByTenant } from './getMachinesByTenant.js';
 import {
   type PaginationInput,
   type PaginatedResponse,

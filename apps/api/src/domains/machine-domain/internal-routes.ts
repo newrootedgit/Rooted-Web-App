@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { prisma } from '../../lib/db/index.js';
-import { handleLifecycleEvent } from './service/handleLifecycleEvent.js';
+import { handleLifecycleEvent } from './commands/index.js';
 
 interface LifecycleEventBody {
   deviceId: string;

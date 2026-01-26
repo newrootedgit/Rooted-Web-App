@@ -1,7 +1,7 @@
 import { TRPCError } from '@trpc/server';
 import type { PrismaClient } from '../../../generated/prisma/client.js';
 import type { Machine } from '../types.js';
-import { getMachineById } from '../queries/getMachineById.js';
+import { getMachineById } from './getMachineById.js';
 
 export async function getMachine(
   prisma: PrismaClient,

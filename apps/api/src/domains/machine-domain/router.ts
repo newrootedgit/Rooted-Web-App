@@ -1,11 +1,8 @@
 import { router, authedProcedure, farmProcedure, tenantProcedure } from '../../lib/trpc/trpc.js';
 import { paginationInputSchema } from '../../lib/trpc/pagination/index.js';
 import { addMachineSchema, getMachineParamsSchema, getByDeviceIdSchema, deleteMachineSchema } from './types.js';
-import { listMachines } from './service/listMachines.js';
-import { getMachine } from './service/getMachine.js';
-import { getMachineByDeviceId } from './service/getMachineByDeviceId.js';
-import { createOrUpdateMachine } from './service/createOrUpdateMachine.js';
-import { deleteMachine } from './service/deleteMachine.js';
+import { listMachines, getMachine, findMachineByDeviceId } from './queries/index.js';
+import { createOrUpdateMachine, deleteMachine } from './commands/index.js';
 
 export const machineRouter = router({
   list: tenantProcedure
@@ -19,7 +16,7 @@ export const machineRouter = router({
   ),
 
   byDeviceId: authedProcedure.input(getByDeviceIdSchema).query(({ ctx, input }) =>
-    getMachineByDeviceId(ctx.prisma, input.deviceId)
+    findMachineByDeviceId(ctx.prisma, input.deviceId)
   ),
 
   create: tenantProcedure.input(addMachineSchema).mutation(({ ctx, input }) =>

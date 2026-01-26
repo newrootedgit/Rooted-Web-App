@@ -94,11 +94,16 @@ echo ""
 echo "Installing all dependencies on the Pi (this may take a few minutes)..."
 sshpass -p "$SSH_PASSWORD" ssh -o StrictHostKeyChecking=no "${PI_USER}@${PI_HOST}" << REMOTE_SCRIPT
 set -e
+
+# Fix any interrupted dpkg operations first
+echo "Checking for interrupted package operations..."
+echo '${SSH_PASSWORD}' | sudo -S dpkg --configure -a || true
+
 echo "Updating package lists..."
-echo '${SSH_PASSWORD}' | sudo -S apt-get update -qq
+echo '${SSH_PASSWORD}' | sudo -S apt-get update
 
 echo "Installing required packages..."
-echo '${SSH_PASSWORD}' | sudo -S apt-get install -y -qq \
+echo '${SSH_PASSWORD}' | sudo -S apt-get install -y \
     network-manager \
     pkg-config \
     libcairo2-dev \
