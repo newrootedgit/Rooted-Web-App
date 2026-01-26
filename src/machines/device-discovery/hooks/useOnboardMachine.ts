@@ -55,7 +55,7 @@ export function useOnboardMachine({ tenantId, userEmail, farmId, onSuccess }: Us
       await createMachine.mutateAsync({
         name: deviceInfoRef.current.name,
         deviceId: currentDeviceId,
-        displayName: displayName || undefined,
+        displayName: displayName,
       });
       setStatusMessage('Machine registered successfully!');
       setStep('success');

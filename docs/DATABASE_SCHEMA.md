@@ -2,7 +2,18 @@
 
 Complete database schema for both Rooted Planner and Machine IoT platforms.
 
-## Multi-Tenant Architecture
+## Implementation Status
+
+**✅ IMPLEMENTED & IN USE:**
+- Multi-tenant architecture (tenants, farms, farm_users)
+- Machine IoT tables (machines)
+- Authentication and onboarding
+
+**🚧 DEFINED BUT NOT USED:**
+- All Rooted Planner tables (products, orders, tasks, customers, etc.)
+- These tables exist in the schema but have no application logic yet
+
+## Multi-Tenant Architecture ✅ **IN USE**
 
 **Hierarchy**: `tenants` → `farms` → data tables
 
@@ -18,9 +29,11 @@ SET app.current_tenant_id = '<tenant-uuid>';
 SET app.current_farm_id = '<farm-uuid>';
 ```
 
+**Note**: RLS is defined in schema but enforcement happens at application level via tRPC middleware.
+
 ---
 
-## Tenant & Farm Management
+## Tenant & Farm Management ✅ **IMPLEMENTED & IN USE**
 
 ### tenants
 Top-level organization representing a business entity.
@@ -43,6 +56,8 @@ CREATE TABLE tenants (
 CREATE INDEX idx_tenants_slug ON tenants(slug);
 ```
 
+**Status**: ✅ Actively used for multi-tenancy. Created during user onboarding.
+
 ### farms
 Individual farm locations under a tenant.
 
@@ -61,6 +76,8 @@ CREATE TABLE farms (
 CREATE INDEX idx_farms_tenant_id ON farms(tenant_id);
 CREATE UNIQUE INDEX idx_farms_tenant_name ON farms(tenant_id, name);
 ```
+
+**Status**: ✅ Actively used. Created during user onboarding. Users can switch between farms.
 
 ### farm_users
 User-farm relationship with role-based access control.
@@ -87,9 +104,11 @@ CREATE UNIQUE INDEX idx_farm_users_unique ON farm_users(clerk_user_id, farm_id);
 -- Note: Users can belong to multiple farms, so no unique constraint on clerk_user_id alone
 ```
 
+**Status**: ✅ Actively used. Links Clerk users to farms with roles. Created during onboarding.
+
 ---
 
-## Machine IoT Platform
+## Machine IoT Platform ✅ **IMPLEMENTED & IN USE**
 
 ### machines
 Raspberry Pi IoT devices for farm automation and monitoring.
@@ -125,16 +144,21 @@ CREATE POLICY machines_isolation ON machines
   );
 ```
 
+**Status**: ✅ Fully implemented and actively used. Machines are onboarded via BLE, registered with AWS IoT Core, and monitored for connectivity.
+
 **Notes:**
 - `name` comes from BLE device name during onboarding
 - `aws_iot_thing_name` is set after successful WiFi provisioning and AWS IoT registration
-- `status` is updated via periodic AWS IoT Core connectivity checks
+- `status` is updated via periodic AWS IoT Core connectivity checks (Lambda function)
 - Unique constraint on `(tenant_id, farm_id, name)` prevents duplicate machine names per farm
 - Both `tenant_id` and `farm_id` required for proper multi-tenant isolation
+- RLS policy defined but enforcement happens at application level via tRPC middleware
 
 ---
 
-## Rooted Planner Platform
+## Rooted Planner Platform 🚧 **DEFINED BUT NOT USED**
+
+**All tables below are defined in the Prisma schema but have NO application logic implemented yet.**
 
 ### product_categories
 Categorization for microgreen varieties.
@@ -598,3 +622,23 @@ All tables include:
 6. **Constraints**: Check constraints ensure data integrity (e.g., product XOR blend in order items)
 7. **Machine Integration**: Machines table follows same multi-tenant pattern as planner tables
 8. **Context Switching**: Frontend must allow users to switch between farms they have access to
+
+## Implementation Status Summary
+
+### ✅ Fully Implemented & In Use
+- `tenants` - Multi-tenant organization structure
+- `farms` - Farm locations under tenants
+- `farm_users` - User-farm relationships with roles
+- `machines` - IoT device registry with AWS IoT Core integration
+
+### 🚧 Defined But Not Used (Rooted Planner)
+All Rooted Planner tables are defined in the Prisma schema but have no application logic:
+- `product_categories`, `products`, `blends`, `blend_ingredients`
+- `customers`
+- `orders`, `order_items`
+- `tasks`
+- `farm_layouts`, `rack_assignments`
+- `recurring_order_schedules`, `recurring_order_items`
+- `supplies`
+
+**Next Steps**: Implement Rooted Planner domain logic to utilize these tables. Start with products, then orders, then tasks.

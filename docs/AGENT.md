@@ -1,24 +1,77 @@
-# Agent Development Guide - Rooted Planner
+# Agent Development Guide - Rooted Web App
 
 ## Overview
 
-This document outlines how AI coding agents can effectively support developers working on the Rooted Planner codebase. It covers the project structure, development workflows, common tasks, and best practices for agent-assisted development.
+This document outlines how AI coding agents can effectively support developers working on the Rooted Web App codebase. The project consists of two platforms: **Machine IoT** (fully implemented) and **Rooted Planner** (not yet implemented).
 
 ## Project Context Understanding
 
-### Core Business Domain
-- **Microgreen farm management** application
-- **Production workflow**: Order → Tasks (SOAK → SEED → MOVE_TO_LIGHT → HARVEST)
-- **Multi-tenant architecture** with farm isolation
-- **Real-world operations**: Tracking trays, yields, customers, employees
+### Current Implementation Status
+
+**✅ Machine IoT Platform - FULLY IMPLEMENTED**
+- BLE-based device provisioning for Raspberry Pi machines
+- Web Bluetooth API integration for WiFi configuration
+- Multi-tenant machine management with PostgreSQL
+- AWS IoT Core integration for connectivity monitoring
+- Admin portal for cross-tenant machine viewing
+- Production-ready deployment scripts
+
+**🚧 Rooted Planner Platform - NOT IMPLEMENTED**
+- Microgreen farm management application (planned)
+- Only placeholder page exists
+- Backend domain structure not created
+- Database schema defined but tables not used
+- Full implementation pending
+
+### Core Business Domains
+
+**Machine IoT (Active):**
+- Device onboarding via Web Bluetooth
+- WiFi provisioning through BLE GATT characteristics
+- Machine registry with multi-tenant isolation
+- AWS IoT Core connectivity monitoring
+- Admin dashboard for system-wide machine management
+
+**Rooted Planner (Planned):**
+- Microgreen farm production workflow management
+- Order → Tasks (SOAK → SEED → MOVE_TO_LIGHT → HARVEST)
+- Multi-tenant architecture with farm isolation
+- Real-world operations tracking (trays, yields, customers, employees)
 
 ### Technical Architecture
-- **Monorepo**: Apps (web/api) + shared packages (db/ui/logic/config)
-- **Type-safe stack**: tRPC + Zod + TypeScript + Prisma
-- **Frontend**: React + Vite + TailwindCSS + Shadcn
-- **Backend**: Fastify + tRPC + PostgreSQL + Redis
-- **Auth**: Clerk with farm_id in JWT metadata
-- **Deployment**: Docker containers on AWS EC2
+- **Frontend**: React 18 + TypeScript + Vite + TailwindCSS
+- **Backend**: Fastify + tRPC + Prisma ORM + PostgreSQL
+- **Auth**: Clerk with JWT-based multi-tenancy
+- **Machine IoT Specific**: Web Bluetooth API + Python BLE peripheral + AWS IoT Core
+- **Deployment**: Docker containers, static hosting for frontend, AWS infrastructure
+
+### Current Codebase Structure
+
+```
+Rooted-Web-App/
+├── src/                          # Frontend (React + Vite)
+│   ├── machines/                 # ✅ Machine IoT (IMPLEMENTED)
+│   ├── planner/                  # 🚧 Placeholder only
+│   ├── admin/                    # ✅ Admin portal (IMPLEMENTED)
+│   ├── auth/                     # ✅ Clerk integration (IMPLEMENTED)
+│   ├── onboarding/               # ✅ Tenant/farm creation (IMPLEMENTED)
+│   └── lib/                      # ✅ Shared utilities (IMPLEMENTED)
+│
+├── apps/api/                     # Backend (Fastify + tRPC)
+│   └── src/
+│       ├── domains/
+│       │   ├── machine-domain/   # ✅ IMPLEMENTED
+│       │   ├── admin-domain/     # ✅ IMPLEMENTED
+│       │   ├── onboarding-domain/# ✅ IMPLEMENTED
+│       │   ├── user-domain/      # 🚧 Stub only
+│       │   └── planner-domain/   # 🚧 NOT CREATED
+│       └── lib/                  # ✅ Core infrastructure (IMPLEMENTED)
+│
+├── pi-src/                       # ✅ Raspberry Pi BLE service (IMPLEMENTED)
+├── shared/                       # ✅ Shared UI components (IMPLEMENTED)
+├── infra/                        # ✅ AWS Lambda functions (IMPLEMENTED)
+└── docs/                         # Documentation
+```
 
 ## Development Workflow Support
 
@@ -29,272 +82,280 @@ This document outlines how AI coding agents can effectively support developers w
    ```bash
    # Clone and install dependencies
    git clone <repo>
-   cd rooted-planner-erp
+   cd Rooted-Web-App
    pnpm install
    
    # Setup environment files
-   cp .env.example .env.local
-   # Guide developer through required environment variables
+   cp .env.example .env
+   cp apps/api/.env.example apps/api/.env
+   
+   # Configure Clerk keys (required)
+   # VITE_CLERK_PUBLISHABLE_KEY=pk_test_...
+   # CLERK_SECRET_KEY=sk_test_...
    ```
 
 2. **Database Initialization**
    ```bash
    # Start PostgreSQL container
-   docker-compose up -d postgres redis
+   docker compose -f docker/docker-compose.yml up -d
    
    # Run Prisma migrations
-   cd packages/db
+   cd apps/api
    pnpm prisma migrate dev
    pnpm prisma generate
    ```
 
-3. **Development Server**
+3. **Development Servers**
    ```bash
-   # Start all services
+   # Terminal 1: Frontend (port 5173)
    pnpm dev
-   # This should start:
-   # - apps/web (React + Vite)
-   # - apps/api (Fastify + tRPC)
-   # - Database and Redis containers
+   
+   # Terminal 2: Backend API (port 3001)
+   cd apps/api
+   pnpm dev
    ```
+
+4. **Verify Setup**
+   - Frontend: http://localhost:5173
+   - Backend: http://localhost:3001/health (if health endpoint exists)
+   - Admin Portal: http://localhost:5173/admin.html
 
 ### Code Navigation Assistance
 
-**Help developers understand:**
+**Help developers understand the actual structure:**
 
 ```
-├── apps/
-│   ├── web/                # Frontend React app
-│   │   ├── src/
-│   │   │   ├── products/   # Product management features
-│   │   │   ├── orders/     # Order management features
-│   │   │   ├── tasks/      # Production workflow features
-│   │   │   └── shared/     # Reusable components/hooks
-│   └── api/                # Backend tRPC API
-│       ├── src/
-│       │   ├── products/   # Product domain logic
-│       │   ├── orders/     # Order domain logic
-│       │   ├── tasks/      # Task domain logic
-│       │   └── shared/     # Middleware, utils
-├── packages/
-│   ├── db/                 # Prisma schema + migrations
-│   ├── ui/                 # Shadcn components
-│   ├── logic/              # Zod schemas + business rules
-│   └── config/             # Shared tooling configs
+Key Directories:
+├── src/machines/                 # ✅ Machine IoT frontend
+│   ├── dashboard/                # Machine list and management
+│   ├── device-discovery/         # BLE onboarding flow
+│   └── wifi-provisioning/        # WiFi configuration
+│
+├── apps/api/src/domains/
+│   ├── machine-domain/           # ✅ Machine backend logic
+│   │   ├── router.ts             # tRPC procedures
+│   │   ├── internal-routes.ts    # HTTP endpoints for AWS IoT
+│   │   ├── commands/             # Write operations
+│   │   └── queries/              # Read operations
+│   │
+│   ├── admin-domain/             # ✅ Admin operations
+│   ├── onboarding-domain/        # ✅ User onboarding
+│   └── planner-domain/           # 🚧 NOT CREATED YET
+│
+├── pi-src/                       # ✅ Raspberry Pi BLE service
+│   ├── provisioner.py            # Main BLE peripheral
+│   ├── aws_iot_registration.py  # AWS IoT integration
+│   └── deploy-*.sh               # Deployment scripts
+│
+└── shared/ui/components/         # ✅ Reusable UI components
 ```
 
 **Key Files to Understand:**
-- `packages/db/prisma/schema.prisma` - Database schema
-- `packages/logic/src/` - Business rules and validation
-- `apps/api/src/router/index.ts` - tRPC router setup
-- `apps/web/src/lib/trpc.ts` - tRPC client setup
+- `apps/api/prisma/schema.prisma` - Database schema (multi-tenant structure)
+- `apps/api/src/lib/trpc/trpc.ts` - tRPC setup and procedures
+- `apps/api/src/lib/auth/middleware.ts` - Clerk authentication
+- `src/lib/bluetooth/gatt-client.ts` - Web Bluetooth GATT operations
+- `pi-src/provisioner.py` - BLE peripheral implementation
 
 ## Common Development Tasks
 
-### 1. Adding New Features
+### 1. Adding Machine IoT Features ✅
 
-**Agent Workflow:**
+**Agent Workflow for Machine Domain:**
+
 1. **Understand Requirements**
-   - Ask clarifying questions about business logic
-   - Reference existing similar features
-   - Check BASIC_SPEC.md for feature requirements
+   - Machine IoT is production-ready
+   - Focus on enhancements or bug fixes
+   - Reference `docs/machine-iot/` for architecture
 
-2. **Plan Implementation**
-   ```
-   For new feature "Supplier Management":
-   1. Add database schema (packages/db)
-   2. Create Zod schemas (packages/logic)
-   3. Build tRPC procedures (apps/api)
-   4. Create React components (apps/web)
-   5. Add navigation and routing
-   ```
-
-3. **Database Schema Changes**
+2. **Backend Changes (tRPC Procedures)**
    ```typescript
-   // packages/db/prisma/schema.prisma
-   model Supplier {
-     id        String   @id @default(uuid())
-     farmId    String   @map("farm_id")
-     name      String
-     email     String?
-     phone     String?
-     address   Json?
-     createdAt DateTime @default(now()) @map("created_at")
+   // apps/api/src/domains/machine-domain/router.ts
+   export const machineRouter = router({
+     list: protectedProcedure
+       .query(async ({ ctx }) => {
+         return listMachines(ctx.db, ctx.auth.tenantId, ctx.auth.farmId);
+       }),
      
-     // Relations
-     farm      Farm     @relation(fields: [farmId], references: [id])
-     supplies  Supply[]
-     
-     @@map("suppliers")
-   }
-   ```
-
-4. **Business Logic & Validation**
-   ```typescript
-   // packages/logic/src/suppliers/schemas.ts
-   export const supplierSchema = z.object({
-     id: z.string().uuid(),
-     farmId: z.string().uuid(),
-     name: z.string().min(1).max(100),
-     email: z.string().email().optional(),
-     phone: z.string().optional(),
-     address: z.record(z.any()).optional(),
-   });
-   
-   export const createSupplierSchema = supplierSchema.omit({ 
-     id: true, 
-     farmId: true 
-   });
-   ```
-
-5. **tRPC Procedures**
-   ```typescript
-   // apps/api/src/suppliers/router.ts
-   export const supplierRouter = router({
-     list: farmProcedure.query(async ({ ctx }) => {
-       return ctx.prisma.supplier.findMany({
-         where: { farmId: ctx.farmId },
-         orderBy: { name: 'asc' },
-       });
-     }),
-     
-     create: farmProcedure
-       .input(createSupplierSchema)
+     create: protectedProcedure
+       .input(createMachineSchema)
        .mutation(async ({ ctx, input }) => {
-         return ctx.prisma.supplier.create({
-           data: { ...input, farmId: ctx.farmId },
-         });
+         return createOrUpdateMachine(ctx.db, input);
        }),
    });
    ```
 
-6. **React Components**
+3. **Frontend Changes (React Components)**
    ```typescript
-   // apps/web/src/suppliers/components/SupplierList.tsx
-   export const SupplierList = () => {
-     const { data: suppliers, isLoading } = trpc.suppliers.list.useQuery();
+   // src/machines/dashboard/components/NewFeature.tsx
+   export const NewFeature = () => {
+     const { data: machines } = trpc.machines.list.useQuery();
      
-     if (isLoading) return <LoadingSpinner />;
-     
-     return (
-       <div className="space-y-4">
-         {suppliers?.map(supplier => (
-           <SupplierCard key={supplier.id} supplier={supplier} />
-         ))}
-       </div>
-     );
+     // Component implementation
    };
    ```
 
-### 2. Debugging Issues
+4. **Testing**
+   ```bash
+   cd apps/api
+   pnpm test  # Run existing tests
+   # Add new tests in __tests__/ directories
+   ```
+
+### 2. Starting Rooted Planner Implementation 🚧
+
+**Agent Workflow for NEW Planner Features:**
+
+1. **Create Domain Structure**
+   ```bash
+   mkdir -p apps/api/src/domains/planner-domain/{commands,queries}
+   touch apps/api/src/domains/planner-domain/{router.ts,types.ts}
+   ```
+
+2. **Define Database Schema**
+   ```prisma
+   // apps/api/prisma/schema.prisma
+   // Add planner-specific tables (products, orders, tasks, etc.)
+   // Reference DATABASE_SCHEMA.md for full schema
+   ```
+
+3. **Create tRPC Router**
+   ```typescript
+   // apps/api/src/domains/planner-domain/router.ts
+   export const plannerRouter = router({
+     products: productRouter,
+     orders: orderRouter,
+     tasks: taskRouter,
+     // ... other sub-routers
+   });
+   ```
+
+4. **Build Frontend Features**
+   ```bash
+   mkdir -p src/planner/{products,orders,tasks,customers}
+   # Create components, hooks, and pages
+   ```
+
+5. **Update Root Router**
+   ```typescript
+   // apps/api/src/lib/trpc/router.ts
+   export const appRouter = router({
+     machines: machineRouter,
+     planner: plannerRouter,  // Add this
+     admin: adminRouter,
+     onboarding: onboardingRouter,
+   });
+   ```
+
+### 3. Debugging Machine IoT Issues ✅
 
 **Agent Debugging Support:**
 
-1. **tRPC Errors**
+1. **BLE Connection Issues**
    ```typescript
-   // Common tRPC error patterns
-   
-   // Input validation error
-   if (error.code === 'BAD_REQUEST') {
-     // Check Zod schema validation
-     // Verify input data structure
+   // Check browser support
+   if (!navigator.bluetooth) {
+     console.error('Web Bluetooth not supported');
    }
    
-   // Unauthorized error
-   if (error.code === 'UNAUTHORIZED') {
-     // Check Clerk JWT validation
-     // Verify farm_id extraction
-   }
-   
-   // Database constraint error
-   if (error.code === 'CONFLICT') {
-     // Check unique constraints
-     // Verify foreign key relationships
-   }
+   // Check GATT client logs
+   // src/lib/bluetooth/gatt-client.ts has detailed error handling
    ```
 
-2. **Database Issues**
+2. **tRPC Errors**
+   ```typescript
+   // Common patterns in machine-domain
+   
+   // Check authentication
+   if (!ctx.auth.tenantId || !ctx.auth.farmId) {
+     throw new TRPCError({ code: 'UNAUTHORIZED' });
+   }
+   
+   // Check database queries
+   // apps/api/src/domains/machine-domain/queries/
+   ```
+
+3. **AWS IoT Connectivity**
    ```bash
-   # Check database connection
-   docker-compose logs postgres
+   # Check Lambda logs
+   # infra/lambda/machine-lifecycle/index.js
    
-   # Verify schema sync
-   cd packages/db
-   pnpm prisma db pull
-   pnpm prisma generate
-   
-   # Reset database if needed
-   pnpm prisma migrate reset
+   # Verify IoT Core thing registration
+   aws iot describe-thing --thing-name <machine-name>
    ```
 
-3. **Frontend Issues**
-   ```typescript
-   // React Query devtools
-   import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
+4. **Database Issues**
+   ```bash
+   # Check Prisma client
+   cd apps/api
+   pnpm prisma studio  # Open database GUI
    
-   // Add to app root for debugging
-   <ReactQueryDevtools initialIsOpen={false} />
+   # Verify migrations
+   pnpm prisma migrate status
    ```
 
-### 3. Testing Support
+### 3. Testing Support ✅
 
 **Agent Testing Assistance:**
 
-1. **Unit Tests**
+1. **Unit Tests (Vitest)**
    ```typescript
-   // packages/logic/src/products/__tests__/calculations.test.ts
-   import { calculateHarvestDate, calculateTraysNeeded } from '../calculations';
+   // apps/api/src/domains/machine-domain/commands/__tests__/createOrUpdateMachine.test.ts
+   import { describe, it, expect, beforeEach } from 'vitest';
+   import { createMockPrisma } from '../../../test/mockPrisma';
+   import { createOrUpdateMachine } from '../createOrUpdateMachine';
    
-   describe('Product Calculations', () => {
-     test('calculates harvest date correctly', () => {
-       const seedDate = new Date('2024-01-01');
-       const daysToHarvest = 14;
-       const expected = new Date('2024-01-15');
+   describe('createOrUpdateMachine', () => {
+     let mockDb: ReturnType<typeof createMockPrisma>;
+     
+     beforeEach(() => {
+       mockDb = createMockPrisma();
+     });
+     
+     it('creates a new machine', async () => {
+       const input = {
+         deviceId: 'test-device',
+         name: 'Test Machine',
+         tenantId: 'tenant-1',
+         farmId: 'farm-1',
+         onboardedBy: 'user-1',
+       };
        
-       expect(calculateHarvestDate(seedDate, daysToHarvest)).toEqual(expected);
+       const result = await createOrUpdateMachine(mockDb, input);
+       expect(result.deviceId).toBe('test-device');
      });
    });
    ```
 
-2. **Integration Tests**
-   ```typescript
-   // apps/api/src/__tests__/products.test.ts
-   import { createTRPCMsw } from 'msw-trpc';
-   import { appRouter } from '../router';
-   
-   const trpcMsw = createTRPCMsw(appRouter);
-   
-   test('creates product successfully', async () => {
-     const mockProduct = { name: 'Arugula', daysToHarvest: 7 };
-     
-     server.use(
-       trpcMsw.products.create.mutation(() => {
-         return { id: '123', ...mockProduct };
-       })
-     );
-     
-     // Test implementation
-   });
+2. **Running Tests**
+   ```bash
+   cd apps/api
+   pnpm test                    # Run all tests
+   pnpm test createOrUpdate     # Run specific test
+   pnpm test --coverage         # With coverage
    ```
 
-3. **E2E Tests**
+3. **Integration Tests (tRPC)**
    ```typescript
-   // apps/web/src/__tests__/order-workflow.e2e.ts
-   import { test, expect } from '@playwright/test';
+   // Test tRPC procedures with mock context
+   import { appRouter } from '../lib/trpc/router';
+   import { createMockContext } from '../test/mockContext';
    
-   test('complete order workflow', async ({ page }) => {
-     // 1. Create customer
-     await page.goto('/customers');
-     await page.click('[data-testid="add-customer"]');
-     
-     // 2. Create order
-     await page.goto('/orders');
-     await page.click('[data-testid="add-order"]');
-     
-     // 3. Verify tasks created
-     await page.goto('/tasks');
-     await expect(page.locator('[data-testid="task-soak"]')).toBeVisible();
+   const ctx = createMockContext({
+     auth: { tenantId: 'tenant-1', farmId: 'farm-1' }
    });
+   
+   const caller = appRouter.createCaller(ctx);
+   const machines = await caller.machines.list();
+   ```
+
+4. **E2E Tests (Not Implemented)**
+   ```bash
+   # Playwright or Cypress would go here
+   # Focus on critical user flows:
+   # - Machine onboarding via BLE
+   # - WiFi provisioning
+   # - Dashboard navigation
    ```
 
 ## Code Quality Assistance
@@ -306,23 +367,24 @@ This document outlines how AI coding agents can effectively support developers w
 ```typescript
 // ✅ Type Safety
 - All tRPC procedures have proper input/output types
-- Zod schemas are used for validation
-- No 'any' types without justification
+- Zod schemas used for validation where needed
+- Minimal 'any' types (TypeScript strict mode)
 
-// ✅ Business Logic
-- Farm isolation enforced (farmId in all queries)
-- Error handling follows established patterns
-- Business rules implemented in packages/logic
+// ✅ Multi-Tenancy
+- All database queries include tenantId and farmId filtering
+- Clerk authentication properly validated
+- Row-level security enforced at database level
 
-// ✅ Performance
-- Database queries are optimized
-- Proper indexing on farm_id columns
-- React Query used for caching
+// ✅ Error Handling
+- Proper error types from apps/api/src/lib/errors/
+- User-friendly error messages
+- Logging for debugging
 
 // ✅ Security
 - Input validation with Zod
 - Authorization checks in tRPC middleware
 - No sensitive data in client-side code
+- HTTPS required for Web Bluetooth
 
 // ✅ Consistency
 - Follows naming conventions from STYLE.md
@@ -334,55 +396,49 @@ This document outlines how AI coding agents can effectively support developers w
 
 **Common Refactoring Patterns:**
 
-1. **Extract Business Logic**
+1. **Extract tRPC Procedures**
    ```typescript
-   // Before: Business logic in tRPC procedure
-   create: farmProcedure
-     .input(createOrderSchema)
-     .mutation(async ({ ctx, input }) => {
-       // Complex order calculation logic here
-       const traysNeeded = input.items.reduce((total, item) => {
-         const product = await ctx.prisma.product.findUnique({
-           where: { id: item.productId }
-         });
-         return total + Math.ceil(item.quantity / product.avgYieldPerTray);
-       }, 0);
-       // ... more logic
+   // Before: Logic in router
+   list: protectedProcedure.query(async ({ ctx }) => {
+     const machines = await ctx.db.machine.findMany({
+       where: { tenantId: ctx.auth.tenantId, farmId: ctx.auth.farmId }
      });
+     return machines;
+   });
    
-   // After: Extract to packages/logic
-   // packages/logic/src/orders/calculations.ts
-   export const calculateOrderRequirements = (
-     items: OrderItem[],
-     products: Product[]
+   // After: Extract to queries/
+   // apps/api/src/domains/machine-domain/queries/listMachines.ts
+   export const listMachines = async (
+     db: PrismaClient,
+     tenantId: string,
+     farmId: string
    ) => {
-     return items.map(item => {
-       const product = products.find(p => p.id === item.productId);
-       return {
-         ...item,
-         traysNeeded: Math.ceil(item.quantity / product.avgYieldPerTray),
-         soakDate: subDays(item.harvestDate, product.daysToHarvest),
-       };
+     return db.machine.findMany({
+       where: { tenantId, farmId },
+       orderBy: { createdAt: 'desc' }
      });
    };
+   
+   // Router becomes cleaner
+   list: protectedProcedure.query(({ ctx }) => 
+     listMachines(ctx.db, ctx.auth.tenantId, ctx.auth.farmId)
+   );
    ```
 
 2. **Component Composition**
    ```typescript
    // Before: Large monolithic component
-   const OrderForm = () => {
+   const MachinesDashboard = () => {
      // 200+ lines of JSX and logic
    };
    
    // After: Composed components
-   const OrderForm = () => (
-     <form>
-       <OrderHeader />
-       <CustomerSelection />
-       <OrderItemsList />
-       <OrderSummary />
-       <OrderActions />
-     </form>
+   const MachinesDashboard = () => (
+     <div>
+       <StatusBanner />
+       <BluetoothIndicator />
+       <MachinesList />
+     </div>
    );
    ```
 
@@ -392,221 +448,364 @@ This document outlines how AI coding agents can effectively support developers w
 
 1. **Database Optimization**
    ```sql
-   -- Add indexes for common queries
-   CREATE INDEX idx_orders_farm_id_status ON orders(farm_id, status);
-   CREATE INDEX idx_tasks_farm_id_due_date ON tasks(farm_id, due_date);
-   CREATE INDEX idx_products_farm_id_active ON products(farm_id, is_active);
+   -- Indexes already in place for machine queries
+   CREATE INDEX idx_machines_tenant_farm ON machines(tenant_id, farm_id);
+   CREATE INDEX idx_machines_status ON machines(tenant_id, farm_id, status);
    ```
 
 2. **React Query Optimization**
    ```typescript
    // Prefetch related data
-   const prefetchOrderData = async (orderId: string) => {
-     await Promise.all([
-       queryClient.prefetchQuery({
-         queryKey: ['orders', 'byId', orderId],
-         queryFn: () => trpc.orders.byId.fetch(orderId),
-       }),
-       queryClient.prefetchQuery({
-         queryKey: ['customers', 'list'],
-         queryFn: () => trpc.customers.list.fetch(),
-       }),
-     ]);
+   const queryClient = useQueryClient();
+   
+   const prefetchMachines = async () => {
+     await queryClient.prefetchQuery({
+       queryKey: ['machines', 'list'],
+       queryFn: () => trpc.machines.list.fetch(),
+     });
    };
    ```
 
 3. **Bundle Optimization**
    ```typescript
-   // Lazy load heavy components
-   const FarmLayoutEditor = lazy(() => import('./FarmLayoutEditor'));
-   const ReportsPage = lazy(() => import('./ReportsPage'));
+   // Lazy load admin portal (separate entry point)
+   // Already implemented via separate HTML files
    
-   // Code splitting by route
-   const router = createBrowserRouter([
-     {
-       path: '/farm-layout',
-       element: <Suspense fallback={<Loading />}><FarmLayoutEditor /></Suspense>,
-     },
-   ]);
+   // Future: Code splitting by route
+   const PlannerPage = lazy(() => import('./planner/PlannerPage'));
    ```
 
 ## Deployment & DevOps Support
 
-### 1. Docker Development
+### 1. Docker Development ✅
 
 **Agent Docker Assistance:**
 
 ```yaml
-# docker-compose.dev.yml
+# docker/docker-compose.yml (actual file)
 version: '3.8'
 services:
   postgres:
     image: postgres:15
     environment:
-      POSTGRES_DB: rooted_planner
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
+      POSTGRES_DB: rooted
+      POSTGRES_USER: rooted
+      POSTGRES_PASSWORD: rooted_dev_password
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-
-  web:
-    build:
-      context: .
-      dockerfile: Dockerfile.dev
-    ports:
-      - "3000:3000"
-      - "3001:3001"
-    volumes:
-      - .:/app
-      - /app/node_modules
-    environment:
-      - DATABASE_URL=postgresql://postgres:password@postgres:5432/rooted_planner
-      - REDIS_URL=redis://redis:6379
-    depends_on:
-      - postgres
-      - redis
+volumes:
+  postgres_data:
 ```
 
-### 2. Environment Management
+**Note**: Redis not currently used in production. May be added for caching later.
+
+### 2. Environment Management ✅
 
 **Agent Environment Setup:**
 
 ```bash
-# .env.example
-# Database
-DATABASE_URL="postgresql://postgres:password@localhost:5432/rooted_planner"
-REDIS_URL="redis://localhost:6379"
+# Root .env
+VITE_CLERK_PUBLISHABLE_KEY="pk_test_..."
+VITE_API_URL="http://localhost:3001"
 
-# Authentication
-CLERK_PUBLISHABLE_KEY="pk_test_..."
+# apps/api/.env
+DATABASE_URL="postgresql://rooted:rooted_dev_password@localhost:5433/rooted"
 CLERK_SECRET_KEY="sk_test_..."
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY="pk_test_..."
-
-# Application
-NODE_ENV="development"
 PORT="3001"
-FRONTEND_URL="http://localhost:3000"
+NODE_ENV="development"
 
-# AWS (for production)
+# AWS IoT (for production Pi deployment)
 AWS_REGION="us-east-1"
-AWS_ACCESS_KEY_ID=""
-AWS_SECRET_ACCESS_KEY=""
+AWS_IOT_ENDPOINT="<your-iot-endpoint>.iot.us-east-1.amazonaws.com"
 ```
 
-### 3. Production Deployment
+### 3. Raspberry Pi Deployment ✅
 
 **Agent Deployment Checklist:**
 
 ```bash
-# Build and deploy steps
-1. Build production images
-   docker build -t rooted-planner:latest .
+# Deploy BLE service to Raspberry Pi
+cd pi-src
 
-2. Run database migrations
-   docker run --rm rooted-planner:latest pnpm prisma migrate deploy
+# Option 1: Basic deployment (no AWS IoT)
+./deploy-to-pi-one.sh <pi-ip-address>
 
-3. Start production stack
-   docker-compose -f docker-compose.prod.yml up -d
+# Option 2: Full deployment with AWS IoT
+./deploy-to-pi-two.sh <pi-ip-address>
 
-4. Verify health checks
-   curl http://localhost:3001/health
-   curl http://localhost:3000/health
+# Option 3: AWS IoT only
+./deploy-with-iot.sh <pi-ip-address>
 
-5. Monitor logs
-   docker-compose logs -f web
+# Verify deployment
+ssh pi@<pi-ip-address>
+sudo systemctl status machine-iot
+sudo journalctl -u machine-iot -f  # View logs
+```
+
+### 4. Production Web Deployment
+
+**Agent Deployment Steps:**
+
+```bash
+# Build frontend
+pnpm build  # Outputs to dist/
+
+# Deploy to static hosting
+# - Cloudflare Pages
+# - Vercel
+# - Netlify
+# - AWS S3 + CloudFront
+
+# Build backend
+cd apps/api
+pnpm build
+
+# Deploy backend
+# - AWS EC2 with Docker
+# - Heroku
+# - Railway
+# - Fly.io
+
+# Database
+# - AWS RDS PostgreSQL
+# - Supabase
+# - Neon
+# - Self-hosted PostgreSQL
 ```
 
 ## Troubleshooting Guide
 
 ### Common Issues & Solutions
 
-1. **tRPC Type Errors**
+1. **Web Bluetooth Not Working**
    ```bash
-   # Regenerate tRPC types
-   cd apps/web
-   pnpm build
+   # Check browser support
+   - Chrome/Edge only (desktop & Android)
+   - HTTPS required (or localhost)
+   - User gesture required to initiate scan
    
-   # Clear TypeScript cache
-   rm -rf node_modules/.cache
-   pnpm install
+   # Check browser console
+   if (!navigator.bluetooth) {
+     console.error('Web Bluetooth not supported');
+   }
+   
+   # Common errors
+   - NotFoundError: No devices found (check Pi is advertising)
+   - SecurityError: Not in secure context (use HTTPS)
+   - NotAllowedError: User denied permission
    ```
 
-2. **Database Schema Drift**
+2. **tRPC Type Errors**
    ```bash
-   # Reset and regenerate
-   cd packages/db
-   pnpm prisma migrate reset
+   # Regenerate Prisma client
+   cd apps/api
    pnpm prisma generate
+   
+   # Restart TypeScript server in VS Code
+   Cmd+Shift+P -> "TypeScript: Restart TS Server"
+   
+   # Clear build cache
+   rm -rf dist/
+   pnpm build
    ```
 
-3. **Clerk Authentication Issues**
+3. **Database Connection Issues**
+   ```bash
+   # Check Docker container
+   docker compose -f docker/docker-compose.yml ps
+   docker compose -f docker/docker-compose.yml logs postgres
+   
+   # Verify connection string
+   # apps/api/.env
+   DATABASE_URL="postgresql://rooted:rooted_dev_password@localhost:5433/rooted"
+   
+   # Test connection
+   cd apps/api
+   pnpm prisma db pull
+   ```
+
+4. **Clerk Authentication Issues**
    ```typescript
-   // Check JWT extraction
-   const farmId = auth.sessionClaims?.metadata?.farmId;
-   if (!farmId) {
-     throw new TRPCError({
-       code: 'UNAUTHORIZED',
-       message: 'Farm ID not found in session',
-     });
+   // Check JWT in middleware
+   // apps/api/src/lib/auth/middleware.ts
+   
+   // Verify Clerk keys
+   console.log('CLERK_SECRET_KEY:', process.env.CLERK_SECRET_KEY?.slice(0, 10));
+   
+   // Check user metadata
+   const { tenantId, farmId } = auth.sessionClaims?.metadata || {};
+   if (!tenantId || !farmId) {
+     throw new Error('Missing tenant/farm in JWT');
    }
    ```
 
-4. **Build Failures**
+5. **Raspberry Pi BLE Service Issues**
    ```bash
-   # Clear all caches and reinstall
-   pnpm clean
-   rm -rf node_modules
-   pnpm install
-   pnpm build
+   # SSH into Pi
+   ssh pi@<pi-ip>
+   
+   # Check service status
+   sudo systemctl status machine-iot
+   
+   # View logs
+   sudo journalctl -u machine-iot -f
+   
+   # Restart service
+   sudo systemctl restart machine-iot
+   
+   # Check Bluetooth
+   sudo systemctl status bluetooth
+   hciconfig  # Should show hci0 UP RUNNING
+   ```
+
+6. **AWS IoT Connectivity**
+   ```bash
+   # Check thing registration
+   aws iot describe-thing --thing-name <machine-name>
+   
+   # Check connectivity status
+   aws iot describe-thing-connectivity --thing-name <machine-name>
+   
+   # View Lambda logs
+   aws logs tail /aws/lambda/machine-lifecycle --follow
    ```
 
 ## Agent Best Practices
 
-### 1. Session Documentation
+### 1. Session Documentation ✅ **CRITICAL**
 - **Document all work**: Create session logs in `docs/agentic-sessions/`
-- **Research Best Practice**: When starting a new session
-search the internet for best practices related to the task at hand.
-- **Session format**: `YYYY-MM-DD-session-name.md` (e.g., `2024-01-15-product-feature-implementation.md`)
+- **Research Best Practice**: When starting a new session, search the internet for best practices related to the task at hand
+- **Session format**: `YYYY-MM-DD-session-name.md` (e.g., `2026-01-26-documentation-update.md`)
 - **Include user name**: Document which user/developer the agent was assisting
 - **Include**: All prompts, responses, code changes, and decisions made during the session
 - **Track reasoning**: Document why specific approaches were chosen
 - **Link related files**: Reference all files created, modified, or reviewed
 
 ### 2. Context Awareness
-- Always consider the farm multi-tenancy when writing queries
-- Reference the business domain (microgreen production workflow)
-- Understand the relationship between Orders → Tasks → Production
-
-### 2. Code Consistency
-- Follow patterns established in STYLE.md
-- Use existing components from packages/ui
-- Maintain type safety throughout the stack
+- **Multi-tenancy**: Always consider tenant_id and farm_id in database queries
+- **Platform Status**: Machine IoT is implemented, Rooted Planner is not
+- **BLE Limitations**: Web Bluetooth only works on Chrome/Edge with HTTPS
+- **AWS Integration**: Machines can be monitored via AWS IoT Core
 
 ### 3. Code Consistency
 - Follow patterns established in STYLE.md
-- Use existing components from packages/ui
+- Use existing components from shared/ui/components/
 - Maintain type safety throughout the stack
+- Keep tRPC procedures thin (extract logic to commands/queries)
 
 ### 4. Testing Mindset
-- Write tests for business logic in packages/logic
-- Test tRPC procedures with proper mocking
-- Consider edge cases in production workflows
+- Write tests for new backend commands and queries
+- Test tRPC procedures with proper mocking (see existing __tests__/)
+- Consider edge cases in BLE operations (connection failures, timeouts)
+- Manual testing required for actual BLE functionality
 
 ### 5. Performance Considerations
-- Optimize database queries with proper indexing
-- Use React Query for efficient data fetching
-- Consider lazy loading for heavy components
+- Database queries already optimized with proper indexing
+- Use React Query for efficient data fetching (automatic via tRPC)
+- Consider lazy loading for future heavy components
+- BLE operations are inherently slow (user expectations)
 
 ### 6. Security Awareness
-- Always validate inputs with Zod schemas
-- Ensure farm isolation in all database queries
+- Always validate inputs (Zod schemas where appropriate)
+- Ensure tenant/farm isolation in all database queries
 - Never expose sensitive data to the client
+- HTTPS required for Web Bluetooth API
+- Clerk handles authentication - trust the JWT
 
-This guide enables AI agents to effectively support developers by understanding the project structure, common workflows, and best practices specific to the Rooted Planner codebase.
+### 7. Documentation Updates
+- Update docs/ when making architectural changes
+- Keep PROJECT_STRUCTURE.md in sync with actual structure
+- Document new tRPC procedures in code comments
+- Update DATABASE_SCHEMA.md if schema changes
+
+### 8. Deployment Awareness
+- Frontend and backend deploy separately
+- Pi deployment is independent (use deployment scripts)
+- AWS IoT Core requires proper IAM configuration
+- Environment variables differ between dev and production
+
+## Current Project State & Next Steps
+
+### What's Working ✅
+1. **Machine IoT Platform** - Fully functional
+   - BLE device discovery and onboarding
+   - WiFi provisioning via Web Bluetooth
+   - Machine dashboard with real-time status
+   - AWS IoT Core connectivity monitoring
+   - Multi-tenant machine management
+   - Admin portal for cross-tenant viewing
+
+2. **Infrastructure** - Production ready
+   - Fastify + tRPC backend
+   - PostgreSQL with multi-tenant schema
+   - Clerk authentication
+   - Docker development environment
+   - Raspberry Pi deployment scripts
+   - AWS IoT Core integration
+
+3. **Development Tools** - Operational
+   - TypeScript throughout
+   - Vitest for testing
+   - Prisma for database management
+   - ESLint + Prettier for code quality
+
+### What's Not Implemented 🚧
+1. **Rooted Planner Platform** - Not started
+   - No frontend features (only placeholder)
+   - No backend domain (`planner-domain/` doesn't exist)
+   - Database schema defined but not used
+   - Full implementation required
+
+2. **Redis Caching** - Not integrated
+   - Infrastructure ready but not used
+   - Can be added for performance optimization
+
+3. **E2E Testing** - Not implemented
+   - Manual testing only
+   - Playwright or Cypress could be added
+
+### Next Major Milestones
+
+**Milestone 1: Rooted Planner Foundation**
+1. Create `apps/api/src/domains/planner-domain/` structure
+2. Implement product management (CRUD operations)
+3. Build frontend product catalog
+4. Test end-to-end product workflow
+
+**Milestone 2: Order Management**
+1. Implement order creation and management
+2. Build customer management features
+3. Create order dashboard
+4. Test order workflow
+
+**Milestone 3: Production Workflow**
+1. Implement task generation from orders
+2. Build task management interface
+3. Create calendar and specialized views
+4. Test complete production cycle
+
+**Milestone 4: Advanced Features**
+1. Farm layout editor
+2. Recurring orders
+3. Inventory management
+4. Reporting and analytics
+
+### Agent Guidance for New Features
+
+**When adding Machine IoT features:**
+- Reference existing patterns in `machine-domain/`
+- Test with actual Raspberry Pi devices
+- Consider BLE connection limitations
+- Update documentation
+
+**When starting Rooted Planner:**
+- Study DATABASE_SCHEMA.md for data model
+- Reference REQUIREMENTS.md and ARCH.md in `docs/rooted-planner/`
+- Follow domain-driven design patterns from `machine-domain/`
+- Start with simplest feature (products) and build up
+- Create comprehensive tests from the beginning
+
+This guide enables AI agents to effectively support developers by understanding the actual project state, implemented features, and realistic next steps for the Rooted Web App codebase.
