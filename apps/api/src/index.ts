@@ -8,6 +8,7 @@ import { createLogger } from './lib/logger/logger.js';
 import { errorHandler, NotFoundError } from './lib/errors/index.js';
 import { farmAuthMiddleware } from './lib/auth/middleware.js';
 import { createContext } from './lib/trpc/context.js';
+import { isProd } from './lib/env.js';
 import { appRouter } from './lib/trpc/router.js';
 import { registerInternalRoutes } from './domains/machine-domain/internal-routes.js';
 
@@ -29,7 +30,12 @@ async function main() {
     genReqId: () => crypto.randomUUID(),
   });
 
-  await app.register(cors, { origin: true });
+  await app.register(cors, {
+    origin: isProd() 
+      ? (process.env.CORS_ORIGIN?.split(',') || ['https://app.rootedrobotics.com'])
+      : true,
+    credentials: true,
+  });
   await app.register(errorHandler, { logger });
   await app.register(farmAuthMiddleware, { logger });
 

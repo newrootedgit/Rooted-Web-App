@@ -1,0 +1,11 @@
+import { PrismaClient } from '../../generated/prisma/client.js';
+// Prevent multiple instances in development with hot reload
+const globalForPrisma = globalThis;
+export const prisma = globalForPrisma.prisma ??
+    new PrismaClient({
+        log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+    });
+if (process.env.NODE_ENV !== 'production') {
+    globalForPrisma.prisma = prisma;
+}
+//# sourceMappingURL=index.js.map

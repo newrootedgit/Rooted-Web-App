@@ -18,6 +18,31 @@ output "dlq_url" {
   value       = aws_sqs_queue.lambda_dlq.url
 }
 
+output "rds_endpoint" {
+  description = "RDS PostgreSQL endpoint"
+  value       = aws_db_instance.rooted.endpoint
+}
+
+output "rds_database_name" {
+  description = "RDS database name"
+  value       = aws_db_instance.rooted.db_name
+}
+
+output "ec2_security_group_id" {
+  description = "EC2 security group ID"
+  value       = aws_security_group.ec2.id
+}
+
+output "ec2_public_ip" {
+  description = "EC2 Elastic IP address"
+  value       = aws_eip.rooted.public_ip
+}
+
+output "ec2_instance_id" {
+  description = "EC2 instance ID"
+  value       = aws_instance.rooted.id
+}
+
 data "aws_iot_endpoint" "data" {
   endpoint_type = "iot:Data-ATS"
 }

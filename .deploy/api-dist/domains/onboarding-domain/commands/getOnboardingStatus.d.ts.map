@@ -1,0 +1,1 @@
+{"version":3,"file":"getOnboardingStatus.d.ts","sourceRoot":"","sources":["../../../../src/domains/onboarding-domain/commands/getOnboardingStatus.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,YAAY,EAAE,MAAM,qCAAqC,CAAC;AACxE,OAAO,KAAK,EAAE,gBAAgB,EAAE,MAAM,aAAa,CAAC;AAEpD,wBAAsB,mBAAmB,CACvC,MAAM,EAAE,YAAY,EACpB,MAAM,EAAE,MAAM,GACb,OAAO,CAAC,gBAAgB,CAAC,CAmC3B"}

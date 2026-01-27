@@ -1,0 +1,397 @@
+generator client {
+  provider      = "prisma-client"
+  output        = "../src/generated/prisma"
+  binaryTargets = ["native", "linux-musl-arm64-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model blend_ingredients {
+  id              String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  blend_id        String?   @db.Uuid
+  product_id      String?   @db.Uuid
+  percentage      Decimal   @db.Decimal(5, 2)
+  timing_override Json?
+  blends          blends?   @relation(fields: [blend_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  products        products? @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([blend_id], map: "idx_blend_ingredients_blend_id")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model blends {
+  id                String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  farm_id           String?             @db.Uuid
+  name              String              @db.VarChar(255)
+  description       String?
+  created_at        DateTime?           @default(now()) @db.Timestamp(6)
+  blend_ingredients blend_ingredients[]
+  farms             farms?              @relation(fields: [farm_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  order_items       order_items[]
+
+  @@index([farm_id], map: "idx_blends_farm_id")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model customers {
+  id                        String                      @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  farm_id                   String?                     @db.Uuid
+  name                      String                      @db.VarChar(255)
+  email                     String?                     @db.VarChar(255)
+  phone                     String?                     @db.VarChar(50)
+  company_name              String?                     @db.VarChar(255)
+  customer_type             String?                     @db.VarChar(50)
+  payment_terms             String?                     @db.VarChar(50)
+  address                   Json?
+  tags                      String[]
+  notes                     String?
+  is_active                 Boolean?                    @default(true)
+  created_at                DateTime?                   @default(now()) @db.Timestamp(6)
+  farms                     farms?                      @relation(fields: [farm_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  orders                    orders[]
+  recurring_order_schedules recurring_order_schedules[]
+
+  @@index([farm_id], map: "idx_customers_farm_id")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model employees {
+  id          String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  farm_id     String?   @db.Uuid
+  first_name  String    @db.VarChar(100)
+  last_name   String    @db.VarChar(100)
+  email       String?   @db.VarChar(255)
+  phone       String?   @db.VarChar(50)
+  position    String?   @db.VarChar(100)
+  status      String?   @default("ACTIVE") @db.VarChar(50)
+  hire_date   DateTime? @db.Date
+  hourly_rate Decimal?  @db.Decimal(10, 2)
+  notes       String?
+  created_at  DateTime? @default(now()) @db.Timestamp(6)
+  farms       farms?    @relation(fields: [farm_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([farm_id], map: "idx_employees_farm_id")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model farm_layouts {
+  id          String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  farm_id     String?   @db.Uuid
+  name        String    @db.VarChar(255)
+  canvas_data Json
+  is_active   Boolean?  @default(true)
+  created_at  DateTime? @default(now()) @db.Timestamp(6)
+  farms       farms?    @relation(fields: [farm_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([farm_id], map: "idx_farm_layouts_farm_id")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model farm_users {
+  id            String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenant_id     String?   @db.Uuid
+  farm_id       String?   @db.Uuid
+  clerk_user_id String    @unique @db.VarChar(255)
+  role          String    @db.VarChar(50)
+  first_name    String?   @db.VarChar(100)
+  last_name     String?   @db.VarChar(100)
+  email         String?   @db.VarChar(255)
+  is_active     Boolean?  @default(true)
+  created_at    DateTime? @default(now()) @db.Timestamp(6)
+  farms         farms?    @relation(fields: [farm_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tenants       tenants?  @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([clerk_user_id], map: "idx_farm_users_clerk_user_id")
+  @@index([farm_id], map: "idx_farm_users_farm_id")
+  @@index([tenant_id], map: "idx_farm_users_tenant_id")
+}
+
+model farms {
+  tenant_id                 String?                     @db.Uuid
+  id                        String                      @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name                      String                      @db.VarChar(255)
+  slug                      String                      @unique @db.VarChar(255)
+  logo_url                  String?                     @db.VarChar(500)
+  brand_color               String?                     @db.VarChar(7)
+  contact_email             String?                     @db.VarChar(255)
+  contact_phone             String?                     @db.VarChar(50)
+  address                   Json?
+  settings                  Json?
+  created_at                DateTime?                   @default(now()) @db.Timestamp(6)
+  updated_at                DateTime?                   @default(now()) @db.Timestamp(6)
+  blends                    blends[]
+  customers                 customers[]
+  employees                 employees[]
+  farm_layouts              farm_layouts[]
+  farm_users                farm_users[]
+  tenants                   tenants?                    @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  machines                  machines[]
+  orders                    orders[]
+  product_categories        product_categories[]
+  products                  products[]
+  rack_assignments          rack_assignments[]
+  recurring_order_schedules recurring_order_schedules[]
+  supplies                  supplies[]
+  supply_categories         supply_categories[]
+  tasks                     tasks[]
+
+  @@index([tenant_id], map: "idx_farms_tenant_id")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model machines {
+  id                 String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenant_id          String?   @db.Uuid
+  farm_id            String?   @db.Uuid
+  name               String    @db.VarChar(255)
+  display_name       String?   @db.VarChar(255)
+  device_id          String    @db.VarChar(255)
+  created_at         DateTime? @default(now()) @db.Timestamp(6)
+  aws_iot_thing_name String?   @unique @db.VarChar(255)
+  status             String?   @default("offline") @db.VarChar(50)
+  last_seen_at       DateTime? @db.Timestamp(6)
+  current_wifi_ssid  String?   @db.VarChar(255)
+  farms              farms?    @relation(fields: [farm_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tenants            tenants?  @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([device_id], map: "idx_machines_device_id")
+  @@index([farm_id], map: "idx_machines_farm_id")
+  @@index([tenant_id], map: "idx_machines_tenant_id")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model order_items {
+  id                 String             @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  order_id           String?            @db.Uuid
+  product_id         String?            @db.Uuid
+  blend_id           String?            @db.Uuid
+  quantity_oz        Decimal            @db.Decimal(8, 2)
+  harvest_date       DateTime           @db.Date
+  overage_percent    Decimal?           @default(10.00) @db.Decimal(5, 2)
+  trays_needed       Int?
+  soak_date          DateTime?          @db.Date
+  seed_date          DateTime?          @db.Date
+  move_to_light_date DateTime?          @db.Date
+  created_at         DateTime?          @default(now()) @db.Timestamp(6)
+  blends             blends?            @relation(fields: [blend_id], references: [id], onUpdate: NoAction)
+  orders             orders?            @relation(fields: [order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  products           products?          @relation(fields: [product_id], references: [id], onUpdate: NoAction)
+  rack_assignments   rack_assignments[]
+  tasks              tasks[]
+
+  @@index([harvest_date], map: "idx_order_items_harvest_date")
+  @@index([order_id], map: "idx_order_items_order_id")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model orders {
+  id           String        @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  farm_id      String?       @db.Uuid
+  customer_id  String?       @db.Uuid
+  order_number String        @unique @db.VarChar(50)
+  status       String        @db.VarChar(50)
+  notes        String?
+  created_at   DateTime?     @default(now()) @db.Timestamp(6)
+  updated_at   DateTime?     @default(now()) @db.Timestamp(6)
+  order_items  order_items[]
+  customers    customers?    @relation(fields: [customer_id], references: [id], onUpdate: NoAction)
+  farms        farms?        @relation(fields: [farm_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([customer_id], map: "idx_orders_customer_id")
+  @@index([farm_id], map: "idx_orders_farm_id")
+  @@index([status], map: "idx_orders_status")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model product_categories {
+  id          String     @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  farm_id     String?    @db.Uuid
+  name        String     @db.VarChar(255)
+  description String?
+  created_at  DateTime?  @default(now()) @db.Timestamp(6)
+  farms       farms?     @relation(fields: [farm_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  products    products[]
+
+  @@index([farm_id], map: "idx_product_categories_farm_id")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model products {
+  id                 String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  farm_id            String?             @db.Uuid
+  category_id        String?             @db.Uuid
+  name               String              @db.VarChar(255)
+  sku                String?             @db.VarChar(100)
+  days_soaking       Int
+  days_germination   Int
+  days_light         Int
+  avg_yield_per_tray Decimal?            @db.Decimal(8, 2)
+  seed_weight        Decimal?            @db.Decimal(8, 2)
+  seed_unit          String?             @db.VarChar(50)
+  unit_cost          Decimal?            @db.Decimal(10, 2)
+  unit_price         Decimal?            @db.Decimal(10, 2)
+  is_active          Boolean?            @default(true)
+  created_at         DateTime?           @default(now()) @db.Timestamp(6)
+  blend_ingredients  blend_ingredients[]
+  order_items        order_items[]
+  product_categories product_categories? @relation(fields: [category_id], references: [id], onUpdate: NoAction)
+  farms              farms?              @relation(fields: [farm_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  supplies           supplies[]
+
+  @@index([category_id], map: "idx_products_category_id")
+  @@index([farm_id], map: "idx_products_farm_id")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model rack_assignments {
+  id              String       @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  farm_id         String?      @db.Uuid
+  rack_element_id String       @db.VarChar(255)
+  level           Int
+  order_item_id   String?      @db.Uuid
+  tray_count      Int
+  assigned_at     DateTime?    @default(now()) @db.Timestamp(6)
+  assigned_by     String?      @db.VarChar(255)
+  is_active       Boolean?     @default(true)
+  removed_at      DateTime?    @db.Timestamp(6)
+  farms           farms?       @relation(fields: [farm_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  order_items     order_items? @relation(fields: [order_item_id], references: [id], onUpdate: NoAction)
+
+  @@index([farm_id], map: "idx_rack_assignments_farm_id")
+  @@index([order_item_id], map: "idx_rack_assignments_order_item_id")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model recurring_order_schedules {
+  id             String     @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  farm_id        String?    @db.Uuid
+  customer_id    String?    @db.Uuid
+  name           String     @db.VarChar(255)
+  schedule_type  String     @db.VarChar(50)
+  days_of_week   Int[]
+  interval_days  Int?
+  start_date     DateTime   @db.Date
+  end_date       DateTime?  @db.Date
+  lead_time_days Int?       @default(7)
+  is_active      Boolean?   @default(true)
+  created_at     DateTime?  @default(now()) @db.Timestamp(6)
+  customers      customers? @relation(fields: [customer_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  farms          farms?     @relation(fields: [farm_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([customer_id], map: "idx_recurring_order_schedules_customer_id")
+  @@index([farm_id], map: "idx_recurring_order_schedules_farm_id")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model supplies {
+  id                String             @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  farm_id           String?            @db.Uuid
+  category_id       String?            @db.Uuid
+  product_id        String?            @db.Uuid
+  name              String             @db.VarChar(255)
+  sku               String?            @db.VarChar(100)
+  current_stock     Decimal?           @default(0) @db.Decimal(10, 2)
+  unit              String?            @db.VarChar(50)
+  reorder_level     Decimal?           @db.Decimal(10, 2)
+  created_at        DateTime?          @default(now()) @db.Timestamp(6)
+  supply_categories supply_categories? @relation(fields: [category_id], references: [id], onUpdate: NoAction)
+  farms             farms?             @relation(fields: [farm_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  products          products?          @relation(fields: [product_id], references: [id], onUpdate: NoAction)
+  supply_purchases  supply_purchases[]
+  supply_usage      supply_usage[]
+
+  @@index([category_id], map: "idx_supplies_category_id")
+  @@index([farm_id], map: "idx_supplies_farm_id")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model supply_categories {
+  id          String     @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  farm_id     String?    @db.Uuid
+  name        String     @db.VarChar(255)
+  description String?
+  created_at  DateTime?  @default(now()) @db.Timestamp(6)
+  supplies    supplies[]
+  farms       farms?     @relation(fields: [farm_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([farm_id], map: "idx_supply_categories_farm_id")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model supply_purchases {
+  id            String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  supply_id     String?   @db.Uuid
+  quantity      Decimal   @db.Decimal(10, 2)
+  unit_cost     Decimal?  @db.Decimal(10, 2)
+  total_cost    Decimal?  @db.Decimal(10, 2)
+  supplier      String?   @db.VarChar(255)
+  lot_number    String?   @db.VarChar(100)
+  expiry_date   DateTime? @db.Date
+  purchase_date DateTime  @db.Date
+  notes         String?
+  created_at    DateTime? @default(now()) @db.Timestamp(6)
+  supplies      supplies? @relation(fields: [supply_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([supply_id], map: "idx_supply_purchases_supply_id")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model supply_usage {
+  id         String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  supply_id  String?   @db.Uuid
+  task_id    String?   @db.Uuid
+  quantity   Decimal   @db.Decimal(10, 2)
+  usage_type String?   @db.VarChar(50)
+  notes      String?
+  created_at DateTime? @default(now()) @db.Timestamp(6)
+  supplies   supplies? @relation(fields: [supply_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tasks      tasks?    @relation(fields: [task_id], references: [id], onUpdate: NoAction)
+
+  @@index([supply_id], map: "idx_supply_usage_supply_id")
+  @@index([task_id], map: "idx_supply_usage_task_id")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model tasks {
+  id               String         @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  farm_id          String?        @db.Uuid
+  order_item_id    String?        @db.Uuid
+  title            String         @db.VarChar(255)
+  type             String         @db.VarChar(50)
+  due_date         DateTime       @db.Date
+  status           String?        @default("TODO") @db.VarChar(50)
+  priority         String?        @default("MEDIUM") @db.VarChar(50)
+  completed_at     DateTime?      @db.Timestamp(6)
+  completed_by     String?        @db.VarChar(255)
+  completion_notes String?
+  actual_trays     Int?
+  seed_lot         String?        @db.VarChar(100)
+  created_at       DateTime?      @default(now()) @db.Timestamp(6)
+  supply_usage     supply_usage[]
+  farms            farms?         @relation(fields: [farm_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  order_items      order_items?   @relation(fields: [order_item_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([due_date], map: "idx_tasks_due_date")
+  @@index([farm_id], map: "idx_tasks_farm_id")
+  @@index([order_item_id], map: "idx_tasks_order_item_id")
+  @@index([status], map: "idx_tasks_status")
+  @@index([type], map: "idx_tasks_type")
+}
+
+model tenants {
+  id            String       @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name          String       @db.VarChar(255)
+  slug          String       @unique @db.VarChar(255)
+  contact_email String?      @db.VarChar(255)
+  contact_phone String?      @db.VarChar(50)
+  settings      Json?
+  created_at    DateTime?    @default(now()) @db.Timestamp(6)
+  updated_at    DateTime?    @default(now()) @db.Timestamp(6)
+  farm_users    farm_users[]
+  farms         farms[]
+  machines      machines[]
+}

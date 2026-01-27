@@ -26,3 +26,14 @@ variable "lambda_secret_token" {
     type        = string
     sensitive   = true
 }
+
+variable "db_password" {
+  description = "The master password for the RDS database."
+  type        = string
+  sensitive   = true
+}
+
+variable "ec2_key_name" {
+  description = "Name of the EC2 key pair for SSH access."
+  type        = string
+}

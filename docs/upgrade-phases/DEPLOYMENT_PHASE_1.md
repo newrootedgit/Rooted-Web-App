@@ -6,12 +6,17 @@
 
 ## Architecture
 
+> **Note on Cloudflare vs ngrok:**  
+> Cloudflare is your production solution - it provides DNS, SSL, and DDoS protection for your deployed EC2 instance.  
+> ngrok is NOT needed for production. It's only useful for temporarily exposing localhost during local development testing.
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │ Cloudflare DNS (app.rootedrobotics.com)                     │
 │ - Free SSL/HTTPS                                             │
 │ - DDoS protection                                            │
 │ - CDN caching                                                │
+│ - Points to EC2 public IP (NOT localhost/ngrok)             │
 └──────────────────────┬──────────────────────────────────────┘
                        │
                        ▼
