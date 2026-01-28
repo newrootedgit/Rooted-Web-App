@@ -29,8 +29,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      - name: Install API dependencies
+        run: cd apps/api && pnpm install
+
       - name: Generate Prisma Client
-        run: pnpm --filter @rooted/api exec prisma generate
+        run: cd apps/api && pnpm exec prisma generate
 
       - name: Build API
         run: cd apps/api && pnpm build
