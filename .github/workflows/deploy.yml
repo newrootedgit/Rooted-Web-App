@@ -1,0 +1,104 @@
+name: Deploy to Production
+
+on:
+  workflow_dispatch:
+
+env:
+  EC2_USER: ubuntu
+  APP_DIR: /var/www/rooted
+
+jobs:
+  deploy:
+    name: Build and Deploy
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build frontend
+        env:
+          VITE_CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY }}
+          VITE_API_URL: /api/trpc
+        run: pnpm build
+
+      - name: Build API
+        run: cd apps/api && pnpm build
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to EC2
+        run: |
+          # Create directories
+          ssh -i ~/.ssh/deploy_key ${{ env.EC2_USER }}@${{ secrets.EC2_HOST }} \
+            "mkdir -p ${{ env.APP_DIR }}/apps/api"
+
+          # Deploy frontend
+          rsync -avz --delete -e "ssh -i ~/.ssh/deploy_key" \
+            dist/ ${{ env.EC2_USER }}@${{ secrets.EC2_HOST }}:${{ env.APP_DIR }}/dist/
+
+          # Deploy API
+          rsync -avz --delete -e "ssh -i ~/.ssh/deploy_key" \
+            apps/api/dist/ ${{ env.EC2_USER }}@${{ secrets.EC2_HOST }}:${{ env.APP_DIR }}/apps/api/dist/
+
+          # Deploy Prisma schema
+          rsync -avz -e "ssh -i ~/.ssh/deploy_key" \
+            apps/api/prisma/ ${{ env.EC2_USER }}@${{ secrets.EC2_HOST }}:${{ env.APP_DIR }}/apps/api/prisma/
+
+          # Deploy package.json
+          scp -i ~/.ssh/deploy_key \
+            apps/api/package.json ${{ env.EC2_USER }}@${{ secrets.EC2_HOST }}:${{ env.APP_DIR }}/apps/api/
+
+      - name: Finalize deployment on EC2
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ env.EC2_USER }}@${{ secrets.EC2_HOST }} << 'ENDSSH'
+          set -e
+          cd /var/www/rooted/apps/api
+
+          # Install dependencies (uses existing .env.production on EC2)
+          pnpm install --prod
+
+          # Generate Prisma Client for Linux
+          pnpm prisma generate
+
+          # Copy Prisma client to dist
+          mkdir -p dist/generated
+          cp -r src/generated/prisma dist/generated/
+
+          # Run migrations
+          pnpm prisma migrate deploy
+
+          # Reload API (sources existing .env.production - not modified by this workflow)
+          set -a; source .env.production; set +a
+          pm2 reload rooted-api
+
+          # Health check
+          sleep 5
+          curl -sf http://localhost:8000/health || (pm2 logs rooted-api --lines 20 && exit 1)
+
+          echo "Deployment complete!"
+          ENDSSH
+
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/deploy_key

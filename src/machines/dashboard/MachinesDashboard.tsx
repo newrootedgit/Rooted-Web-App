@@ -38,14 +38,21 @@ export default function MachinesDashboard() {
           <h1 className="text-2xl font-semibold text-foreground">Machine Management</h1>
           <BluetoothIndicator isSupported={isBluetoothSupported} />
         </div>
-        <button
-          onClick={() => setIsOnboardModalOpen(true)}
-          disabled={!isBluetoothSupported}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md font-semibold hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          <Plus size={18} />
-          Add Machine
-        </button>
+        <div className="flex flex-col items-end gap-1">
+          <button
+            onClick={() => setIsOnboardModalOpen(true)}
+            disabled={!isBluetoothSupported}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md font-semibold hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            <Plus size={18} />
+            Add Machine
+          </button>
+          {!isBluetoothSupported && (
+            <p className="text-xs text-muted-foreground">
+              Enable Bluetooth to add machines
+            </p>
+          )}
+        </div>
       </div>
       <MachinesList
         machines={machinesData?.items ?? []}
