@@ -46,6 +46,7 @@ describe('createOrUpdateMachine', () => {
       tenantId: 'tenant-1',
       farmId: 'farm-1',
       name: 'New Machine',
+      displayName: 'New Machine',
       deviceId: 'new-device',
       createdAt: createdMachine.created_at,
     });
