@@ -7,38 +7,35 @@
 Organize code by business domain, not technical layer:
 
 ```
-apps/api/src/
-├── products/
+apps/api/src/domains/
+├── machine-domain/
 │   ├── router.ts          # tRPC procedures
-│   ├── service.ts         # Business logic
-│   ├── queries.ts         # Database queries
-│   └── types.ts           # Domain-specific types
-├── orders/
-├── tasks/
-└── shared/
-    ├── middleware/
-    ├── utils/
-    └── types/
+│   ├── types.ts           # Domain-specific types
+│   ├── commands/          # Write operations (logic)
+│   └── queries/           # Read operations (DB)
+├── admin-domain/
+├── onboarding-domain/
+└── planner-domain/
 ```
 
 ```
-apps/web/src/
-├── products/
-│   ├── components/        # Feature-specific components
-│   ├── hooks/            # Feature-specific hooks
-│   ├── pages/            # Route components
-│   └── types.ts          # Frontend-specific types
-├── orders/
-├── tasks/
-└── shared/
-    ├── components/       # Reusable UI components
-    ├── hooks/           # Generic hooks
-    └── utils/
+src/
+├── machines/
+│   ├── dashboard/         # Feature-specific components & logic
+│   ├── device-discovery/
+│   ├── wifi-provisioning/
+│   └── index.ts
+├── planner/
+├── auth/
+└── shared/                # Shared via root shared/ folder
+    ├── ui/                # Reusable UI components
+    ├── types/             # Shared TypeScript types
+    └── api-types/
 ```
 
-### Package Boundaries
+### Shared Code Boundaries
 
-**packages/logic** - Universal business rules:
+**shared/logic (or within domain commands)** - Universal business rules:
 ```typescript
 // ✅ Good - Pure business logic
 export const calculateHarvestDate = (seedDate: Date, daysToHarvest: number) => {
@@ -55,7 +52,7 @@ export const createOrderSchema = z.object({
 export const useOrderQuery = () => { /* React-specific */ };
 ```
 
-**packages/ui** - Reusable React components:
+**shared/ui** - Reusable React components:
 ```typescript
 // ✅ Good - Generic, reusable components
 export const Button = ({ variant, children, ...props }) => { /* */ };
@@ -63,7 +60,7 @@ export const DataTable = ({ data, columns }) => { /* */ };
 
 // ❌ Bad - Business logic in UI components
 export const OrderForm = () => {
-  // Complex order calculation logic should be in packages/logic
+  // Complex order calculation logic should be in shared/logic or domain logic
 };
 ```
 
@@ -71,28 +68,27 @@ export const OrderForm = () => {
 
 **Use barrel exports for clean imports:**
 ```typescript
-// packages/logic/src/index.ts
-export * from './orders';
-export * from './products';
-export * from './validation';
+// shared/index.ts
+export * from './types';
+export * from './ui';
 
-// apps/web/src/orders/components/OrderForm.tsx
-import { createOrderSchema, calculateTotal } from '@rooted/logic';
+// src/onboarding/OnboardingPage.tsx
+import { Button } from '@shared/ui';
 ```
 
-**Prefer absolute imports for packages:**
+**Prefer absolute imports using path aliases:**
 ```typescript
 // ✅ Good
-import { Button } from '@rooted/ui';
-import { createOrderSchema } from '@rooted/logic';
+import { Button } from '@shared/ui';
+import { MachineCard } from '@machines/dashboard/components/MachineCard';
 
 // ❌ Bad
-import { Button } from '../../../packages/ui/src/button';
+import { Button } from '../../../shared/ui/components/button';
 ```
 
 **Use relative imports within features:**
 ```typescript
-// apps/web/src/orders/components/OrderForm.tsx
+// src/machines/dashboard/MachinesDashboard.tsx
 // ✅ Good - within same feature
 import { OrderItem } from './OrderItem';
 import { useOrderMutations } from '../hooks/useOrderMutations';
@@ -248,7 +244,7 @@ products: {
 
 **Co-locate with domain logic:**
 ```typescript
-// packages/logic/src/products/schemas.ts
+// apps/api/src/domains/planner-domain/types.ts
 export const productSchema = z.object({
   id: z.string().uuid(),
   name: z.string().min(1).max(100),
@@ -306,7 +302,7 @@ type CreateOrderInput = Omit<Order, 'id' | 'createdAt' | 'updatedAt'>;
 
 **Reusable API response types:**
 ```typescript
-// packages/logic/src/shared/types.ts
+// shared/types/index.ts
 export interface PaginatedResponse<T> {
   data: T[];
   total: number;
@@ -378,8 +374,8 @@ export const OrderForm: React.FC<OrderFormProps> = ({
 
 **Custom hooks for business logic:**
 ```typescript
-// apps/web/src/orders/hooks/useOrderMutations.ts
-export const useOrderMutations = () => {
+// src/machines/dashboard/hooks/useMachineActions.ts
+export const useMachineActions = () => {
   const utils = trpc.useContext();
   
   const createOrder = trpc.orders.create.useMutation({
@@ -404,7 +400,7 @@ export const useOrderMutations = () => {
 
 **Hooks for complex state logic:**
 ```typescript
-// apps/web/src/farm-layout/hooks/useCanvasEditor.ts
+// src/planner/hooks/useCanvasEditor.ts
 export const useCanvasEditor = (initialLayout?: FarmLayout) => {
   const [elements, setElements] = useState<LayoutElement[]>([]);
   const [selectedElement, setSelectedElement] = useState<string | null>(null);
@@ -458,8 +454,8 @@ const [formData, setFormData] = useState<FormData>({});
 
 **Consistent procedure organization:**
 ```typescript
-// apps/api/src/products/router.ts
-export const productRouter = router({
+// apps/api/src/domains/machine-domain/router.ts
+export const machineRouter = router({
   // Queries
   list: farmProcedure
     .input(z.object({
@@ -521,8 +517,8 @@ export const productRouter = router({
 
 **Organize complex queries in separate files:**
 ```typescript
-// apps/api/src/orders/queries.ts
-export const getOrdersWithItems = async (
+// apps/api/src/domains/machine-domain/queries/listMachines.ts
+export const listMachines = async (
   prisma: PrismaClient,
   farmId: string,
   filters: OrderFilters
@@ -564,7 +560,7 @@ export const getOrdersWithItems = async (
 
 **Consistent error patterns:**
 ```typescript
-// packages/logic/src/shared/errors.ts
+// apps/api/src/lib/errors/base-error.ts
 export class BusinessError extends Error {
   constructor(
     message: string,
@@ -608,16 +604,16 @@ import React, { useState, useCallback } from 'react';
 import { z } from 'zod';
 import { format } from 'date-fns';
 
-// 2. Internal packages
-import { Button, Input } from '@rooted/ui';
-import { createOrderSchema, calculateTotal } from '@rooted/logic';
+// 2. Shared code & Aliases
+import { Button, Input } from '@shared/ui';
+import { trpc } from '@/lib/trpc/client';
 
 // 3. Relative imports (same feature)
-import { OrderItem } from './OrderItem';
-import { useOrderMutations } from '../hooks/useOrderMutations';
+import { MachineCard } from './MachineCard';
+import { useMachineActions } from '../hooks/useMachineActions';
 
 // 4. Type-only imports (last)
-import type { Order, OrderItem as OrderItemType } from '@rooted/logic';
+import type { Machine } from '@shared/types';
 ```
 
 ### Code Nesting & Complexity
@@ -690,9 +686,9 @@ const processOrder = (order: Order) => {
 
 ### Prettier/ESLint Configuration
 
-**Shared configuration in packages/config:**
+**Shared configuration:**
 ```javascript
-// packages/config/eslint.js
+// .eslintrc.json
 module.exports = {
   extends: [
     '@typescript-eslint/recommended',
@@ -707,7 +703,7 @@ module.exports = {
   },
 };
 
-// packages/config/prettier.js
+// .prettierrc
 module.exports = {
   semi: true,
   trailingComma: 'es5',
@@ -725,9 +721,9 @@ module.exports = {
 **Use Shadcn components as base:**
 ```typescript
 // ✅ Good - Extend Shadcn components
-import { Button } from '@rooted/ui';
+import { Button } from '@shared/ui';
 
-const OrderActionButton = ({ variant = 'default', ...props }) => (
+const MachineActionButton = ({ variant = 'default', ...props }) => (
   <Button 
     variant={variant}
     className="min-w-[120px] font-medium"
@@ -749,8 +745,8 @@ const OrderActionButton = ({ variant = 'default', ...props }) => (
 
 **Extract complex styles to CSS classes:**
 ```css
-/* apps/web/src/styles/components.css */
-.order-card {
+/* src/index.css */
+.machine-card {
   @apply flex flex-col p-6 bg-white rounded-lg border shadow-sm;
   @apply hover:shadow-md transition-all duration-200;
   @apply focus-within:ring-2 focus-within:ring-blue-500 focus-within:ring-offset-2;

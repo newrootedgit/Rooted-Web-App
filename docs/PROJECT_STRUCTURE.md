@@ -180,7 +180,7 @@ Rooted-Web-App/
 │       ├── vitest.config.ts           # Test configuration
 │       └── package.json
 │
-├── shared/                            # ✅ Shared packages
+├── shared/                            # ✅ Shared code
 │   ├── ui/                            # Shared UI components (Shadcn)
 │   │   └── components/
 │   │       ├── AppHeader/             # Application header
@@ -241,7 +241,6 @@ Rooted-Web-App/
 ├── .env.example                       # Environment variables template
 ├── .gitignore
 ├── package.json                       # Root package.json
-├── pnpm-workspace.yaml                # pnpm workspace configuration
 ├── tsconfig.json                      # TypeScript configuration
 ├── vite.config.ts                     # Vite configuration
 ├── tailwind.config.js                 # Tailwind CSS configuration

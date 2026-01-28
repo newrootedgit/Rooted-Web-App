@@ -172,65 +172,52 @@ The Machine IoT platform shares the same web application as Rooted Planner, with
 
 ```
 Rooted-Web-App/
-├── machines/                    # Machine IoT Platform
-│   ├── src/                    # Web frontend for machine management
+├── src/
+│   ├── machines/                # Machine IoT Platform
 │   │   ├── device-discovery/
 │   │   │   ├── components/
-│   │   │   │   ├── ScanButton.tsx
-│   │   │   │   └── DeviceList.tsx
+│   │   │   │   ├── OnboardMachine.tsx
 │   │   │   ├── hooks/
-│   │   │   │   ├── useBluetoothScanner.ts
-│   │   │   │   └── useDeviceConnection.ts
-│   │   │   └── types.ts
+│   │   │   │   └── useOnboardMachine.ts
 │   │   ├── wifi-provisioning/
 │   │   │   ├── components/
-│   │   │   │   ├── WiFiConfigModal.tsx
-│   │   │   │   └── ConnectionStatus.tsx
+│   │   │   │   └── ChangeWifiModal.tsx
 │   │   │   ├── hooks/
-│   │   │   │   ├── useWiFiProvisioning.ts
-│   │   │   │   └── useConnectionStatus.ts
-│   │   │   └── types.ts
+│   │   │   │   └── useChangeWifi.ts
 │   │   ├── dashboard/
 │   │   │   ├── components/
 │   │   │   │   ├── MachineCard.tsx
-│   │   │   │   └── MachineList.tsx
+│   │   │   │   └── MachinesList.tsx
 │   │   │   ├── hooks/
-│   │   │   │   └── useMachineDashboard.ts
-│   │   │   └── types.ts
+│   │   │   │   └── useBluetoothScanner.ts
 │   │   └── lib/
 │   │       ├── bluetooth/
 │   │       │   ├── scanner.ts
 │   │       │   ├── gatt-client.ts
 │   │       │   └── constants.ts
-│   │       └── storage/
-│   │           └── indexeddb.ts
-│   └── pi-src/                 # Raspberry Pi BLE service
-│       ├── main.py
-│       ├── ble/
-│       │   ├── peripheral.py
-│       │   ├── characteristics.py
-│       │   └── constants.py
-│       ├── wifi/
-│       │   ├── manager.py
-│       │   └── status.py
-│       └── config/
-│           └── settings.py
-│
-├── planner/                     # Rooted Planner Platform
-│   └── src/                    # Farm management features
-│       ├── products/
-│       ├── orders/
-│       ├── tasks/
-│       ├── customers/
-│       ├── farm-layout/
-│       ├── employees/
-│       └── supplies/
+│   ├── planner/                 # Rooted Planner Platform
+│   │   ├── products/
+│   │   ├── orders/
+│   │   ├── tasks/
+│   │   ├── customers/
+│   │   ├── farm-layout/
+│   │   ├── employees/
+│   │   └── supplies/
 │
 ├── shared/                      # Shared across both platforms
-│   ├── components/             # Reusable UI components
-│   ├── hooks/                  # Common hooks
-│   ├── utils/                  # Utility functions
-│   └── types/                  # Shared TypeScript types
+│   ├── ui/                     # Shared UI components (Shadcn)
+│   ├── types/                  # Shared TypeScript types
+│   └── api-types/
+│
+├── apps/api/                    # Backend API (Fastify + tRPC)
+│   └── src/
+│       ├── domains/
+│       │   ├── machine-domain/  # Machine IoT backend
+│       │   └── planner-domain/  # Planner backend
+│
+├── pi-src/                      # Raspberry Pi BLE service
+│   ├── provisioner.py
+│   └── requirements.txt
 │
 └── docs/
     ├── machine-iot/
@@ -276,52 +263,25 @@ const routes = [
 
 ### State Management
 
-**Platform Isolation:**
-- Machine IoT uses client-side state only (no backend)
-- Rooted Planner uses tRPC + React Query for server state
-- Shared UI state can use React Context
+**Unified State Strategy:**
+- Both platforms use **tRPC + React Query** for server-side state.
+- **Machine IoT** uses local React state (via hooks) for ephemeral BLE operations.
+- **Rooted Planner** will use server state for all production data.
 
-**Machine IoT State (React Context/Zustand):**
-```typescript
-// machines/src/lib/store.ts
-interface MachineState {
-  devices: Device[];
-  activeDevice: Device | null;
-  connectionStatus: ConnectionStatus;
-  wifiStatus: WiFiStatus;
-  
-  // Actions
-  addDevice: (device: Device) => void;
-  removeDevice: (deviceId: string) => void;
-  setActiveDevice: (device: Device) => void;
-  updateWiFiStatus: (status: WiFiStatus) => void;
-}
-```
+**Machine IoT State:**
+- **BLE Connections**: Managed via custom hooks in `src/machines/` (e.g., `useOnboardMachine.ts`).
+- **Machine Registry**: Fetched from backend via `trpc.machines.list.useQuery()`.
+- **No Local Persistence**: Device lists are stored in the database, not in browser storage.
 
-**Persistent State (IndexedDB):**
-```typescript
-// machines/src/lib/storage/indexeddb.ts
-interface DeviceRecord {
-  id: string;
-  name: string;
-  lastConnected: Date;
-  wifiConfigured: boolean;
-  lastKnownStatus: WiFiStatus;
-}
-```
-
-**Planner State (tRPC + React Query):**
-```typescript
-// planner/src/ uses tRPC client for all server state
-// Managed through React Query cache
-```
+**Planner State:**
+- **Server-driven**: All products, orders, and tasks are managed through tRPC procedures and cached by React Query.
 
 ### Web Bluetooth Integration
 
 #### Device Discovery Flow
 
 ```typescript
-// machines/src/lib/bluetooth/scanner.ts
+// src/lib/bluetooth/scanner.ts
 export async function scanForDevices(): Promise<BluetoothDevice> {
   try {
     const device = await navigator.bluetooth.requestDevice({
@@ -341,7 +301,7 @@ export async function scanForDevices(): Promise<BluetoothDevice> {
 #### GATT Connection Flow
 
 ```typescript
-// machines/src/lib/bluetooth/gatt-client.ts
+// src/lib/bluetooth/gatt-client.ts
 export class MachineGATTClient {
   private device: BluetoothDevice;
   private server: BluetoothRemoteGATTServer | null = null;
@@ -498,17 +458,17 @@ class WiFiManager:
 ### Systemd Service
 
 ```ini
-# /etc/systemd/system/machine-iot.service
+# /etc/systemd/system/rooted-ble.service
 [Unit]
-Description=Machine IoT BLE Provisioning Service
+Description=Rooted Robotics BLE Provisioner
 After=bluetooth.target network.target
 
 [Service]
 Type=simple
 User=root
-ExecStart=/usr/bin/python3 /opt/machine-iot/main.py
-Restart=on-failure
-RestartSec=5
+WorkingDirectory=/opt/rooted-ble
+ExecStart=/opt/rooted-ble/ble-wrapper.sh
+Restart=no
 
 [Install]
 WantedBy=multi-user.target
@@ -607,20 +567,17 @@ class WiFiError(Enum):
 ### Raspberry Pi Setup
 
 **Initial Configuration:**
+Deployment is handled via scripts in `pi-src/`.
+
 ```bash
-# Install dependencies
-sudo apt update
-sudo apt install -y python3-pip bluez
+# Deploy BLE service to Raspberry Pi
+cd pi-src
+./deploy-to-pi-one.sh <pi-ip-address>
 
-# Install bluezero
-pip3 install bluezero
-
-# Copy service files
-sudo cp -r pi-src /opt/machine-iot/
-
-# Enable and start service
-sudo systemctl enable machine-iot
-sudo systemctl start machine-iot
+# Verify deployment
+ssh pi@<pi-ip-address>
+sudo systemctl status rooted-ble
+sudo journalctl -u rooted-ble -f
 ```
 
 **BLE Advertising Configuration:**

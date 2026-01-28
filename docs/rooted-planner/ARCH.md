@@ -113,7 +113,7 @@ sequenceDiagram
 ### tRPC Integration
 
 **End-to-End Type Safety:**
-- **Zod Schemas**: Defined in `packages/logic` as the single source of truth
+- **Zod Schemas**: Defined in domain types or `@shared/api-types` as the single source of truth
 - **tRPC Procedures**: Type-safe API endpoints with automatic TypeScript inference
 - **React Query**: Automatic caching and state management on the frontend
 - **Shared Types**: No code generation needed - types flow automatically
@@ -544,26 +544,24 @@ graph TB
 
 ## Development Workflow
 
-### Monorepo Structure
+### Project Structure
 ```
 ├── apps/
-│   ├── web/                # React + Vite (The "Consumer")
-│   └── api/                # Fastify (The "Provider")
-├── packages/
-│   ├── db/                 # Prisma schema + client (The "Source of Truth")
-│   ├── ui/                 # Shared React/Tailwind components (Shadcn)
-│   ├── config/             # Shared ESLint, TypeScript, Tailwind configs
-│   └── logic/              # Shared Zod schemas & business rules (Universal)
+│   └── api/                # Fastify Backend (The "Provider")
+├── src/                    # React + Vite Frontend (The "Consumer")
+│   ├── planner/            # Rooted Planner platform
+│   ├── machines/           # Machine IoT platform
+│   └── admin/              # Admin portal
+├── shared/                 # Shared code (Types, UI components)
 ├── docker/                 # Global orchestration
-└── package.json            # Root workspace config
+└── package.json            # Root configuration
 ```
 
 ### Code Organization
-- **Feature-Based Modules**: Domain-driven folder structure within apps/api and apps/web
-- **Shared Logic**: Zod schemas and business rules in packages/logic (tRPC contract)
-- **UI Components**: Reusable Shadcn components in packages/ui
-- **Database**: Single source of truth Prisma schema in packages/db
-- **Configuration**: Shared tooling configs in packages/config
+- **Feature-Based Modules**: Domain-driven folder structure within `apps/api/src/domains/` and `src/`
+- **Shared Logic**: Zod schemas and business rules in domain types or `shared/`
+- **UI Components**: Reusable components in `shared/ui/`
+- **Database**: Single source of truth Prisma schema in `apps/api/prisma/`
 - **Type Safety**: End-to-end types from tRPC procedures to React components
 
 ## Integration Points
