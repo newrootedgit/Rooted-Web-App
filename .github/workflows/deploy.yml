@@ -84,15 +84,18 @@ jobs:
           # Install dependencies (uses existing .env.production on EC2)
           pnpm install --prod
 
+          # Install Prisma CLI (matching project version)
+          pnpm add -D prisma@6
+
           # Generate Prisma Client for Linux
-          npx prisma generate
+          pnpm exec prisma generate
 
           # Copy Prisma client to dist
           mkdir -p dist/generated
           cp -r src/generated/prisma dist/generated/
 
           # Run migrations
-          npx prisma migrate deploy
+          pnpm exec prisma migrate deploy
 
           # Reload API (sources existing .env.production - not modified by this workflow)
           set -a; source .env.production; set +a
