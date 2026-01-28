@@ -36,6 +36,7 @@ describe('createOrUpdateMachine', () => {
         tenant_id: 'tenant-1',
         farm_id: 'farm-1',
         name: 'New Machine',
+        display_name: 'New Machine',
         device_id: 'new-device',
       },
     });
@@ -80,6 +81,7 @@ describe('createOrUpdateMachine', () => {
       where: { id: 'existing-id' },
       data: {
         name: 'Updated Name',
+        display_name: 'Updated Name',
         tenant_id: 'tenant-2',
         farm_id: 'farm-2',
       },
@@ -130,6 +132,7 @@ describe('createOrUpdateMachine', () => {
         tenant_id: 'tenant-1',
         farm_id: null,
         name: 'No Farm Machine',
+        display_name: 'No Farm Machine',
         device_id: 'device-123',
       },
     });
@@ -162,6 +165,7 @@ describe('createOrUpdateMachine', () => {
       tenantId: 'tenant-abc',
       farmId: 'farm-xyz',
       name: 'Formatted Machine',
+      displayName: dbMachine.display_name,
       deviceId: 'device-456',
       createdAt: createdAt,
     });

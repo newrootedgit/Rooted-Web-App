@@ -201,26 +201,25 @@ Machine IoT is a web-based device provisioning platform that enables users to di
 
 ## Data Management Requirements
 
-### Requirement 8: Local Data Persistence
+### Requirement 8: Machine Registry Persistence
 
-**User Story:** As a user, I want my machine list to persist across browser sessions, so that I don't have to re-discover devices every time.
+**User Story:** As a user, I want my machine list to persist across sessions, so that I don't have to re-discover devices every time.
 
 #### Business Rules
 
-1. The system MUST store the following data locally:
+1. The system MUST store machine information in a centralized database (PostgreSQL):
    - Device ID and name
-   - Last connection timestamp
+   - Last seen timestamp
    - WiFi configuration status
+   - AWS IoT Thing Name
 
 2. The system MUST NOT store:
    - WiFi passwords
    - Sensitive device credentials
 
-3. Users MUST be able to clear their device list manually
+3. Users MUST be able to remove machines from their account
 
-4. The system SHOULD use IndexedDB for structured device data storage
-
-5. The system MUST handle storage quota limits gracefully
+4. The system MUST support multi-tenant isolation, ensuring machines are only visible to authorized users of the same farm/tenant.
 
 ---
 

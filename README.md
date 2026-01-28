@@ -19,12 +19,17 @@ Rooted-Web-App/
 ├── apps/
 │   └── api/               # Backend API server
 │       ├── src/
-│       │   ├── machine-domain/
-│       │   ├── planner-domain/
-│       │   └── lib/
+│       │   ├── domains/   # Domain-driven logic
+│       │   │   ├── machine-domain/
+│       │   │   ├── admin-domain/
+│       │   │   ├── onboarding-domain/
+│       │   │   └── planner-domain/
+│       │   └── lib/       # Shared backend utilities
 │       └── prisma/        # Database schema
-├── shared/                # Shared UI components
-│   └── ui/
+├── shared/                # Shared code (Frontend & API)
+│   ├── ui/                # Shared UI components
+│   ├── types/             # Shared TypeScript types
+│   └── api-types/         # Shared API definitions
 ├── pi-src/                # Raspberry Pi BLE service
 └── docs/                  # Documentation
 ```
