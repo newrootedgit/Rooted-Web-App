@@ -27,6 +27,7 @@ export function createMockDbMachine(overrides: Partial<{
   tenant_id: string | null;
   farm_id: string | null;
   name: string;
+  display_name: string | null;
   device_id: string;
   created_at: Date | null;
 }> = {}) {
@@ -35,6 +36,7 @@ export function createMockDbMachine(overrides: Partial<{
     tenant_id: 'tenant_id' in overrides ? overrides.tenant_id : 'tenant-uuid-1',
     farm_id: 'farm_id' in overrides ? overrides.farm_id : 'farm-uuid-1',
     name: overrides.name ?? 'Test Machine',
+    display_name: 'display_name' in overrides ? overrides.display_name : overrides.name ?? 'Test Machine',
     device_id: overrides.device_id ?? 'device-001',
     created_at: 'created_at' in overrides ? overrides.created_at : new Date('2024-01-01'),
   };
