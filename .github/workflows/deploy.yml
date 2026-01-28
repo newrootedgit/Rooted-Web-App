@@ -29,14 +29,17 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      - name: Generate Prisma Client
+        run: cd apps/api && pnpm prisma generate
+
+      - name: Build API
+        run: cd apps/api && pnpm build
+
       - name: Build frontend
         env:
           VITE_CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY }}
           VITE_API_URL: /api/trpc
         run: pnpm build
-
-      - name: Build API
-        run: cd apps/api && pnpm build
 
       - name: Setup SSH
         run: |
