@@ -30,7 +30,7 @@ jobs:
         run: pnpm install
 
       - name: Generate Prisma Client
-        run: cd apps/api && npx prisma generate
+        run: pnpm --filter @rooted/api exec prisma generate
 
       - name: Build API
         run: cd apps/api && pnpm build
