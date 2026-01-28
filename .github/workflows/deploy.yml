@@ -33,6 +33,8 @@ jobs:
         run: cd apps/api && pnpm install
 
       - name: Generate Prisma Client
+        env:
+          DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
         run: cd apps/api && pnpm exec prisma generate
 
       - name: Build API
