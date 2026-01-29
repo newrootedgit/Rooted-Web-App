@@ -102,6 +102,7 @@ RestartSec=10
 WantedBy=multi-user.target"
 
 # Write service file to Pi
+echo '$SSH_PASSWORD' | sudo -S chmod 644 /opt/rooted-ble/certs/private.pem.key
 sshpass -p "$SSH_PASSWORD" ssh "${PI_USER}@${PI_HOST}" bash << ENDSSH
 echo '$SSH_PASSWORD' | sudo -S bash -c "cat > /etc/systemd/system/rooted-ble.service" << 'EOF'
 $SERVICE_CONTENT

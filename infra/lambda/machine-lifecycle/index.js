@@ -7,7 +7,14 @@ exports.handler = async (event) => {
   console.log('Received event:', JSON.stringify(event, null, 2));
 
   try {
-    const { clientId, eventType, timestamp, sessionIdentifier } = event;
+    // AWS IoT sends either 'clientId' or 'deviceId' depending on the rule
+    const deviceId = event.deviceId || event.clientId;
+    const { eventType, timestamp, sessionIdentifier } = event;
+
+    if (!deviceId || !eventType || !timestamp) {
+      console.error('Missing required fields:', { deviceId, eventType, timestamp });
+      return { statusCode: 400, body: 'Missing required fields' };
+    }
 
     let normalizedEventType;
     if (eventType === 'connected') {
@@ -20,7 +27,7 @@ exports.handler = async (event) => {
     }
 
     const payload = {
-      deviceId: clientId,
+      deviceId,
       eventType: normalizedEventType,
       timestamp: new Date(timestamp).toISOString(),
       sessionId: sessionIdentifier,

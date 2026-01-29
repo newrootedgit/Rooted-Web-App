@@ -1,0 +1,6 @@
+- [ ] Fix IoT Infrastructure
+- [ ] Prod Clerk is still in Development Mode
+- [ ] Admin Should have ability to add/remove users and delete machines
+- [ ] Add update name and location to machine data
+- [ ] Test Deployment Script
+- [ ] Build Logger
