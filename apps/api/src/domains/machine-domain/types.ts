@@ -4,6 +4,7 @@ export const addMachineSchema = z.object({
   name: z.string().min(1).max(255),
   displayName: z.string().min(1).max(255).optional(),
   deviceId: z.string().min(1).max(255),
+  currentWifiSsid: z.string().min(1).max(255).optional(),
 });
 
 export const getMachineParamsSchema = z.object({

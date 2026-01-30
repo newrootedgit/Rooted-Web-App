@@ -20,6 +20,7 @@ export function useOnboardMachine({ tenantId, userEmail, farmId, onSuccess }: Us
   const [device, setDevice] = useState<MachineGATTClient | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [deviceName, setDeviceName] = useState('');
+  const [currentWifiSsid, setCurrentWifiSsid] = useState('');
   const [displayName, setDisplayName] = useState('');
 
   const createMachine = trpc.machines.create.useMutation();
@@ -56,6 +57,7 @@ export function useOnboardMachine({ tenantId, userEmail, farmId, onSuccess }: Us
         name: deviceInfoRef.current.name,
         deviceId: currentDeviceId,
         displayName: displayName,
+        currentWifiSsid: currentWifiSsid,
       });
       setStatusMessage('Machine registered successfully!');
       setStep('success');
@@ -65,7 +67,7 @@ export function useOnboardMachine({ tenantId, userEmail, farmId, onSuccess }: Us
       setStatusMessage(error.message || 'Failed to register machine');
       setStep('failed');
     }
-  }, [createMachine, displayName, onSuccess]);
+  }, [createMachine, displayName, currentWifiSsid, onSuccess]);
 
   const handleStatusChange = useCallback((status: StatusCode) => {
     const currentStep = stepRef.current;
@@ -177,6 +179,7 @@ export function useOnboardMachine({ tenantId, userEmail, farmId, onSuccess }: Us
 
     setStep('connecting');
     setStatusMessage('Sending WiFi credentials...');
+    setCurrentWifiSsid(ssid);
 
     try {
       await device.writeWiFiCredentials(ssid, password);

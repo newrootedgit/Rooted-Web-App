@@ -3,7 +3,6 @@ import subprocess
 import os
 import sys
 import threading
-import uuid
 from bluezero import peripheral
 from bluezero import adapter
 import json
@@ -50,26 +49,6 @@ class MachineBLE:
         self.is_onboarded = False
         self.user_info = None
         
-        # Auto-connect to AWS IoT if WiFi is already connected (with retry)
-        def try_aws_iot_connect():
-            import time
-            for attempt in range(6):  # Try for 30 seconds
-                try:
-                    result = subprocess.run(['nmcli', '-t', '-f', 'active,ssid', 'dev', 'wifi'], 
-                                          capture_output=True, text=True)
-                    if 'yes:' in result.stdout:
-                        from aws_iot_registration import register_with_aws_iot, connect_to_aws_iot
-                        register_with_aws_iot()
-                        connect_to_aws_iot()
-                        print("AWS IoT connected on startup")
-                        return
-                except Exception as e:
-                    print(f"AWS IoT connection attempt {attempt + 1} failed: {e}")
-                time.sleep(5)
-            print("WiFi not connected after 30s, skipping AWS IoT auto-connect")
-        
-        # Run in background thread so BLE starts immediately
-        threading.Thread(target=try_aws_iot_connect, daemon=True).start()
 
     def _safe_notify(self, value):
         """Safely send notification, handling client disconnection gracefully."""
@@ -151,19 +130,6 @@ class MachineBLE:
             if result.returncode == 0:
                 print("Success!")
                 self._safe_notify([0x02])  # Success
-
-                # Register with AWS IoT and connect
-                try:
-                    from aws_iot_registration import register_with_aws_iot, connect_to_aws_iot
-
-                    thing_name = register_with_aws_iot()
-                    mqtt_connection = connect_to_aws_iot()
-
-                    print("AWS IoT connection established. Lifecycle events enabled.")
-
-                except Exception as e:
-                    print(f"AWS IoT setup failed: {e}")
-                    # Continue anyway - WiFi is connected
             else:
                 print(f"Failed: {result.stderr}")
                 self._safe_notify([0x03])  # Failure

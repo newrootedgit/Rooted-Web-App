@@ -5,6 +5,18 @@ export const getTenantMachinesInput = z.object({
   tenantId: z.string().uuid(),
 });
 
+export const getTenantFarmsInput = z.object({
+  tenantId: z.string().uuid(),
+});
+
+export const deleteMachineInput = z.object({
+  machineId: z.string().uuid(),
+});
+
+export const deleteFarmInput = z.object({
+  farmId: z.string().uuid(),
+});
+
 // Response types
 export const tenantSchema = z.object({
   id: z.string(),
@@ -34,6 +46,21 @@ export const machineSchema = z.object({
   }).nullable(),
 });
 
+export const farmSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  slug: z.string(),
+  contact_email: z.string().nullable(),
+  created_at: z.date().nullable(),
+  _count: z.object({
+    machines: z.number(),
+  }),
+});
+
 export type GetTenantMachinesInput = z.infer<typeof getTenantMachinesInput>;
+export type GetTenantFarmsInput = z.infer<typeof getTenantFarmsInput>;
+export type DeleteMachineInput = z.infer<typeof deleteMachineInput>;
+export type DeleteFarmInput = z.infer<typeof deleteFarmInput>;
 export type Tenant = z.infer<typeof tenantSchema>;
 export type Machine = z.infer<typeof machineSchema>;
+export type Farm = z.infer<typeof farmSchema>;

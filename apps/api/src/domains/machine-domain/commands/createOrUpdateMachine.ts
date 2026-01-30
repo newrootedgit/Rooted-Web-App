@@ -19,6 +19,7 @@ export async function createOrUpdateMachine(
         display_name: input.displayName ?? input.name,
         tenant_id: tenantId,
         farm_id: farmId,
+        current_wifi_ssid: input.currentWifiSsid ?? null,
       },
     });
   } else {
@@ -29,6 +30,7 @@ export async function createOrUpdateMachine(
         name: input.name,
         display_name: input.displayName ?? input.name,
         device_id: input.deviceId,
+        current_wifi_ssid: input.currentWifiSsid ?? null,
       },
     });
   }
@@ -40,6 +42,7 @@ export async function createOrUpdateMachine(
     name: machine.name,
     displayName: machine.display_name,
     deviceId: machine.device_id,
+    currentWifiSsid: machine.current_wifi_ssid,
     createdAt: machine.created_at,
   };
 }

@@ -1,11 +1,15 @@
 import { useState } from 'react';
-import { Building2, Server, AlertCircle } from 'lucide-react';
+import { Building2, Server, AlertCircle, MapPin } from 'lucide-react';
 import { trpc } from '../lib/trpc';
 import { TenantCard } from './TenantCard';
 import { MachineList } from './MachineList';
+import { FarmList } from './FarmList';
+
+type ViewMode = 'machines' | 'farms';
 
 export function TenantOverview() {
   const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>('machines');
   const { data: tenants, isLoading } = trpc.admin.getAllTenants.useQuery();
 
   if (isLoading) {
@@ -59,7 +63,7 @@ export function TenantOverview() {
         <div className="bg-card border border-border rounded-lg p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold">
-              {tenants.find((t) => t.id === selectedTenantId)?.name} - Machines
+              {tenants.find((t) => t.id === selectedTenantId)?.name}
             </h2>
             <button
               onClick={() => setSelectedTenantId(null)}
@@ -68,7 +72,34 @@ export function TenantOverview() {
               Clear selection
             </button>
           </div>
-          <MachineList tenantId={selectedTenantId} />
+
+          <div className="flex gap-2 mb-4">
+            <button
+              onClick={() => setViewMode('machines')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                viewMode === 'machines'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-secondary text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <Server size={16} />
+              Machines
+            </button>
+            <button
+              onClick={() => setViewMode('farms')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                viewMode === 'farms'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-secondary text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <MapPin size={16} />
+              Farms
+            </button>
+          </div>
+
+          {viewMode === 'machines' && <MachineList tenantId={selectedTenantId} />}
+          {viewMode === 'farms' && <FarmList tenantId={selectedTenantId} />}
         </div>
       )}
 
@@ -76,7 +107,7 @@ export function TenantOverview() {
         <div className="bg-secondary/50 border border-border rounded-lg p-8 text-center">
           <AlertCircle size={48} className="mx-auto text-muted-foreground mb-3" />
           <p className="text-muted-foreground">
-            Select a tenant to view their machines
+            Select a tenant to view their machines and farms
           </p>
         </div>
       )}

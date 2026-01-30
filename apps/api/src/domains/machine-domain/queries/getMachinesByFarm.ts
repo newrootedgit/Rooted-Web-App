@@ -23,6 +23,7 @@ export async function getMachinesByFarm(
     name: m.name,
     displayName: m.display_name,
     deviceId: m.device_id,
+    currentWifiSsid: m.current_wifi_ssid,
     createdAt: m.created_at,
   }));
 }

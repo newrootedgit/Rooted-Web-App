@@ -1,4 +1,7 @@
 - [ ] Fix IoT Infrastructure
+    - [X] Connection status
+    - [ ] Make connection a system service
+    
 - [ ] Prod Clerk is still in Development Mode
 - [ ] Admin Should have ability to add/remove users and delete machines
 - [ ] Add update name and location to machine data

@@ -1,4 +1,4 @@
-import { Circle, MapPin, Clock } from 'lucide-react';
+import { Circle, MapPin, Clock, Trash2 } from 'lucide-react';
 import { trpc } from '../lib/trpc';
 
 interface MachineListProps {
@@ -6,7 +6,14 @@ interface MachineListProps {
 }
 
 export function MachineList({ tenantId }: MachineListProps) {
+  const utils = trpc.useUtils();
   const { data: machines, isLoading } = trpc.admin.getTenantMachines.useQuery({ tenantId });
+  const deleteMutation = trpc.admin.deleteMachine.useMutation({
+    onSuccess: () => {
+      utils.admin.getTenantMachines.invalidate({ tenantId });
+      utils.admin.getAllTenants.invalidate();
+    },
+  });
 
   if (isLoading) {
     return <div className="text-center py-8 text-muted-foreground">Loading machines...</div>;
@@ -46,23 +53,36 @@ export function MachineList({ tenantId }: MachineListProps) {
             </div>
           </div>
 
-          <div className="text-right">
-            <span className={`
-              inline-flex items-center px-3 py-1 rounded-full text-xs font-medium
-              ${machine.status === 'online' 
-                ? 'bg-green-100 text-green-800' 
-                : 'bg-gray-100 text-gray-800'}
-            `}>
-              {machine.status}
-            </span>
-            {machine.last_seen_at && (
-              <div className="flex items-center gap-1 text-xs text-muted-foreground mt-2">
-                <Clock size={12} />
-                <span>
-                  {new Date(machine.last_seen_at).toLocaleString()}
-                </span>
-              </div>
-            )}
+          <div className="flex items-center gap-3">
+            <div className="text-right">
+              <span className={`
+                inline-flex items-center px-3 py-1 rounded-full text-xs font-medium
+                ${machine.status === 'online' 
+                  ? 'bg-green-100 text-green-800' 
+                  : 'bg-gray-100 text-gray-800'}
+              `}>
+                {machine.status}
+              </span>
+              {machine.last_seen_at && (
+                <div className="flex items-center gap-1 text-xs text-muted-foreground mt-2">
+                  <Clock size={12} />
+                  <span>
+                    {new Date(machine.last_seen_at).toLocaleString()}
+                  </span>
+                </div>
+              )}
+            </div>
+            <button
+              onClick={() => {
+                if (confirm(`Delete machine "${machine.name}"?`)) {
+                  deleteMutation.mutate({ machineId: machine.id });
+                }
+              }}
+              disabled={deleteMutation.isPending}
+              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+            >
+              <Trash2 size={16} />
+            </button>
           </div>
         </div>
       ))}

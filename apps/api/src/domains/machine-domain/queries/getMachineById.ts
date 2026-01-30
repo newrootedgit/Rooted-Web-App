@@ -24,6 +24,7 @@ export async function getMachineById(
     name: machine.name,
     displayName: machine.display_name,
     deviceId: machine.device_id,
+    currentWifiSsid: machine.current_wifi_ssid,
     createdAt: machine.created_at,
   };
 }
