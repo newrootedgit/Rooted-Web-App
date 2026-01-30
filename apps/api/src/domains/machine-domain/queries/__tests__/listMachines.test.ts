@@ -62,8 +62,13 @@ describe('listMachines', () => {
       tenantId: 'tenant-1',
       farmId: 'farm-1',
       name: 'Harvester',
+      displayName: 'Harvester',
       deviceId: 'dev-001',
       createdAt: dbMachine.created_at,
+      awsIotThingName: undefined,
+      status: undefined,
+      lastSeenAt: undefined,
+      currentWifiSsid: undefined,
     });
     expect(mockPrisma.machines.findMany).toHaveBeenCalledWith(
       expect.objectContaining({

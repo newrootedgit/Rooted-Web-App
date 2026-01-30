@@ -1,6 +1,6 @@
-import { prisma } from '../../../lib/db/index.js';
+import type { PrismaClient } from '../../../generated/prisma/client.js';
 
-export async function getAllTenants() {
+export async function getAllTenants(prisma: PrismaClient) {
   return prisma.tenants.findMany({
     select: {
       id: true,

@@ -33,6 +33,7 @@ describe('getMachine', () => {
       tenantId: 'tenant-1',
       farmId: 'farm-1',
       name: 'Test Machine',
+      displayName: 'Test Machine',
       deviceId: 'dev-123',
       createdAt: dbMachine.created_at,
     });

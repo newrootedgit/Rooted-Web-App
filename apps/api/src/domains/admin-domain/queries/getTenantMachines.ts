@@ -1,6 +1,6 @@
-import { prisma } from '../../../lib/db/index.js';
+import type { PrismaClient } from '../../../generated/prisma/client.js';
 
-export async function getTenantMachines(tenantId: string) {
+export async function getTenantMachines(prisma: PrismaClient, tenantId: string) {
   return prisma.machines.findMany({
     where: { tenant_id: tenantId },
     include: {
