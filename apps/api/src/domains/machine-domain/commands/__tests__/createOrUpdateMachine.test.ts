@@ -48,6 +48,7 @@ describe('createOrUpdateMachine', () => {
       name: 'New Machine',
       displayName: 'New Machine',
       deviceId: 'new-device',
+      currentWifiSsid: null,
       createdAt: createdMachine.created_at,
     });
   });

@@ -24,7 +24,7 @@ describe('getTenantMachines', () => {
 
     expect(result).toHaveLength(1);
     expect(result[0].name).toBe('Machine 1');
-    expect(result[0].farms.name).toBe('Farm 1');
+    expect(result[0].farms?.name).toBe('Farm 1');
     expect(mockPrisma.machines.findMany).toHaveBeenCalledWith({
       where: { tenant_id: tenantId },
       include: {

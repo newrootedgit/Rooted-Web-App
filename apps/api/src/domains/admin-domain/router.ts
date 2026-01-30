@@ -1,5 +1,4 @@
 import { router, adminProcedure } from '../../lib/trpc/trpc.js';
-import { PrismaClient } from '@prisma/client';
 import { getAllTenants } from './queries/getAllTenants.js';
 import { getTenantMachines } from './queries/getTenantMachines.js';
 import { getTenantFarms } from './queries/getTenantFarms.js';

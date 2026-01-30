@@ -27,7 +27,7 @@ describe('createTenantAndFarm', () => {
     const result = await createTenantAndFarm(
       mockPrisma as unknown as PrismaClient,
       'user-123',
-      { farmName: 'New Farm' }
+      { farmName: 'New Farm', userEmail: 'test@example.com' }
     );
 
     expect(result).toEqual({
@@ -56,7 +56,7 @@ describe('createTenantAndFarm', () => {
     mockPrisma.farm_users.findFirst.mockResolvedValue(null);
 
     await expect(
-      createTenantAndFarm(mockPrisma as unknown as PrismaClient, 'user-123', { farmName: 'New Farm' })
+      createTenantAndFarm(mockPrisma as unknown as PrismaClient, 'user-123', { farmName: 'New Farm', userEmail: 'test@example.com' })
     ).rejects.toThrow('User not found');
   });
 
@@ -65,7 +65,7 @@ describe('createTenantAndFarm', () => {
     mockPrisma.farm_users.findFirst.mockResolvedValue(dbFarmUser);
 
     await expect(
-      createTenantAndFarm(mockPrisma as unknown as PrismaClient, 'user-123', { farmName: 'New Farm' })
+      createTenantAndFarm(mockPrisma as unknown as PrismaClient, 'user-123', { farmName: 'New Farm', userEmail: 'test@example.com' })
     ).rejects.toThrow('User already has a farm');
   });
 
@@ -85,7 +85,7 @@ describe('createTenantAndFarm', () => {
     const result = await createTenantAndFarm(
       mockPrisma as unknown as PrismaClient,
       'user-123',
-      { farmName: 'New Farm' }
+      { farmName: 'New Farm', userEmail: 'test@example.com' }
     );
 
     expect(result.farmSlug).toBe('new-farm-1');
