@@ -11,7 +11,7 @@ echo "======================================"
 echo ""
 
 # Check if running as root
-if [ "$EUID" -ne 0 ]; then 
+if [ "$EUID" -ne 0 ]; then
     echo "Please run as root (use sudo)"
     exit 1
 fi
@@ -19,7 +19,13 @@ fi
 # Configuration
 WLAN_INTERFACE="wlan0"
 
-echo "Step 1: Installing required packages..."
+echo "Step 1: Checking required packages..."
+
+# Fix any interrupted dpkg operations
+if ! dpkg --configure -a 2>/dev/null; then
+    echo "Fixing interrupted package installations..."
+    dpkg --configure -a
+fi
 
 # Check and install NetworkManager if needed
 if ! command -v nmcli &> /dev/null; then
@@ -30,32 +36,33 @@ else
     echo "NetworkManager already installed"
 fi
 
-# Install other required tools
-apt-get install -y rfkill wireless-tools 2>/dev/null || true
-
 echo "✓ Required packages installed"
 echo ""
 
 echo "Step 2: Removing wlan0 from netplan control..."
 
-# Backup and modify cloud-init netplan config
+# Backup cloud-init netplan file (if it exists)
 if [ -f /etc/netplan/50-cloud-init.yaml ]; then
     cp /etc/netplan/50-cloud-init.yaml /etc/netplan/50-cloud-init.yaml.bak-$(date +%s)
-    
-    # Remove any wlan0 configuration
-    cat > /etc/netplan/50-cloud-init.yaml <<EOF
-# This file is generated from information provided by the datasource.  Changes
-# to it will not persist across an instance reboot.  To disable cloud-init's
-# network configuration capabilities, write a file
-# /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg with the following:
-# network: {config: disabled}
-network:
-    version: 2
-EOF
 fi
 
+# Replace it with a minimal stub (removes wlan0 and everything else)
+tee /etc/netplan/50-cloud-init.yaml > /dev/null <<'EOF'
+# This file is generated from information provided by the datasource. Changes
+# to it will not persist across an instance reboot.
+# To disable cloud-init's network configuration capabilities, write a file:
+#   /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg
+# with the following content:
+#   network: {config: disabled}
+network:
+  version: 2
+EOF
+
 # Apply netplan changes
+netplan generate
 netplan apply
+
+# Remove any leftover netplan wpa_supplicant config
 rm -f /run/netplan/wpa-wlan0.conf 2>/dev/null || true
 
 echo "✓ wlan0 removed from netplan control"
@@ -64,7 +71,7 @@ echo ""
 echo "Step 3: Configuring NetworkManager..."
 
 # Configure NetworkManager to NOT manage eth0 (let networkd handle it)
-cat > /etc/NetworkManager/NetworkManager.conf <<EOF
+tee /etc/NetworkManager/NetworkManager.conf > /dev/null <<'EOF'
 [main]
 plugins=keyfile
 
@@ -80,7 +87,7 @@ EOF
 
 # Create specific config to ensure wlan0 is managed
 mkdir -p /etc/NetworkManager/conf.d
-cat > /etc/NetworkManager/conf.d/20-manage-wlan0.conf <<EOF
+tee /etc/NetworkManager/conf.d/20-manage-wlan0.conf > /dev/null <<'EOF'
 [device-wlan0]
 match-device=interface-name:wlan0
 managed=true
@@ -114,11 +121,13 @@ echo ""
 
 echo "Step 6: Enabling WiFi interface..."
 
-# Unblock WiFi
-rfkill unblock wifi
+# Unblock WiFi (if rfkill is available)
+if command -v rfkill &> /dev/null; then
+    rfkill unblock wifi
+fi
 
 # Bring up the interface
-ip link set ${WLAN_INTERFACE} up
+ip link set ${WLAN_INTERFACE} up 2>/dev/null || true
 
 echo "✓ WiFi interface enabled"
 echo ""
@@ -142,11 +151,6 @@ echo "------------------"
 nmcli radio wifi
 echo ""
 
-echo "wpa_supplicant Process:"
-echo "----------------------"
-ps aux | grep wpa_supplicant | grep -v grep || echo "(Will start automatically when NetworkManager needs it)"
-echo ""
-
 # Check wlan0 state
 WLAN_STATE=$(nmcli -t -f DEVICE,STATE device status | grep "^${WLAN_INTERFACE}:" | cut -d: -f2)
 
@@ -156,13 +160,8 @@ if [ "$WLAN_STATE" = "disconnected" ]; then
     echo "✓ SUCCESS: ${WLAN_INTERFACE} is ready for NetworkManager control!"
     echo ""
     echo "You can now:"
-    echo "  • Create WiFi hotspots"
-    echo "  • Connect to WiFi networks"
-    echo "  • Switch between hotspot and client mode"
-    echo ""
-    echo "Next steps:"
-    echo "  1. Use your wifi-manager.sh script to manage hotspot/client modes"
-    echo "  2. eth0 will remain stable and unaffected"
+    echo "  • Connect to WiFi networks via BLE provisioner"
+    echo "  • Use nmcli to manage WiFi connections"
 elif [ "$WLAN_STATE" = "unavailable" ]; then
     echo "⚠ WARNING: ${WLAN_INTERFACE} is 'unavailable'"
     echo ""
@@ -170,9 +169,6 @@ elif [ "$WLAN_STATE" = "unavailable" ]; then
     echo "  sudo systemctl restart NetworkManager"
     echo "  sleep 5"
     echo "  nmcli device status"
-    echo ""
-    echo "If still unavailable, check logs:"
-    echo "  journalctl -u NetworkManager -n 50 --no-pager | grep wlan"
 else
     echo "ℹ INFO: ${WLAN_INTERFACE} state is: $WLAN_STATE"
 fi
@@ -183,5 +179,4 @@ echo "---------------------"
 echo "• wlan0: Managed by NetworkManager"
 echo "• eth0: Still managed by systemd-networkd (isolated)"
 echo "• wpa_supplicant: Controlled by NetworkManager via D-Bus"
-echo "• WiFi Radio: Enabled"
-echo ""echo "You can check and manage WiFi connections using 'nmcli' or 'nmtui' commands."
+echo ""

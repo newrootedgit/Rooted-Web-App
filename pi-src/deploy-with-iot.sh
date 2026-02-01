@@ -1,6 +1,6 @@
 #!/bin/bash
 # Deploy to Raspberry Pi with AWS IoT support
-# Run this AFTER deploy-to-pi-two.sh
+# Assumes certificates are already provisioned via provision-iot-device.sh
 
 set -e
 
@@ -16,11 +16,12 @@ DEFAULT_HOSTNAME="192.168.10.1"
 DEFAULT_USERNAME="rooted"
 
 echo -e "${BLUE}================================================${NC}"
-echo -e "${BLUE}  Rooted Robotics - AWS IoT Setup (Optional)  ${NC}"
+echo -e "${BLUE}  Rooted Robotics - Deploy with AWS IoT        ${NC}"
 echo -e "${BLUE}================================================${NC}"
 echo ""
-echo "This script adds AWS IoT connectivity to your Pi."
-echo -e "${YELLOW}Run this AFTER deploy-to-pi-two.sh completes.${NC}"
+echo -e "${YELLOW}Prerequisites:${NC}"
+echo "  1. Run provision-iot-device.sh first to create certificates"
+echo "  2. Certificates should be in /opt/rooted-ble/certs/ on Pi"
 echo ""
 
 # Get Pi connection info
@@ -33,95 +34,81 @@ PI_USER=${PI_USER:-$DEFAULT_USERNAME}
 read -s -p "Enter the SSH password for ${PI_USER}@${PI_HOST}: " SSH_PASSWORD
 echo ""
 
-# AWS credentials
-echo ""
-echo -e "${YELLOW}Enter AWS IoT credentials:${NC}"
-read -p "AWS Access Key ID: " AWS_ACCESS_KEY_ID
-read -s -p "AWS Secret Access Key: " AWS_SECRET_ACCESS_KEY
-echo ""
-
-# AWS IoT config
-AWS_REGION="us-west-2"
-AWS_IOT_ENDPOINT="a2jotz5yvt34r4-ats.iot.us-west-2.amazonaws.com"
-AWS_IOT_POLICY_NAME="rooted-machine-policy-prod"
+# Check if sshpass is installed
+if ! command -v sshpass &> /dev/null; then
+    echo -e "${RED}Error: sshpass is not installed${NC}"
+    echo "Install with: brew install hudochenkov/sshpass/sshpass"
+    exit 1
+fi
 
 echo ""
-echo -e "${GREEN}Deploying AWS IoT files to Pi...${NC}"
+echo -e "${GREEN}[1/4] Copying Python files to Pi...${NC}"
 
-# Copy files
 sshpass -p "$SSH_PASSWORD" scp \
   "$SCRIPT_DIR/aws_iot_registration.py" \
-  "$SCRIPT_DIR/setup-aws-iot.sh" \
-  "${PI_USER}@${PI_HOST}:/opt/rooted-ble/"
-
-# Update requirements.txt
-sshpass -p "$SSH_PASSWORD" scp \
+  "$SCRIPT_DIR/provisioner.py" \
   "$SCRIPT_DIR/requirements.txt" \
   "${PI_USER}@${PI_HOST}:/opt/rooted-ble/"
 
-# Update provisioner.py
-sshpass -p "$SSH_PASSWORD" scp \
-  "$SCRIPT_DIR/provisioner.py" \
-  "${PI_USER}@${PI_HOST}:/opt/rooted-ble/"
+echo -e "${GREEN}[2/4] Copying systemd service files...${NC}"
 
-echo -e "${GREEN}Installing AWS IoT dependencies...${NC}"
+sshpass -p "$SSH_PASSWORD" scp \
+  "$SCRIPT_DIR/rooted-ble.service" \
+  "$SCRIPT_DIR/rooted-iot.service" \
+  "${PI_USER}@${PI_HOST}:/tmp/"
+
+echo -e "${GREEN}[3/4] Installing services on Pi...${NC}"
 
 sshpass -p "$SSH_PASSWORD" ssh "${PI_USER}@${PI_HOST}" << 'ENDSSH'
-cd /opt/rooted-ble
-
-# Run setup script
-chmod +x setup-aws-iot.sh
-./setup-aws-iot.sh
-
 # Install Python dependencies
+cd /opt/rooted-ble
 source .venv/bin/activate
-pip3 install awsiotsdk boto3
+pip3 install -q awsiotsdk
+
+# Move service files and set up systemd
+echo "Setting up systemd services..."
+sudo mv /tmp/rooted-ble.service /etc/systemd/system/
+sudo mv /tmp/rooted-iot.service /etc/systemd/system/
+
+# Reload systemd
+sudo systemctl daemon-reload
+
+# Enable services to start on boot
+sudo systemctl enable rooted-ble.service
+sudo systemctl enable rooted-iot.service
+
+# Restart services
+sudo systemctl restart rooted-ble.service
+sudo systemctl restart rooted-iot.service
+
+echo "Services installed and started"
 ENDSSH
 
-echo -e "${GREEN}Updating systemd service...${NC}"
+echo -e "${GREEN}[4/4] Verifying services...${NC}"
 
-# Create service file content with variables expanded
-SERVICE_CONTENT="[Unit]
-Description=Rooted BLE Provisioning Service
-After=bluetooth.target network.target
-
-[Service]
-Type=simple
-User=rooted
-WorkingDirectory=/opt/rooted-ble
-Environment=\"AWS_REGION=${AWS_REGION}\"
-Environment=\"AWS_IOT_ENDPOINT=${AWS_IOT_ENDPOINT}\"
-Environment=\"AWS_IOT_POLICY_NAME=${AWS_IOT_POLICY_NAME}\"
-Environment=\"AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}\"
-Environment=\"AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}\"
-ExecStart=/opt/rooted-ble/.venv/bin/python3 /opt/rooted-ble/provisioner.py
-Restart=always
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target"
-
-# Write service file to Pi
-echo '$SSH_PASSWORD' | sudo -S chmod 644 /opt/rooted-ble/certs/private.pem.key
-sshpass -p "$SSH_PASSWORD" ssh "${PI_USER}@${PI_HOST}" bash << ENDSSH
-echo '$SSH_PASSWORD' | sudo -S bash -c "cat > /etc/systemd/system/rooted-ble.service" << 'EOF'
-$SERVICE_CONTENT
-EOF
-
-echo '$SSH_PASSWORD' | sudo -S systemctl daemon-reload
-echo '$SSH_PASSWORD' | sudo -S systemctl restart rooted-ble
+sshpass -p "$SSH_PASSWORD" ssh "${PI_USER}@${PI_HOST}" << 'ENDSSH'
+echo ""
+echo "=== Service Status ==="
+echo ""
+echo "rooted-ble (BLE Provisioner):"
+sudo systemctl is-active rooted-ble.service || true
+echo ""
+echo "rooted-iot (AWS IoT Connection):"
+sudo systemctl is-active rooted-iot.service || true
 ENDSSH
 
 echo ""
-echo -e "${GREEN}✓ AWS IoT setup complete!${NC}"
+echo -e "${GREEN}================================================${NC}"
+echo -e "${GREEN}  Deployment complete!                         ${NC}"
+echo -e "${GREEN}================================================${NC}"
 echo ""
-echo "Next steps:"
-echo "  1. Provision WiFi on the Pi via BLE"
-echo "  2. Pi will auto-register with AWS IoT"
-echo "  3. Check dashboard for online status"
+echo "Services running:"
+echo "  - rooted-ble.service  : BLE provisioning (WiFi setup)"
+echo "  - rooted-iot.service  : AWS IoT connection (stays online)"
 echo ""
-echo "To check status:"
+echo "Useful commands:"
 echo "  ssh ${PI_USER}@${PI_HOST}"
 echo "  sudo systemctl status rooted-ble"
-echo "  sudo journalctl -u rooted-ble -f"
-
+echo "  sudo systemctl status rooted-iot"
+echo "  sudo journalctl -u rooted-iot -f"
+echo ""

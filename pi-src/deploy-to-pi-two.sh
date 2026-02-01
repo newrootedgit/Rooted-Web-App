@@ -131,17 +131,61 @@ else
     DEVICE_UUID=$(python3 -c "import uuid; print(str(uuid.uuid4()))")
 fi
 
-# Create device_config.json (use /tmp to avoid permission issues)
-CONFIG_FILE="/tmp/device_config.json"
-echo "{
-    \"device_name\": \"${MACHINE_NAME}\",
-    \"device_id\": \"${DEVICE_UUID}\"
-}" > "${CONFIG_FILE}"
-cp "${CONFIG_FILE}" "${SCRIPT_DIR}/device_config.json"
-
 echo -e "${GREEN}Device configuration generated:${NC}"
 echo "  Device Name: ${MACHINE_NAME}"
 echo "  Device ID:   ${DEVICE_UUID}"
+
+# =============================================================================
+# STEP 3.5: AWS IoT Provisioning
+# =============================================================================
+
+echo ""
+echo -e "${BLUE}AWS IoT Provisioning${NC}"
+echo "────────────────────────"
+read -p "Provision AWS IoT for this device? [Y/n]: " PROVISION_IOT
+PROVISION_IOT=${PROVISION_IOT:-Y}
+
+IOT_TEMP_DIR="/tmp/rooted-iot-${DEVICE_UUID}"
+IOT_ENDPOINT=""
+
+if [[ "$PROVISION_IOT" =~ ^[Yy]$ ]]; then
+    # Check if AWS CLI is available
+    if ! command -v aws &> /dev/null; then
+        echo -e "${RED}AWS CLI not installed. Skipping IoT provisioning.${NC}"
+        echo "Install with: brew install awscli"
+        PROVISION_IOT="n"
+    else
+        echo "Provisioning AWS IoT Thing: ${DEVICE_UUID}"
+
+        # Run the provisioning script in non-interactive mode
+        "${SCRIPT_DIR}/setup-scripts/provision-iot-device.sh" "${DEVICE_UUID}" --output-dir "${IOT_TEMP_DIR}"
+
+        if [ -f "${IOT_TEMP_DIR}/.iot_endpoint" ]; then
+            IOT_ENDPOINT=$(cat "${IOT_TEMP_DIR}/.iot_endpoint")
+            echo -e "${GREEN}IoT provisioning complete!${NC}"
+        else
+            echo -e "${RED}IoT provisioning may have failed. Continuing without IoT...${NC}"
+            PROVISION_IOT="n"
+        fi
+    fi
+fi
+
+# Create device_config.json with IoT endpoint if available
+CONFIG_FILE="/tmp/device_config.json"
+if [ -n "$IOT_ENDPOINT" ]; then
+    echo "{
+    \"device_name\": \"${MACHINE_NAME}\",
+    \"device_id\": \"${DEVICE_UUID}\",
+    \"aws_iot_endpoint\": \"${IOT_ENDPOINT}\",
+    \"aws_region\": \"us-west-2\"
+}" > "${CONFIG_FILE}"
+else
+    echo "{
+    \"device_name\": \"${MACHINE_NAME}\",
+    \"device_id\": \"${DEVICE_UUID}\"
+}" > "${CONFIG_FILE}"
+fi
+cp "${CONFIG_FILE}" "${SCRIPT_DIR}/device_config.json"
 
 # =============================================================================
 # STEP 4: Copy Files to Pi
@@ -157,9 +201,11 @@ sshpass -p "${SSH_PASSWORD}" ssh -o StrictHostKeyChecking=no "${PI_USER}@${PI_HO
 # Files to copy
 FILES_TO_COPY=(
     "provisioner.py"
+    "aws_iot_registration.py"
     "requirements.txt"
     "device_config.json"
     "rooted-ble.service"
+    "rooted-iot.service"
     "rooted-ble.timer"
     "ble-wrapper.sh"
 )
@@ -174,6 +220,24 @@ for file in "${FILES_TO_COPY[@]}"; do
     fi
 done
 
+# Copy IoT certificates if provisioning was done
+if [[ "$PROVISION_IOT" =~ ^[Yy]$ ]] && [ -d "${IOT_TEMP_DIR}" ]; then
+    echo "  Creating certs directory..."
+    sshpass -p "${SSH_PASSWORD}" ssh -o StrictHostKeyChecking=no "${PI_USER}@${PI_HOST}" \
+        "echo '${SSH_PASSWORD}' | sudo -S mkdir -p ${REMOTE_DIR}/certs && echo '${SSH_PASSWORD}' | sudo -S chown ${PI_USER}:${PI_USER} ${REMOTE_DIR}/certs"
+
+    echo "  Copying IoT certificates..."
+    sshpass -p "${SSH_PASSWORD}" scp -o StrictHostKeyChecking=no \
+        "${IOT_TEMP_DIR}/certificate.pem.crt" \
+        "${IOT_TEMP_DIR}/private.pem.key" \
+        "${IOT_TEMP_DIR}/AmazonRootCA1.pem" \
+        "${PI_USER}@${PI_HOST}:${REMOTE_DIR}/certs/"
+
+    # Set proper permissions on private key
+    sshpass -p "${SSH_PASSWORD}" ssh -o StrictHostKeyChecking=no "${PI_USER}@${PI_HOST}" \
+        "chmod 600 ${REMOTE_DIR}/certs/private.pem.key"
+fi
+
 echo -e "${GREEN}Files copied successfully${NC}"
 
 # =============================================================================
@@ -183,6 +247,11 @@ echo -e "${GREEN}Files copied successfully${NC}"
 echo ""
 echo "Setting up on Pi..."
 
+# Copy setup-nm.sh script
+echo "  Copying NetworkManager setup script..."
+sshpass -p "${SSH_PASSWORD}" scp -o StrictHostKeyChecking=no \
+    "${SCRIPT_DIR}/setup-scripts/setup-nm.sh" "${PI_USER}@${PI_HOST}:${REMOTE_DIR}/"
+
 sshpass -p "${SSH_PASSWORD}" ssh -o StrictHostKeyChecking=no "${PI_USER}@${PI_HOST}" << REMOTE_SCRIPT
 set -e
 
@@ -190,7 +259,20 @@ REMOTE_DIR="${REMOTE_DIR}"
 
 # Make scripts executable
 chmod +x \${REMOTE_DIR}/ble-wrapper.sh
-chmod +x \${REMOTE_DIR}/setup-scripts/*.sh 2>/dev/null || true
+chmod +x \${REMOTE_DIR}/setup-nm.sh
+
+# # =============================================================================
+# # Run NetworkManager setup
+# # =============================================================================
+# echo "  Configuring NetworkManager..."
+# echo "${SSH_PASSWORD}" | sudo -S bash \${REMOTE_DIR}/setup-nm.sh
+
+# # =============================================================================
+# # Reconnect to WiFi after NetworkManager takes over
+# # =============================================================================
+# echo "  Reconnecting to WiFi..."
+# echo "${SSH_PASSWORD}" | sudo -S nmcli device wifi connect "urbanfarms" password "RoboticFarming"
+# sleep 3
 
 # =============================================================================
 # Create Python virtual environment and install dependencies
@@ -246,6 +328,12 @@ echo "  Installing systemd service files..."
 echo "${SSH_PASSWORD}" | sudo -S cp \${REMOTE_DIR}/rooted-ble.service /etc/systemd/system/
 echo "${SSH_PASSWORD}" | sudo -S cp \${REMOTE_DIR}/rooted-ble.timer /etc/systemd/system/
 
+# Install IoT service if it exists
+if [ -f "\${REMOTE_DIR}/rooted-iot.service" ]; then
+    echo "  Installing AWS IoT service..."
+    echo "${SSH_PASSWORD}" | sudo -S cp \${REMOTE_DIR}/rooted-iot.service /etc/systemd/system/
+fi
+
 # Reload systemd
 echo "  Reloading systemd..."
 echo "${SSH_PASSWORD}" | sudo -S systemctl daemon-reload
@@ -258,6 +346,14 @@ echo "${SSH_PASSWORD}" | sudo -S systemctl enable rooted-ble.timer
 echo "  Starting BLE timer..."
 echo "${SSH_PASSWORD}" | sudo -S systemctl start rooted-ble.timer
 
+# Enable and start IoT service if certificates exist
+if [ -f "\${REMOTE_DIR}/certs/certificate.pem.crt" ]; then
+    echo "  Enabling AWS IoT service..."
+    echo "${SSH_PASSWORD}" | sudo -S systemctl enable rooted-iot.service
+    echo "  Starting AWS IoT service..."
+    echo "${SSH_PASSWORD}" | sudo -S systemctl start rooted-iot.service
+fi
+
 echo "  Setup complete!"
 REMOTE_SCRIPT
 
@@ -265,8 +361,9 @@ REMOTE_SCRIPT
 # STEP 6: Cleanup and Summary
 # =============================================================================
 
-# Remove local device_config.json (it's now on the Pi)
+# Remove local device_config.json and temp IoT files
 rm -f "${CONFIG_FILE}" "${SCRIPT_DIR}/device_config.json" 2>/dev/null || true
+rm -rf "${IOT_TEMP_DIR}" 2>/dev/null || true
 
 echo ""
 echo -e "${GREEN}=========================================${NC}"
@@ -278,16 +375,27 @@ echo "  Pi Host:      ${PI_HOST}"
 echo "  Machine Name: ${MACHINE_NAME}"
 echo "  Device ID:    ${DEVICE_UUID}"
 echo "  Install Path: ${REMOTE_DIR}"
+if [ -n "$IOT_ENDPOINT" ]; then
+echo "  IoT Endpoint: ${IOT_ENDPOINT}"
+echo "  IoT Status:   Provisioned"
+else
+echo "  IoT Status:   Not provisioned"
+fi
 echo ""
-echo "The BLE provisioner will run for 5 minutes after each boot."
+echo "Services:"
+echo "  - rooted-ble.timer   : BLE provisioning (runs on boot)"
+if [ -n "$IOT_ENDPOINT" ]; then
+echo "  - rooted-iot.service : AWS IoT connection (always running)"
+fi
 echo ""
 echo "Useful commands on the Pi:"
-echo "  sudo systemctl status rooted-ble.timer   # Check timer status"
-echo "  sudo systemctl status rooted-ble.service # Check service status"
-echo "  sudo journalctl -u rooted-ble.service    # View service logs"
-echo "  cat /var/log/rooted-ble.log              # View wrapper logs"
+echo "  sudo systemctl status rooted-ble.timer   # Check BLE timer"
+echo "  sudo systemctl status rooted-ble.service # Check BLE service"
+if [ -n "$IOT_ENDPOINT" ]; then
+echo "  sudo systemctl status rooted-iot.service # Check IoT service"
+echo "  sudo journalctl -u rooted-iot -f         # Watch IoT logs"
+fi
 echo ""
 echo -e "${YELLOW}Important: Save the Device ID above - you'll need it to identify this machine.${NC}"
 echo ""
 echo "You can now disconnect the ethernet cable."
-echo "The Pi will advertise via BLE for 5 minutes after each boot."

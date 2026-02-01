@@ -1,6 +1,10 @@
 #!/bin/bash
 # AWS IoT Device Provisioning Script
 # Run this on your Mac to provision a new Rooted device
+#
+# Usage:
+#   ./provision-iot-device.sh <thing-name>                    # Interactive mode
+#   ./provision-iot-device.sh <thing-name> --output-dir /tmp  # Non-interactive, output to dir
 
 set -e
 
@@ -17,6 +21,24 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
+# Parse arguments
+THING_NAME="${1:-}"
+OUTPUT_DIR=""
+NON_INTERACTIVE=false
+
+while [[ $# -gt 1 ]]; do
+    case "$2" in
+        --output-dir)
+            OUTPUT_DIR="$3"
+            NON_INTERACTIVE=true
+            shift 2
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
+
 echo -e "${GREEN}=== Rooted IoT Device Provisioning ===${NC}"
 echo ""
 
@@ -27,7 +49,6 @@ if ! command -v aws &> /dev/null; then
 fi
 
 # Get device name from argument or prompt
-THING_NAME="${1:-}"
 if [ -z "$THING_NAME" ]; then
     read -p "Enter device/thing name (e.g., rooted-device-001): " THING_NAME
 fi
@@ -40,8 +61,13 @@ fi
 echo -e "${YELLOW}Provisioning device: ${THING_NAME}${NC}"
 echo ""
 
-# Create temp directory for certs
-TEMP_DIR=$(mktemp -d)
+# Create temp directory for certs (or use provided output dir)
+if [ -n "$OUTPUT_DIR" ]; then
+    TEMP_DIR="$OUTPUT_DIR"
+    mkdir -p "$TEMP_DIR"
+else
+    TEMP_DIR=$(mktemp -d)
+fi
 echo "Working in: $TEMP_DIR"
 
 # Step 1: Create the Thing
@@ -139,7 +165,18 @@ echo ""
 echo "Files in $TEMP_DIR:"
 ls -la "$TEMP_DIR"
 
-# Ask about copying to Pi
+# In non-interactive mode, skip the copy prompt (caller handles it)
+if [ "$NON_INTERACTIVE" = true ]; then
+    echo ""
+    echo -e "${GREEN}=== Provisioning complete (non-interactive) ===${NC}"
+    echo "Certificates saved to: $TEMP_DIR"
+    echo "IoT Endpoint: $IOT_ENDPOINT"
+    # Export for calling script
+    echo "$IOT_ENDPOINT" > "$TEMP_DIR/.iot_endpoint"
+    exit 0
+fi
+
+# Ask about copying to Pi (interactive mode only)
 echo ""
 read -p "Copy certificates to Pi ($PI_USER@$PI_HOST)? [y/N]: " COPY_TO_PI
 
