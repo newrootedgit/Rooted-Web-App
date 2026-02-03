@@ -1,10 +1,10 @@
-- [ ] Fix IoT Infrastructure
+- [X] Fix IoT Infrastructure
     - [X] Connection status
-    - [ ] Make connection a system service
+    - [X] Make connection a system service
 
 - [ ] Just remove all tests, they are broken and we don't have time to fix them
 - [ ] Prod Clerk is still in Development Mode
-- [ ] Admin Should have ability to add/remove users and delete machines
+- [X] Admin Should have ability to add/remove users and delete machines
 - [ ] Add update name and location to machine data
 - [X] Test Deployment Script (works beautifully)
 - [ ] Build Logger
@@ -16,4 +16,4 @@ bash '''
 ck	@	
 '''
 - [ ] SSID gets overwritten when connected via IoT
-- [ ] Things are wrong with the connection status (disconnects randomly)
+- [X] Things are wrong with the connection status (disconnects randomly)
