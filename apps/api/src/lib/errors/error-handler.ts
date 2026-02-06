@@ -126,7 +126,7 @@ const errorHandlerPlugin: FastifyPluginAsync<ErrorHandlerOptions> = async (fasti
       logger.warn(appError.message, logContext);
     } else {
       // Programmer errors need attention (5xx, unexpected)
-      logger.error(appError.message, { ...logContext, stack: appError.stack });
+      logger.error(appError.message, { ...logContext, err: appError });
     }
 
     // Build and send response

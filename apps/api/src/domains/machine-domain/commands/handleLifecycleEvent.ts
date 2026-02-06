@@ -24,8 +24,7 @@ export async function handleLifecycleEvent(
     where: { id: machine.id },
     data: {
       status: input.eventType === 'connected' ? 'online' : 'offline',
-      last_seen_at: new Date(input.timestamp),
-      current_wifi_ssid: input.eventType === 'connected' ? input.wifiSsid : null,
+      last_seen_at: new Date(input.timestamp)
     },
   });
 }

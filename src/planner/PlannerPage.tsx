@@ -1,15 +1,25 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calendar } from 'lucide-react';
+import { Calendar, Sprout, Users, ClipboardList, CheckSquare } from 'lucide-react';
 import { AppLayout, NavItem } from '@shared/ui/components/AppLayout';
 import { AppType } from '@shared/ui/components/AppHeader';
-import { ComingSoon } from '@shared/ui/components/ComingSoon';
+import { ProductsPage } from './products/ProductsPage';
+import { CustomersPage } from './customers/CustomersPage';
+import { OrdersPage } from './orders/OrdersPage';
+import { TasksPage } from './tasks/TasksPage';
+import { ProductionPage } from './production/ProductionPage';
 
 const sidebarItems: NavItem[] = [
-  { id: 'calendar', label: 'Calendar', icon: <Calendar size={20} /> },
+  { id: 'products', label: 'Products', icon: <Sprout size={20} /> },
+  { id: 'customers', label: 'Customers', icon: <Users size={20} /> },
+  { id: 'orders', label: 'Orders', icon: <ClipboardList size={20} /> },
+  { id: 'tasks', label: 'Tasks', icon: <CheckSquare size={20} /> },
+  { id: 'production', label: 'Production', icon: <Calendar size={20} /> },
 ];
 
 export function PlannerPage() {
   const navigate = useNavigate();
+  const [activeItem, setActiveItem] = useState('products');
 
   function handleAppChange(app: AppType) {
     if (app === 'machines') {
@@ -22,13 +32,14 @@ export function PlannerPage() {
       currentApp="planner"
       onAppChange={handleAppChange}
       sidebarItems={sidebarItems}
-      activeSidebarItem="calendar"
-      onSidebarItemClick={() => {}}
+      activeSidebarItem={activeItem}
+      onSidebarItemClick={setActiveItem}
     >
-      <ComingSoon 
-        title="Planner" 
-        description="The planner feature is coming soon. Please contact erik@rootedrobotics.com"
-      />
+      {activeItem === 'products' && <ProductsPage />}
+      {activeItem === 'customers' && <CustomersPage />}
+      {activeItem === 'orders' && <OrdersPage />}
+      {activeItem === 'tasks' && <TasksPage />}
+      {activeItem === 'production' && <ProductionPage />}
     </AppLayout>
   );
 }

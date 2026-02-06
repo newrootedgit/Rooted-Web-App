@@ -16,6 +16,13 @@ export interface LogContext {
   requestId?: string;
   farmId?: string;
   userId?: string;
+  tenantId?: string;
+  component?: string;
+  method?: string;
+  url?: string;
+  statusCode?: number;
+  durationMs?: number;
+  event?: string;
   [key: string]: unknown;
 }
 

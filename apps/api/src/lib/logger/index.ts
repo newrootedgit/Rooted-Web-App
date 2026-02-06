@@ -2,22 +2,22 @@
  * Logger Module
  *
  * Winston-based logging with environment-aware formatting.
- *
- * @example
- * import { createLogger } from './lib/logger/index.js';
- *
- * const logger = createLogger({
- *   service: 'rooted-api',
- *   level: 'info',
- *   environment: 'development'
- * });
- *
- * logger.info('Server started', { port: 8000 });
- *
- * // Create child logger with request context
- * const reqLogger = logger.child({ requestId: 'abc123', farmId: 'farm-1' });
- * reqLogger.info('Processing request');
+ * Exports a shared application logger and context helpers.
  */
 
-export { createLogger } from './logger.js';
+import { createLogger, addLogContext, getLogContext, setLogContext, withLogContext } from './logger.js';
+import type { Environment, LogLevel } from './types.js';
+
+const environment = (process.env.NODE_ENV as Environment) || 'development';
+const level =
+  (process.env.LOG_LEVEL as LogLevel) || (environment === 'production' ? 'info' : 'debug');
+const service = process.env.SERVICE_NAME || 'rooted-api';
+
+export const logger = createLogger({
+  service,
+  level,
+  environment,
+});
+
+export { createLogger, addLogContext, getLogContext, setLogContext, withLogContext };
 export type { Logger, LoggerConfig, LogContext, LogLevel, Environment } from './types.js';

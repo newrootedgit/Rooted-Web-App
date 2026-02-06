@@ -3,6 +3,7 @@ import { createClerkClient } from '@clerk/fastify';
 
 import { prisma } from '../db/index.js';
 import { UnauthorizedError, ForbiddenError } from '../errors/index.js';
+import { addLogContext } from '../logger/index.js';
 
 import type { FastifyPluginAsync } from 'fastify';
 import type { AuthContext, AuthMiddlewareOptions, UserRole } from './types.js';
@@ -71,6 +72,7 @@ const farmAuthPlugin: FastifyPluginAsync<AuthMiddlewareOptions> = async (fastify
         throw new UnauthorizedError('No user ID in auth token');
       }
 
+      addLogContext({ userId });
       logger.debug('Clerk auth verified', { userId });
 
       // Optional: Get farm context from header if provided
@@ -98,6 +100,7 @@ const farmAuthPlugin: FastifyPluginAsync<AuthMiddlewareOptions> = async (fastify
         };
 
         request.auth = authContext;
+        addLogContext({ farmId, tenantId: authContext.tenantId });
 
         logger.debug('Auth context set', {
           userId,
@@ -116,16 +119,20 @@ const farmAuthPlugin: FastifyPluginAsync<AuthMiddlewareOptions> = async (fastify
         });
 
         if (farmUser?.farms?.tenant_id) {
-          // User has farm access - set tenant context
           request.auth = {
             userId,
             tenantId: farmUser.farms.tenant_id,
-            farmId: '',
+            farmId: farmUser.farm_id!,
             role: farmUser.role as UserRole,
           };
-          logger.debug('Auth set with tenant (no farm filter)', {
+          addLogContext({
+            farmId: farmUser.farm_id!,
+            tenantId: farmUser.farms.tenant_id,
+          });
+          logger.debug('Auth set with default farm', {
             userId,
             tenantId: farmUser.farms.tenant_id,
+            farmId: farmUser.farm_id,
           });
         } else {
           // User has no farm access yet - basic auth only
@@ -135,6 +142,7 @@ const farmAuthPlugin: FastifyPluginAsync<AuthMiddlewareOptions> = async (fastify
             farmId: '',
             role: 'FARM_OPERATOR' as UserRole,
           };
+          addLogContext({ farmId: '', tenantId: '' });
           logger.debug('Basic auth set (no farm access)', { userId });
         }
       }
@@ -142,7 +150,7 @@ const farmAuthPlugin: FastifyPluginAsync<AuthMiddlewareOptions> = async (fastify
       if (err instanceof UnauthorizedError || err instanceof ForbiddenError) {
         throw err;
       }
-      logger.error('Authentication failed', { error: err });
+      logger.error('Authentication failed', { err });
       throw new UnauthorizedError('Authentication failed');
     }
   });

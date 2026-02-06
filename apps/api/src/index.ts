@@ -4,7 +4,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { fastifyTRPCPlugin } from '@trpc/server/adapters/fastify';
 
-import { createLogger } from './lib/logger/logger.js';
+import { logger, withLogContext } from './lib/logger/index.js';
 import { errorHandler, NotFoundError } from './lib/errors/index.js';
 import { farmAuthMiddleware } from './lib/auth/middleware.js';
 import { createContext } from './lib/trpc/context.js';
@@ -12,16 +12,8 @@ import { isProd } from './lib/env.js';
 import { appRouter } from './lib/trpc/router.js';
 import { registerInternalRoutes } from './domains/machine-domain/internal-routes.js';
 
-import type { LogLevel, Environment } from './lib/logger/types.js';
-
 const PORT = parseInt(process.env.PORT || '8000', 10);
 const HOST = process.env.HOST || '0.0.0.0';
-
-const logger = createLogger({
-  service: 'rooted-api',
-  level: (process.env.LOG_LEVEL as LogLevel) || 'info',
-  environment: (process.env.NODE_ENV as Environment) || 'development',
-});
 
 async function main() {
   const app = Fastify({
@@ -40,25 +32,27 @@ async function main() {
   await app.register(farmAuthMiddleware, { logger });
 
   app.addHook('onRequest', (request, _reply, done) => {
-    const reqLogger = logger.child({
+    const context = {
       requestId: request.id,
       method: request.method,
       url: request.url,
+    };
+
+    withLogContext(context, () => {
+      const reqLogger = logger.child({ component: 'http' });
+      (request as unknown as { log: typeof reqLogger }).log = reqLogger;
+      reqLogger.info('Request received', { event: 'http.request' });
+      done();
     });
-    logger.http('Request received', {
-      requestId: request.id,
-      method: request.method,
-      url: request.url,
-    });
-    (request as unknown as { log: typeof reqLogger }).log = reqLogger;
-    done();
   });
 
   app.addHook('onResponse', (request, reply, done) => {
-    logger.http('Response sent', {
-      requestId: request.id,
+    const reqLogger =
+      (request as unknown as { log?: typeof logger }).log || logger.child({ component: 'http' });
+    reqLogger.info('Response sent', {
+      event: 'http.response',
       statusCode: reply.statusCode,
-      responseTime: reply.elapsedTime,
+      durationMs: reply.elapsedTime,
     });
     done();
   });
@@ -85,7 +79,7 @@ async function main() {
     await app.listen({ port: PORT, host: HOST });
     logger.info('Server started', { host: HOST, port: PORT });
   } catch (err) {
-    logger.error('Failed to start server', { error: err });
+    logger.error('Failed to start server', { err });
     process.exit(1);
   }
 }
