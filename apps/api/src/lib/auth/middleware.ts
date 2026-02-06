@@ -132,7 +132,7 @@ const farmAuthPlugin: FastifyPluginAsync<AuthMiddlewareOptions> = async (fastify
           logger.debug('Auth set with default farm', {
             userId,
             tenantId: farmUser.farms.tenant_id,
-            farmId: farmUser.farm_id,
+            farmId: farmUser.farm_id ?? undefined,
           });
         } else {
           // User has no farm access yet - basic auth only

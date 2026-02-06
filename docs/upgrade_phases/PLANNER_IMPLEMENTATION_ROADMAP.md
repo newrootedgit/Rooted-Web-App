@@ -902,6 +902,11 @@ apps/api/src/domains/planner-domain/tasks/
 - ✅ Views update in real-time
 - ✅ Print-friendly layouts work
 
+**Optional Enhancements (Post-Phase 4):**
+- Calendar UX polish with richer task detail panel
+- Drag-and-drop rescheduling (deferred)
+- Backend batch-complete mutation for seeding tasks (avoid client-side loops)
+
 ---
 
 ### Phase 5: Farm Layout & Rack Management (Weeks 10-11)

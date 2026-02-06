@@ -79,20 +79,26 @@ export async function listTasks(
         message: 'Invalid cursor date',
       });
     }
-    where.AND = [
-      ...(where.AND ?? []),
-      {
-        OR: [
-          { due_date: { gt: cursorDate } },
-          {
-            AND: [
-              { due_date: cursorDate },
-              { id: { gt: cursor.id } },
-            ],
-          },
-        ],
-      },
-    ];
+    const andFilters: Prisma.tasksWhereInput[] = [];
+    if (where.AND) {
+      if (Array.isArray(where.AND)) {
+        andFilters.push(...where.AND);
+      } else {
+        andFilters.push(where.AND);
+      }
+    }
+    andFilters.push({
+      OR: [
+        { due_date: { gt: cursorDate } },
+        {
+          AND: [
+            { due_date: cursorDate },
+            { id: { gt: cursor.id } },
+          ],
+        },
+      ],
+    });
+    where.AND = andFilters;
   }
 
   const limit = input.limit ?? PAGINATION_DEFAULTS.limit;
