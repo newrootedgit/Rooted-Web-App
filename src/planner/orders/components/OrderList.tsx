@@ -98,7 +98,7 @@ function OrderCard({ order, onViewDetail, onUpdateStatus }: {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-muted-foreground text-left">
-                    <th className="pb-2 font-medium">Product</th>
+                    <th className="pb-2 font-medium">Variety / Blend</th>
                     <th className="pb-2 font-medium">Qty (oz)</th>
                     <th className="pb-2 font-medium">Trays</th>
                     <th className="pb-2 font-medium">Harvest</th>

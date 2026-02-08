@@ -80,7 +80,7 @@ function ProductCard({ product, onEdit, onArchive, categoryName }: {
               <div className="flex items-start gap-2">
                 <Sprout size={16} className="text-muted-foreground mt-0.5" />
                 <div className="flex flex-col gap-0.5">
-                  <span className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Avg Yield/Tray</span>
+                  <span className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Avg Yield per Tray</span>
                   <span className="text-sm text-foreground">{product.avgYieldPerTray} oz</span>
                 </div>
               </div>
@@ -102,7 +102,7 @@ function ProductCard({ product, onEdit, onArchive, categoryName }: {
               <div className="flex items-start gap-2">
                 <Sprout size={16} className="text-muted-foreground mt-0.5" />
                 <div className="flex flex-col gap-0.5">
-                  <span className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Seed Weight</span>
+                  <span className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Seed Weight per Tray</span>
                   <span className="text-sm text-foreground">
                     {product.seedWeight} {product.seedUnit ?? ''}
                   </span>
@@ -143,7 +143,7 @@ export function ProductList({ products, isLoading, onEdit, onArchive, categoryNa
     return (
       <div className="flex flex-col items-center justify-center py-8 text-muted-foreground gap-4">
         <div className="animate-spin rounded-full h-6 w-6 border-2 border-primary border-t-transparent" />
-        <p>Loading products...</p>
+        <p>Loading varieties...</p>
       </div>
     );
   }
@@ -151,7 +151,7 @@ export function ProductList({ products, isLoading, onEdit, onArchive, categoryNa
   if (products.length === 0) {
     return (
       <p className="text-muted-foreground py-8 text-center">
-        No products yet. Click "New Product" to get started.
+        No varieties yet. Click "New Variety" to get started.
       </p>
     );
   }

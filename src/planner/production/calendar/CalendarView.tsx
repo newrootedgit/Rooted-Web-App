@@ -1,17 +1,31 @@
 import { useMemo, useState } from 'react';
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  type DragStartEvent,
+  type DragEndEvent,
+} from '@dnd-kit/core';
 import { TaskTypeFilter } from '../components/TaskTypeFilter';
 import { ProductionMetrics } from '../components/ProductionMetrics';
 import { useCalendarTasks } from '../hooks/useCalendarTasks';
+import { useTaskDragDrop } from '../hooks/useTaskDragDrop';
 import type { ProductionTask } from '../types';
 import type { CalendarView as CalendarViewType } from '../utils/dates';
 import {
   getDateRangeForView,
+  getMonthGridDays,
   listDaysBetween,
   toDateKey,
   toInputDate,
 } from '../utils/dates';
 import { CalendarControls } from './CalendarControls';
 import { CalendarGrid } from './CalendarGrid';
+import { TaskDetailPanel } from './TaskDetailPanel';
+import { TaskEvent } from './TaskEvent';
 
 const DEFAULT_TYPES = ['SOAK', 'SEED', 'MOVE_TO_LIGHT', 'HARVEST'];
 const STATUS_OPTIONS = ['TODO', 'IN_PROGRESS', 'COMPLETED'];
@@ -22,6 +36,14 @@ export function CalendarView() {
   const [selectedTypes, setSelectedTypes] = useState<string[]>(DEFAULT_TYPES);
   const [statusFilter, setStatusFilter] = useState('');
   const [selectedTask, setSelectedTask] = useState<ProductionTask | null>(null);
+  const [activeTask, setActiveTask] = useState<ProductionTask | null>(null);
+
+  const { handleDragEnd: rescheduleTask, isUpdating } = useTaskDragDrop();
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor)
+  );
 
   const range = getDateRangeForView(view, anchorDate);
   const dueDateStart = toInputDate(range.start);
@@ -53,7 +75,31 @@ export function CalendarView() {
     return grouped;
   }, [tasks]);
 
-  const days = useMemo(() => listDaysBetween(range.start, range.end), [range.start, range.end]);
+  const days = useMemo(() => {
+    if (view === 'month') return getMonthGridDays(anchorDate);
+    return listDaysBetween(range.start, range.end);
+  }, [view, anchorDate, range.start, range.end]);
+
+  function onDragStart(event: DragStartEvent) {
+    const task = event.active.data.current?.task as ProductionTask | undefined;
+    setActiveTask(task ?? null);
+  }
+
+  function onDragEnd(event: DragEndEvent) {
+    setActiveTask(null);
+    const { active, over } = event;
+    if (!over) return;
+
+    const taskId = active.id as string;
+    const newDateKey = over.id as string;
+    const task = active.data.current?.task as ProductionTask | undefined;
+    if (!task) return;
+
+    const currentDateKey = toDateKey(task.dueDate);
+    if (currentDateKey === newDateKey) return;
+
+    rescheduleTask(taskId, newDateKey);
+  }
 
   return (
     <div className="space-y-6">
@@ -85,45 +131,39 @@ export function CalendarView() {
             ))}
           </select>
         </div>
+        {isUpdating && (
+          <span className="text-xs text-muted-foreground">Saving...</span>
+        )}
       </div>
 
       {isLoading ? (
         <div className="text-sm text-muted-foreground">Loading calendar...</div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6">
-          <CalendarGrid
-            days={days}
-            tasksByDate={tasksByDate}
-            selectedTaskId={selectedTask?.id ?? null}
-            onSelectTask={setSelectedTask}
-          />
-          <div className="border border-border rounded-lg p-4 bg-card h-fit print:hidden">
-            <h3 className="text-sm font-semibold text-foreground mb-2">Task Details</h3>
-            {!selectedTask ? (
-              <div className="text-sm text-muted-foreground">Select a task to view details.</div>
-            ) : (
-              <div className="space-y-2">
-                <div className="text-xs uppercase tracking-wider text-muted-foreground">{selectedTask.type}</div>
-                <div className="text-lg font-semibold text-foreground">
-                  {selectedTask.orderItem?.products?.name
-                    ?? selectedTask.orderItem?.blends?.name
-                    ?? selectedTask.title}
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  Order {selectedTask.orderItem?.orders?.order_number ?? '—'}
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  Due {new Date(selectedTask.dueDate).toLocaleDateString()}
-                </div>
-                {selectedTask.orderItem?.trays_needed != null && (
-                  <div className="text-sm text-muted-foreground">
-                    Trays needed: {selectedTask.orderItem.trays_needed}
-                  </div>
-                )}
-              </div>
-            )}
+        <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
+          <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6">
+            <CalendarGrid
+              view={view}
+              days={days}
+              tasksByDate={tasksByDate}
+              selectedTaskId={selectedTask?.id ?? null}
+              onSelectTask={setSelectedTask}
+              anchorDate={anchorDate}
+            />
+            <TaskDetailPanel task={selectedTask} />
           </div>
-        </div>
+          <DragOverlay>
+            {activeTask ? (
+              <div className="w-64">
+                <TaskEvent
+                  task={activeTask}
+                  onSelect={() => {}}
+                  isSelected={false}
+                  isDragOverlay
+                />
+              </div>
+            ) : null}
+          </DragOverlay>
+        </DndContext>
       )}
 
       {hasNextPage && (

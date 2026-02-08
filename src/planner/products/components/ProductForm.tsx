@@ -123,7 +123,7 @@ export function ProductForm({ isOpen, onClose, onSuccess, editProduct }: Product
         </button>
 
         <h2 className="text-xl font-semibold text-foreground mb-6">
-          {editProduct ? 'Edit Product' : 'New Product'}
+          {editProduct ? 'Edit Variety' : 'New Variety'}
         </h2>
 
         {error && (
@@ -179,6 +179,7 @@ export function ProductForm({ isOpen, onClose, onSuccess, editProduct }: Product
                 className="px-3 py-2 bg-secondary border border-border rounded-md text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                 required
               />
+              <p className="text-xs text-muted-foreground">Use 0 if no soak.</p>
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-sm font-medium text-foreground">Days Germination</label>
@@ -206,7 +207,7 @@ export function ProductForm({ isOpen, onClose, onSuccess, editProduct }: Product
 
           <div className="grid grid-cols-3 gap-3">
             <div className="flex flex-col gap-1">
-              <label className="text-sm font-medium text-foreground">Avg Yield/Tray</label>
+              <label className="text-sm font-medium text-foreground">Avg Yield per Tray</label>
               <input
                 type="number"
                 step="0.01"
@@ -215,9 +216,10 @@ export function ProductForm({ isOpen, onClose, onSuccess, editProduct }: Product
                 onChange={(e) => setAvgYieldPerTray(e.target.value)}
                 className="px-3 py-2 bg-secondary border border-border rounded-md text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               />
+              <p className="text-xs text-muted-foreground">Auto-updated from harvest weights. You can override manually.</p>
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-sm font-medium text-foreground">Seed Weight</label>
+              <label className="text-sm font-medium text-foreground">Seed Weight per Tray</label>
               <input
                 type="number"
                 step="0.01"
@@ -270,7 +272,7 @@ export function ProductForm({ isOpen, onClose, onSuccess, editProduct }: Product
               disabled={isSubmitting}
               className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-md font-semibold hover:bg-primary/90 disabled:opacity-50 transition-colors"
             >
-              {isSubmitting ? 'Saving...' : editProduct ? 'Update Product' : 'Create Product'}
+              {isSubmitting ? 'Saving...' : editProduct ? 'Update Variety' : 'Create Variety'}
             </button>
             <button
               type="button"

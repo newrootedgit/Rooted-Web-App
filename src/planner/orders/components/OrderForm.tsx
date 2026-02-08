@@ -208,7 +208,7 @@ export function OrderForm({ isOpen, onClose, onSuccess }: OrderFormProps) {
                   <div className="flex items-start gap-3">
                     <div className="flex-1 grid grid-cols-2 gap-3">
                       <div className="flex flex-col gap-1">
-                        <label className="text-xs text-muted-foreground">Product or Blend</label>
+                        <label className="text-xs text-muted-foreground">Variety or Blend</label>
                         <select
                           value={item.productId || item.blendId || ''}
                           onChange={(e) => {
@@ -223,7 +223,7 @@ export function OrderForm({ isOpen, onClose, onSuccess }: OrderFormProps) {
                           className="px-2 py-1.5 bg-secondary border border-border rounded-md text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                         >
                           <option value="">Select...</option>
-                          <optgroup label="Products">
+                          <optgroup label="Varieties">
                             {products.map((p) => (
                               <option key={p.id} value={p.id}>{p.name}</option>
                             ))}

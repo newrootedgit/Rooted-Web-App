@@ -162,7 +162,7 @@ export function BlendForm({ isOpen, onClose, onSuccess, editBlend }: BlendFormPr
                   className="flex-1 px-3 py-2 bg-secondary border border-border rounded-md text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                   required
                 >
-                  <option value="">Select product</option>
+                  <option value="">Select variety</option>
                   {products.map((p) => (
                     <option key={p.id} value={p.id}>{p.name}</option>
                   ))}

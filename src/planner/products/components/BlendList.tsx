@@ -62,7 +62,7 @@ function BlendCard({ blend, onEdit, onArchive }: {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left text-xs text-muted-foreground uppercase tracking-wide">
-                    <th className="pb-2">Product</th>
+                    <th className="pb-2">Variety</th>
                     <th className="pb-2 text-right">Percentage</th>
                     <th className="pb-2 text-right">Total Days</th>
                   </tr>

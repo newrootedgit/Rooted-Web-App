@@ -62,7 +62,7 @@ export function ProductsPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-foreground">Products</h1>
+        <h1 className="text-2xl font-semibold text-foreground">Varieties</h1>
         <div className="flex items-center gap-2">
           {tab === 'products' && (
             <button
@@ -70,7 +70,7 @@ export function ProductsPage() {
               className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md font-semibold hover:bg-primary/90 transition-colors"
             >
               <Plus size={18} />
-              New Product
+              New Variety
             </button>
           )}
           {tab === 'blends' && (
@@ -94,7 +94,7 @@ export function ProductsPage() {
               : 'border-transparent text-muted-foreground hover:text-foreground'
           }`}
         >
-          Products
+          Varieties
         </button>
         <button
           onClick={() => setTab('blends')}
@@ -117,7 +117,7 @@ export function ProductsPage() {
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search products..."
+                placeholder="Search varieties..."
                 className="w-full pl-9 pr-3 py-2 bg-secondary border border-border rounded-md text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
