@@ -49,6 +49,26 @@ resource "aws_iot_topic_rule" "machine_lifecycle" {
   }
 }
 
+# IoT Rule for Machine Config Responses (pong topic)
+resource "aws_iot_topic_rule" "machine_config_response" {
+  name        = "${var.project_name}_machine_config_response_${var.environment}"
+  description = "Route machine config responses from pong topic to Lambda"
+  enabled     = true
+  sql         = "SELECT * FROM 'rooted/machines/+/pong'"
+  sql_version = "2016-03-23"
+
+  lambda {
+    function_arn = aws_lambda_function.machine_config_response.arn
+  }
+
+  error_action {
+    cloudwatch_logs {
+      log_group_name = aws_cloudwatch_log_group.iot_rule_errors.name
+      role_arn       = aws_iam_role.iot_rule.arn
+    }
+  }
+}
+
 # CloudWatch Log Group for IoT Rule Errors
 resource "aws_cloudwatch_log_group" "iot_rule_errors" {
   name              = "/aws/iot/rules/${var.project_name}-lifecycle-errors-${var.environment}"

@@ -1,12 +1,16 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LayoutDashboard } from 'lucide-react';
+import { Bot, UserRoundCog } from 'lucide-react';
 import { AppLayout, NavItem } from '@shared/ui/components/AppLayout';
 import { AppType } from '@shared/ui/components/AppHeader';
 import MachinesDashboard from './dashboard/MachinesDashboard';
+import MachinePresets from './presets/MachinePresets';
+
 
 const sidebarItems: NavItem[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
+  { id: 'dashboard', label: 'Provisioning', icon: <Bot size={20} /> },
+  { id: 'presets', label: 'Presets', icon: <UserRoundCog size={20} /> }
+
 ];
 
 export function MachinesPage() {
@@ -28,6 +32,7 @@ export function MachinesPage() {
       onSidebarItemClick={setActiveItem}
     >
       {activeItem === 'dashboard' && <MachinesDashboard />}
+      {activeItem === 'presets' && <MachinePresets />}
     </AppLayout>
   );
 }

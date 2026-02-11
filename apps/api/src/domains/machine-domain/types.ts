@@ -35,3 +35,34 @@ export interface Machine {
   lastSeenAt?: Date | null;
   currentWifiSsid?: string | null;
 }
+
+
+// Presets ---------------------------------- 
+
+export const varietyPresetSchema = z.record(z.string(), z.number()); 
+
+export const machineConfigSchema = z.object({ 
+  ready_to_run: z.boolean(),
+  active_variety: z.number().int().min(1).max(20).nullable(),
+}).catchall(varietyPresetSchema);
+
+export type VarietyPreset = z.infer<typeof varietyPresetSchema>;
+export type MachineConfig = z.infer<typeof machineConfigSchema>;
+
+export const getConfigResponseSchema = z.object({
+  requestId: z.string().uuid(),
+});
+
+export const updateConfigSchema = z.object({
+  machineId: z.string().uuid(),
+  presets: z.record(
+    z.string().regex(/^([1-9]|1[0-9]|20)$/),
+    varietyPresetSchema
+  ),
+});
+
+export const requestConfigSchema = z.object({
+  machineId: z.string().uuid(),
+});
+
+

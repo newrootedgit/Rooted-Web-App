@@ -7,6 +7,9 @@ This directory contains comprehensive documentation for implementing the Rooted 
 ### [PLANNER_IMPLEMENTATION_ROADMAP.md](./PLANNER_IMPLEMENTATION_ROADMAP.md)
 **The complete implementation guide** - This is the primary document you should reference.
 
+### [PRODUCTION_LOGGING_UPGRADE.md](./PRODUCTION_LOGGING_UPGRADE.md)
+**Production logging and observability upgrade** - Comprehensive plan to improve production logging with structured events, performance monitoring, and business context.
+
 **Contents:**
 - Current codebase analysis and standards
 - 7-phase implementation plan with detailed tasks

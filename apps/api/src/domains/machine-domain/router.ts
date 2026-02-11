@@ -3,6 +3,8 @@ import { paginationInputSchema } from '../../lib/trpc/pagination/index.js';
 import { addMachineSchema, getMachineParamsSchema, getByDeviceIdSchema, deleteMachineSchema } from './types.js';
 import { listMachines, getMachine, findMachineByDeviceId } from './queries/index.js';
 import { createOrUpdateMachine, deleteMachine } from './commands/index.js';
+import { requestConfigSchema, getConfigResponseSchema, updateConfigSchema } from './types.js';
+import { requestMachineConfig, updateMachineConfig, getConfigResponse } from './mqtt/index.js';
 
 export const machineRouter = router({
   list: tenantProcedure
@@ -26,4 +28,17 @@ export const machineRouter = router({
   delete: tenantProcedure.input(deleteMachineSchema).mutation(({ ctx, input }) =>
     deleteMachine(ctx.prisma, input.deviceId, ctx.tenantId)
   ),
+
+  requestConfig: farmProcedure.input(requestConfigSchema).mutation(({ ctx, input }) =>
+    requestMachineConfig(ctx.prisma, input.machineId, ctx.tenantId)
+  ),
+
+  updateConfig: farmProcedure.input(updateConfigSchema).mutation(({ ctx, input }) =>
+    updateMachineConfig(ctx.prisma, input.machineId, ctx.tenantId, input.presets)
+  ),
+
+  getConfigResponse: farmProcedure.input(getConfigResponseSchema).query(({ ctx, input }) =>
+    getConfigResponse(input.requestId)
+  ),  
+  
 });
