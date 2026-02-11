@@ -31,6 +31,16 @@ export function useOnboardMachine({ tenantId, userEmail, farmId, onSuccess }: Us
     stepRef.current = step;
   }, [step]);
 
+  const displayNameRef = useRef(displayName);
+  useEffect(() => {
+    displayNameRef.current = displayName;
+  }, [displayName]);
+
+  const currentWifiSsidRef = useRef(currentWifiSsid);
+  useEffect(() => {
+    currentWifiSsidRef.current = currentWifiSsid;
+  }, [currentWifiSsid]);
+
   const deviceInfoRef = useRef<{ name: string; id: string } | null>(null);
   const deviceIdRef = useRef<string | null>(null);
 
@@ -56,8 +66,8 @@ export function useOnboardMachine({ tenantId, userEmail, farmId, onSuccess }: Us
       await createMachine.mutateAsync({
         name: deviceInfoRef.current.name,
         deviceId: currentDeviceId,
-        displayName: displayName,
-        currentWifiSsid: currentWifiSsid,
+        displayName: displayNameRef.current,
+        currentWifiSsid: currentWifiSsidRef.current,
       });
       setStatusMessage('Machine registered successfully!');
       setStep('success');
@@ -67,7 +77,7 @@ export function useOnboardMachine({ tenantId, userEmail, farmId, onSuccess }: Us
       setStatusMessage(error.message || 'Failed to register machine');
       setStep('failed');
     }
-  }, [createMachine, displayName, currentWifiSsid, onSuccess]);
+  }, [createMachine, onSuccess]);
 
   const handleStatusChange = useCallback((status: StatusCode) => {
     const currentStep = stepRef.current;
