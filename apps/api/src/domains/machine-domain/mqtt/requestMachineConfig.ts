@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '../../../generated/prisma/client.js';
 import { TRPCError } from '@trpc/server';
 import { publishToDevice } from '../../../lib/aws/iot-client.js';
 import { randomUUID } from 'crypto';
