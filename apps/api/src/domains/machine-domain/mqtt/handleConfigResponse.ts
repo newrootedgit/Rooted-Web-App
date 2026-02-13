@@ -2,7 +2,7 @@ import { storeResponse } from '../../../lib/aws/config-store.js';
 
 interface ConfigResponseInput { 
     requestId: string;
-    action: 'config_response' | 'config_updated'; 
+    action: 'config_response' | 'config_updated' | 'presets_response' | 'presets_updated';
     config?: Record<string, unknown>; 
     success?: boolean; 
     error?: string; 

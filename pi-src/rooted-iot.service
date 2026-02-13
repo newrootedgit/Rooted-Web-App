@@ -9,7 +9,7 @@ Type=simple
 User=rooted
 Group=rooted
 WorkingDirectory=/opt/rooted-ble
-ExecStart=/opt/rooted-ble/.venv/bin/python3 -u /opt/rooted-ble/aws_iot_registration.py
+ExecStart=/opt/rooted-ble/.venv/bin/python3 -u /opt/rooted-ble/command_handler.py
 Restart=always
 RestartSec=10
 
@@ -19,8 +19,8 @@ Environment=PYTHONUNBUFFERED=1
 # Hardening
 NoNewPrivileges=true
 ProtectSystem=strict
-ProtectHome=true
-ReadWritePaths=/opt/rooted-ble
+ProtectHome=read-only
+ReadWritePaths=/opt/rooted-ble /home/rooted/te-cli
 
 [Install]
 WantedBy=multi-user.target

@@ -7,6 +7,9 @@ This directory contains comprehensive documentation for implementing the Rooted 
 ### [PLANNER_IMPLEMENTATION_ROADMAP.md](./PLANNER_IMPLEMENTATION_ROADMAP.md)
 **The complete implementation guide** - This is the primary document you should reference.
 
+### [IOT_LAMBDA_ENVIRONMENT_FIX.md](./IOT_LAMBDA_ENVIRONMENT_FIX.md)
+**IoT Lambda environment & architecture optimization** - Fix environment configuration (dev/prod), remove unnecessary config Lambda, and improve deployment workflow.
+
 ### [PRODUCTION_LOGGING_UPGRADE.md](./PRODUCTION_LOGGING_UPGRADE.md)
 **Production logging and observability upgrade** - Comprehensive plan to improve production logging with structured events, performance monitoring, and business context.
 

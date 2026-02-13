@@ -13,12 +13,18 @@ resource "aws_iot_policy" "machine_policy" {
       {
         Effect = "Allow"
         Action = "iot:Subscribe"
-        Resource = "arn:aws:iot:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:topicfilter/rooted/machines/$${iot:Connection.Thing.ThingName}/ping"
+        Resource = [
+          "arn:aws:iot:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:topicfilter/rooted/machines/$${iot:Connection.Thing.ThingName}/ping",
+          "arn:aws:iot:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:topicfilter/rooted/machines/$${iot:Connection.Thing.ThingName}/commands"
+        ]
       },
       {
         Effect = "Allow"
         Action = "iot:Receive"
-        Resource = "arn:aws:iot:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:topic/rooted/machines/$${iot:Connection.Thing.ThingName}/ping"
+        Resource = [
+          "arn:aws:iot:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:topic/rooted/machines/$${iot:Connection.Thing.ThingName}/ping",
+          "arn:aws:iot:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:topic/rooted/machines/$${iot:Connection.Thing.ThingName}/commands"
+        ]
       },
       {
         Effect = "Allow"

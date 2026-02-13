@@ -2,6 +2,7 @@ import type { PrismaClient } from '../../../generated/prisma/client.js';
 import { TRPCError } from '@trpc/server';
 import { publishToDevice } from '../../../lib/aws/iot-client.js';
 import { randomUUID } from 'crypto';
+import { isProd } from '../../../lib/env.js';
 
 export async function requestMachineConfig(
   prisma: PrismaClient,
@@ -17,16 +18,12 @@ export async function requestMachineConfig(
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Machine not found' });
     }
 
-    if (!machine.aws_iot_thing_name) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Machine is not onboarded to AWS IoT' });
-    } 
-
-    if (machine.status !== 'online') { 
+    if (isProd() && machine.status !== 'online') {
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'Machine is not online' });
     }
 
     const requestId = randomUUID();
-    await publishToDevice(machine.aws_iot_thing_name, { action: 'get_config', requestId });
+    await publishToDevice(machine.device_id, { action: 'get_presets', requestId });
     
     return { requestId };
 }

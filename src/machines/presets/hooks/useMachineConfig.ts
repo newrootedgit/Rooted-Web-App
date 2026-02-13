@@ -58,11 +58,14 @@ export function useMachineConfig(machineId: string) {
     }
   }, [machineId, requestConfigMutation]);
 
-  const updatePresets = useCallback(async (presets: Record<string, Record<string, number>>) => {
+  const updatePresets = useCallback(async (payload: {
+    presets?: Record<string, Record<string, number>>;
+    variety_names?: Record<string, string>;
+  }) => {
     setStatus('updating');
     setError(null);
     try {
-      const { requestId } = await updateConfigMutation.mutateAsync({ machineId, presets });
+      const { requestId } = await updateConfigMutation.mutateAsync({ machineId, ...payload });
       setActiveRequestId(requestId);
       timeoutRef.current = setTimeout(() => {
         setActiveRequestId(null);

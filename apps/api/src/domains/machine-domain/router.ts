@@ -34,7 +34,10 @@ export const machineRouter = router({
   ),
 
   updateConfig: farmProcedure.input(updateConfigSchema).mutation(({ ctx, input }) =>
-    updateMachineConfig(ctx.prisma, input.machineId, ctx.tenantId, input.presets)
+    updateMachineConfig(ctx.prisma, input.machineId, ctx.tenantId, {
+      presets: input.presets,
+      variety_names: input.variety_names,
+    })
   ),
 
   getConfigResponse: farmProcedure.input(getConfigResponseSchema).query(({ ctx, input }) =>

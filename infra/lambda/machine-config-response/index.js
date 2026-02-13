@@ -3,11 +3,11 @@ const https = require('https');
 const API_ENDPOINT = process.env.API_ENDPOINT; 
 const SECRET_TOKEN = process.env.SECRET_TOKEN;
 
-experts.handler = async (event) => { 
+exports.handler = async (event) => {
     console.log('Received config response: ', JSON.stringify(event, null, 2));
 
-    try { 
-        const { requestId, action, config, sucess, error } = event;
+    try {
+        const { requestId, action, config, success, error } = event;
     
         if (!requestId || !action) { 
             console.error('Missing required fields in config response: ', { requestId, action });

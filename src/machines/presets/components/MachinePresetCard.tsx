@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { ChevronDown, ChevronUp, Loader2, AlertCircle, CheckCircle, RefreshCw } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { ChevronDown, ChevronUp, Loader2, AlertCircle, CheckCircle, RefreshCw, Pencil, Check, X, Save, RotateCcw } from 'lucide-react';
 import type { Machine } from '../../../../shared';
 import { useMachineConfig } from '../hooks/useMachineConfig';
 import PresetEditor from './PresetEditor';
@@ -8,12 +8,92 @@ interface MachinePresetCardProps {
   machine: Machine;
 }
 
+function InlineNameEditor({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: string;
+  onChange: (name: string) => void;
+  disabled?: boolean;
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isEditing) inputRef.current?.focus();
+  }, [isEditing]);
+
+  const handleConfirm = () => {
+    const trimmed = draft.trim();
+    if (trimmed && trimmed !== value) {
+      onChange(trimmed);
+    }
+    setIsEditing(false);
+  };
+
+  const handleCancel = () => {
+    setDraft(value);
+    setIsEditing(false);
+  };
+
+  if (!isEditing) {
+    return (
+      <span className="inline-flex items-center gap-1 group">
+        <span>{value}</span>
+        {!disabled && (
+          <button
+            onClick={(e) => { e.stopPropagation(); setIsEditing(true); }}
+            className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-foreground transition-opacity"
+          >
+            <Pencil size={12} />
+          </button>
+        )}
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+      <input
+        ref={inputRef}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') handleConfirm();
+          if (e.key === 'Escape') handleCancel();
+        }}
+        className="px-1.5 py-0.5 text-sm bg-secondary border border-border rounded w-32 focus:outline-none focus:ring-1 focus:ring-primary"
+      />
+      <button onClick={handleConfirm} className="text-green-600 hover:text-green-700">
+        <Check size={14} />
+      </button>
+      <button onClick={handleCancel} className="text-muted-foreground hover:text-foreground">
+        <X size={14} />
+      </button>
+    </span>
+  );
+}
+
 export default function MachinePresetCard({ machine }: MachinePresetCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [activePreset, setActivePreset] = useState<string | null>(null);
   const { status, config, error, fetchConfig, updatePresets } = useMachineConfig(machine.id);
-  const isOnline = machine.status === 'online';
+  const isOnline = machine.status === 'online' || true; // Override for development REMOVE true in production
   const isBusy = status === 'fetching' || status === 'updating';
+
+  // Lifted edit state
+  const [editedPresets, setEditedPresets] = useState<Record<string, Record<string, number>>>({});
+  const [editedNames, setEditedNames] = useState<Record<string, string>>({});
+
+  // Reset edits when config is freshly received
+  useEffect(() => {
+    if (status === 'received') {
+      setEditedPresets({});
+      setEditedNames({});
+    }
+  }, [status]);
 
   useEffect(() => {
     if (isExpanded && status === 'idle' && isOnline) {
@@ -21,8 +101,15 @@ export default function MachinePresetCard({ machine }: MachinePresetCardProps) {
     }
   }, [isExpanded, status, isOnline, fetchConfig]);
 
-  const handleSavePreset = (presetNumber: string, values: Record<string, number>) => {
-    updatePresets({ [presetNumber]: values });
+  const variableRanges = config?.variable_ranges as Record<string, { min: number; max: number }> | undefined;
+  const varietyNames = config?.variety_names as Record<string, string> | undefined;
+
+  const getVarietyName = (num: string): string => {
+    return editedNames[num] ?? varietyNames?.[num] ?? `Variety ${num}`;
+  };
+
+  const getOriginalVarietyName = (num: string): string => {
+    return varietyNames?.[num] ?? `Variety ${num}`;
   };
 
   const getPresets = (): [string, Record<string, number>][] => {
@@ -32,6 +119,50 @@ export default function MachinePresetCard({ machine }: MachinePresetCardProps) {
       .sort(([a], [b]) => parseInt(a) - parseInt(b))
       .map(([key, value]) => [key, value as Record<string, number>]);
   };
+
+  const getEditedValues = (num: string, original: Record<string, number>): Record<string, number> => {
+    return editedPresets[num] ?? original;
+  };
+
+  const hasChanges = Object.keys(editedPresets).length > 0 || Object.keys(editedNames).length > 0;
+
+  const handlePresetChange = (num: string, original: Record<string, number>, updated: Record<string, number>) => {
+    const changed = Object.keys(updated).some(k => updated[k] !== original[k]);
+    setEditedPresets(prev => {
+      if (!changed) {
+        const { [num]: _, ...rest } = prev;
+        return rest;
+      }
+      return { ...prev, [num]: updated };
+    });
+  };
+
+  const handleNameChange = (num: string, name: string) => {
+    const originalName = getOriginalVarietyName(num);
+    setEditedNames(prev => {
+      if (name === originalName) {
+        const { [num]: _, ...rest } = prev;
+        return rest;
+      }
+      return { ...prev, [num]: name };
+    });
+  };
+
+  const handleSave = () => {
+    const payload: { presets?: Record<string, Record<string, number>>; variety_names?: Record<string, string> } = {};
+    if (Object.keys(editedPresets).length > 0) payload.presets = editedPresets;
+    if (Object.keys(editedNames).length > 0) payload.variety_names = editedNames;
+    updatePresets(payload);
+  };
+
+  const handleReset = () => {
+    setEditedPresets({});
+    setEditedNames({});
+  };
+
+  const activeVarietyName = config?.active_variety != null
+    ? getVarietyName(String(config.active_variety))
+    : null;
 
   return (
     <div
@@ -126,7 +257,7 @@ export default function MachinePresetCard({ machine }: MachinePresetCardProps) {
                 <div className="flex items-center gap-2 px-3 py-1.5 bg-secondary rounded-md">
                   <span className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Active Variety</span>
                   <span className="text-sm font-medium text-foreground">
-                    {config.active_variety != null ? `#${config.active_variety}` : 'None'}
+                    {activeVarietyName ? `${activeVarietyName} (#${config.active_variety})` : 'None'}
                   </span>
                 </div>
                 <button
@@ -139,39 +270,71 @@ export default function MachinePresetCard({ machine }: MachinePresetCardProps) {
               </div>
 
               <div className="space-y-1">
-                {getPresets().map(([num, values]) => (
-                  <div key={num} className="border border-border rounded-md overflow-hidden">
-                    <button
-                      className={`w-full flex items-center justify-between px-3 py-2 text-left transition-colors ${
-                        activePreset === num
-                          ? 'bg-primary/5 border-b border-border'
-                          : 'hover:bg-secondary'
-                      }`}
-                      onClick={() => setActivePreset(activePreset === num ? null : num)}
-                    >
-                      <span className="text-sm font-medium text-foreground">
-                        Variety {num}
-                        {config.active_variety != null && parseInt(num) === Number(config.active_variety) && (
-                          <span className="ml-2 text-xs text-primary font-medium">(Active)</span>
-                        )}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        {Object.entries(values).map(([k, v]) => `${v}`).join(' / ')}
-                      </span>
-                    </button>
-                    {activePreset === num && (
-                      <div className="p-3 bg-card">
-                        <PresetEditor
-                          presetNumber={num}
-                          values={values}
-                          onSave={handleSavePreset}
-                          disabled={isBusy}
-                        />
-                      </div>
-                    )}
-                  </div>
-                ))}
+                {getPresets().map(([num, originalValues]) => {
+                  const currentValues = getEditedValues(num, originalValues);
+                  const isPresetEdited = !!editedPresets[num];
+                  const isNameEdited = !!editedNames[num];
+                  return (
+                    <div key={num} className={`border rounded-md overflow-hidden ${
+                      isPresetEdited || isNameEdited ? 'border-primary' : 'border-border'
+                    }`}>
+                      <button
+                        className={`w-full flex items-center justify-between px-3 py-2 text-left transition-colors ${
+                          activePreset === num
+                            ? 'bg-primary/5 border-b border-border'
+                            : 'hover:bg-secondary'
+                        }`}
+                        onClick={() => setActivePreset(activePreset === num ? null : num)}
+                      >
+                        <span className="text-sm font-medium text-foreground">
+                          <InlineNameEditor
+                            value={getVarietyName(num)}
+                            onChange={(name) => handleNameChange(num, name)}
+                            disabled={isBusy}
+                          />
+                          {config.active_variety != null && parseInt(num) === Number(config.active_variety) && (
+                            <span className="ml-2 text-xs text-primary font-medium">(Active)</span>
+                          )}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {Object.entries(currentValues).map(([k, v]) => `${v}`).join(' / ')}
+                        </span>
+                      </button>
+                      {activePreset === num && (
+                        <div className="p-3 bg-card">
+                          <PresetEditor
+                            values={currentValues}
+                            onChange={(updated) => handlePresetChange(num, originalValues, updated)}
+                            disabled={isBusy}
+                            variableRanges={variableRanges}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
+
+              {hasChanges && (
+                <div className="flex gap-2 pt-2 border-t border-border">
+                  <button
+                    onClick={handleSave}
+                    disabled={isBusy}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                  >
+                    <Save size={14} />
+                    Save All Changes
+                  </button>
+                  <button
+                    onClick={handleReset}
+                    disabled={isBusy}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-secondary border border-border rounded-md text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <RotateCcw size={14} />
+                    Reset
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
