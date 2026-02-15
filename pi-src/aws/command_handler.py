@@ -111,6 +111,9 @@ def start_command_handler():
 if __name__ == '__main__':
     import time
 
+    # Ping Google.com First
+    
+
     print("=== Rooted Command Handler ===")
     mqtt_conn = None
     try:

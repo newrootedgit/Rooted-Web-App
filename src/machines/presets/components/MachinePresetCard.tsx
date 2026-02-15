@@ -80,7 +80,7 @@ export default function MachinePresetCard({ machine }: MachinePresetCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [activePreset, setActivePreset] = useState<string | null>(null);
   const { status, config, error, fetchConfig, updatePresets } = useMachineConfig(machine.id);
-  const isOnline = machine.status === 'online' || true; // Override for development REMOVE true in production
+  const isOnline = machine.status === 'online'; 
   const isBusy = status === 'fetching' || status === 'updating';
 
   // Lifted edit state

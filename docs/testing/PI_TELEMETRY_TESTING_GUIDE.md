@@ -1,0 +1,1 @@
+Set up tests that mimic lambda and pi responses, to ensure the program works as expected and that the separation of environments is maintained. if the tests pass, and the program is not working it is an indication that the issue is with the environments or the separation and not the program logic.

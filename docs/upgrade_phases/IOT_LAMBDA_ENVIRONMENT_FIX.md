@@ -10,7 +10,7 @@
 ### Current Issues
 1. **Environment Configuration**: All Lambda functions hardcoded to prod environment via single `terraform.tfvars`
 2. **Unnecessary Lambda**: `machine-config-response` Lambda adds latency/complexity for regular MQTT topic that API can subscribe to directly
-3. **No Dev Environment**: Cannot test IoT infrastructure changes without affecting production
+3. **No Dev Testing**: Cannot test IoT infrastructure changes locally without deploying to production
 
 ### Current Architecture
 ```
@@ -27,129 +27,461 @@ AWS IoT Core
 
 ## Solution Overview
 
-### Phase 1: Multi-Environment Terraform Setup
-Enable dev/prod environments with proper isolation
+### Phase 1: Mock System for Local Development
+Build comprehensive mock system to test IoT flows locally without Lambda/AWS
 
 ### Phase 2: Remove Config Response Lambda
 Eliminate unnecessary Lambda, subscribe to MQTT directly from API
 
-### Phase 3: Update Deployment Workflow
-Ensure GitHub Actions deploys to correct environment
+### Phase 3: Production-Only Lambda Deployment
+Keep Lambda deployment simple - prod only, test locally with mocks
 
 ---
 
-## Phase 1: Multi-Environment Terraform Setup
+## Phase 1: Mock System for Local Development
 
 ### Goals
-- Support dev and prod environments
-- Separate state and resources per environment
-- Environment-specific configuration
+- Test IoT flows locally without AWS infrastructure
+- Mock Pi responses for all actions (presets, diagnostics, firmware updates)
+- Support configurable test scenarios (success, failures, timeouts)
+- Extensible for future Pi actions
+
+### Architecture
+
+```
+LOCAL DEVELOPMENT:
+  Frontend → tRPC → API (mocked IoT) → Mock Pi Simulator → Internal Endpoints
+
+PRODUCTION:
+  Frontend → tRPC → API → AWS IoT → Real Pi → Lambda → Internal Endpoints
+```
 
 ### Implementation
 
-#### 1.1 Create Environment-Specific tfvars
+#### 1.1 Environment Configuration
 
-**File: `infra/terraform/dev.tfvars`**
-```hcl
-aws_region          = "us-west-2"
-project_name        = "rooted"
-environment         = "dev"
-api_endpoint        = "http://localhost:8000"
-lambda_secret_token = "dev-secret-change-me"
-ec2_key_name        = "rooted-dev-key"
+**File: `apps/api/.env.development`**
+```env
+# Mock IoT in non-prod by default
+MOCK_IOT=true
+MOCK_IOT_DELAY_MS=500  # Simulate network latency
+MOCK_IOT_FAILURE_RATE=0  # 0-100, percentage of requests that fail
 ```
 
-**File: `infra/terraform/prod.tfvars`**
-```hcl
-aws_region          = "us-west-2"
-project_name        = "rooted"
-environment         = "prod"
-api_endpoint        = "https://your-prod-domain.com"
-lambda_secret_token = "<use-secrets-manager-or-github-secret>"
-ec2_key_name        = "rooted-prod-key"
+**File: `apps/api/.env.production`**
+```env
+MOCK_IOT=false
+AWS_IOT_ENDPOINT=your-endpoint.iot.us-west-2.amazonaws.com
+AWS_REGION=us-west-2
+AWS_ACCESS_KEY_ID=...
+AWS_SECRET_ACCESS_KEY=...
 ```
 
-**Action**: Move current `terraform.tfvars` → `prod.tfvars`, create `dev.tfvars`
+#### 1.2 Mock IoT Client
 
-#### 1.2 Update Terraform Backend for Workspaces
+**File: `apps/api/src/lib/aws/iot-client.mock.ts`**
+```typescript
+import { mockPiSimulator } from '../testing/mock-pi-simulator.js';
 
-**File: `infra/terraform/main.tf`**
-```hcl
-terraform {
-  required_version = ">= 1.0"
+export async function publishToDevice(
+  thingName: string,
+  payload: Record<string, unknown>
+): Promise<void> {
+  console.log(`[MOCK IoT] Publishing to ${thingName}:`, payload);
   
-  backend "s3" {
-    bucket         = "rooted-terraform-state"
-    key            = "terraform.tfstate"
-    region         = "us-west-2"
-    dynamodb_table = "rooted-terraform-locks"
-    encrypt        = true
-  }
-
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
-  }
-}
-
-provider "aws" {
-  region = var.aws_region
+  // Simulate network delay
+  const delay = parseInt(process.env.MOCK_IOT_DELAY_MS || '500');
+  await new Promise(resolve => setTimeout(resolve, delay));
   
-  default_tags {
-    tags = {
-      Project     = var.project_name
-      Environment = var.environment
-      ManagedBy   = "Terraform"
-    }
+  // Simulate random failures
+  const failureRate = parseInt(process.env.MOCK_IOT_FAILURE_RATE || '0');
+  if (Math.random() * 100 < failureRate) {
+    throw new Error(`[MOCK IoT] Simulated publish failure for ${thingName}`);
   }
+  
+  // Trigger mock Pi response
+  await mockPiSimulator.handleCommand(thingName, payload);
 }
 ```
 
-#### 1.3 Usage Commands
+#### 1.3 Mock Pi Simulator
 
-```bash
-# Initialize
-cd infra/terraform
-terraform init
+**File: `apps/api/src/lib/testing/mock-pi-simulator.ts`**
+```typescript
+import { mockLambdaCaller } from './mock-lambda-caller.js';
+import { getMockPresetData } from './mock-preset-data.js';
 
-# Create workspaces
-terraform workspace new dev
-terraform workspace new prod
+type PiAction = 'get_presets' | 'update_presets' | 'get_diagnostics' | 'update_firmware';
 
-# Deploy to dev
-terraform workspace select dev
-terraform plan -var-file="dev.tfvars"
-terraform apply -var-file="dev.tfvars"
+interface ActionHandler {
+  handle(thingName: string, payload: any): Promise<any>;
+}
 
-# Deploy to prod
-terraform workspace select prod
-terraform plan -var-file="prod.tfvars"
-terraform apply -var-file="prod.tfvars"
+class MockPiSimulator {
+  private handlers = new Map<PiAction, ActionHandler>();
+  private devicePresets = new Map<string, any>();
+
+  constructor() {
+    this.registerDefaultHandlers();
+  }
+
+  registerAction(action: PiAction, handler: ActionHandler) {
+    this.handlers.set(action, handler);
+  }
+
+  async handleCommand(thingName: string, payload: any): Promise<void> {
+    const action = payload.action as PiAction;
+    const requestId = payload.requestId;
+
+    if (!requestId) {
+      console.warn('[MOCK Pi] Missing requestId, ignoring');
+      return;
+    }
+
+    const handler = this.handlers.get(action);
+    if (!handler) {
+      console.warn(`[MOCK Pi] Unknown action: ${action}`);
+      return;
+    }
+
+    try {
+      const response = await handler.handle(thingName, payload);
+      await mockLambdaCaller.callConfigResponse({
+        requestId,
+        ...response,
+      });
+    } catch (error: any) {
+      await mockLambdaCaller.callConfigResponse({
+        requestId,
+        action: `${action}_response`,
+        error: error.message,
+      });
+    }
+  }
+
+  private registerDefaultHandlers() {
+    // Get presets handler
+    this.registerAction('get_presets', {
+      handle: async (thingName: string) => {
+        let presets = this.devicePresets.get(thingName);
+        if (!presets) {
+          presets = getMockPresetData(thingName);
+          this.devicePresets.set(thingName, presets);
+        }
+        return {
+          action: 'presets_response',
+          config: presets,
+        };
+      },
+    });
+
+    // Update presets handler
+    this.registerAction('update_presets', {
+      handle: async (thingName: string, payload: any) => {
+        let current = this.devicePresets.get(thingName) || getMockPresetData(thingName);
+
+        if (payload.presets) {
+          for (const [key, values] of Object.entries(payload.presets)) {
+            if (current[key] && typeof current[key] === 'object') {
+              current[key] = { ...current[key], ...values };
+            } else {
+              current[key] = values;
+            }
+          }
+        }
+
+        if (payload.variety_names) {
+          current.variety_names = {
+            ...current.variety_names,
+            ...payload.variety_names,
+          };
+        }
+
+        this.devicePresets.set(thingName, current);
+
+        return {
+          action: 'presets_updated',
+          success: true,
+        };
+      },
+    });
+  }
+
+  // For testing: reset device state
+  resetDevice(thingName: string) {
+    this.devicePresets.delete(thingName);
+  }
+
+  // For testing: set specific preset data
+  setDevicePresets(thingName: string, presets: any) {
+    this.devicePresets.set(thingName, presets);
+  }
+}
+
+export const mockPiSimulator = new MockPiSimulator();
 ```
 
-#### 1.4 Update .gitignore
+#### 1.4 Mock Lambda Caller
 
-```gitignore
-# Terraform
-infra/terraform/.terraform/
-infra/terraform/.terraform.lock.hcl
-infra/terraform/terraform.tfstate
-infra/terraform/terraform.tfstate.backup
-infra/terraform/*.tfvars
-!infra/terraform/dev.tfvars.example
-!infra/terraform/prod.tfvars.example
+**File: `apps/api/src/lib/testing/mock-lambda-caller.ts`**
+```typescript
+import { handleConfigResponse } from '../../domains/machine-domain/mqtt/handleConfigResponse.js';
+import { handleLifecycleEvent } from '../../domains/machine-domain/commands/handleLifecycleEvent.js';
+import { prisma } from '../db/index.js';
+
+class MockLambdaCaller {
+  async callConfigResponse(payload: {
+    requestId: string;
+    action: string;
+    config?: any;
+    success?: boolean;
+    error?: string;
+  }): Promise<void> {
+    console.log('[MOCK Lambda] Calling config-response handler:', payload);
+    await handleConfigResponse(payload);
+  }
+
+  async callLifecycleEvent(payload: {
+    deviceId: string;
+    eventType: 'connected' | 'disconnected';
+    timestamp: string;
+    sessionId?: string;
+    wifiSsid?: string;
+  }): Promise<void> {
+    console.log('[MOCK Lambda] Calling lifecycle-event handler:', payload);
+    await handleLifecycleEvent(prisma, payload);
+  }
+}
+
+export const mockLambdaCaller = new MockLambdaCaller();
 ```
 
-**Action**: Create `.tfvars.example` files, ignore actual tfvars with secrets
+#### 1.5 Mock Preset Data
+
+**File: `apps/api/src/lib/testing/mock-preset-data.ts`**
+```typescript
+export function getMockPresetData(thingName: string): any {
+  // Generate realistic preset data for 20 varieties
+  const presets: any = {
+    ready_to_run: false,
+    active_variety: 1,
+    variety_names: {},
+  };
+
+  for (let i = 1; i <= 20; i++) {
+    presets[i.toString()] = {
+      blade_speed: Math.floor(Math.random() * 10) + 1,
+      belt_speed: Math.floor(Math.random() * 10) + 1,
+      blade_height: Math.floor(Math.random() * 10) + 1,
+      airknife_mode: Math.random() > 0.5 ? 1 : 0,
+    };
+    presets.variety_names[i.toString()] = `Variety ${i}`;
+  }
+
+  return presets;
+}
+
+// For testing specific scenarios
+export const mockPresetScenarios = {
+  empty: {
+    ready_to_run: false,
+    active_variety: 1,
+    variety_names: {},
+  },
+  
+  singleVariety: {
+    ready_to_run: true,
+    active_variety: 1,
+    '1': {
+      blade_speed: 5,
+      belt_speed: 5,
+      blade_height: 5,
+      airknife_mode: 1,
+    },
+    variety_names: { '1': 'Sunflower' },
+  },
+  
+  // Add more scenarios as needed
+};
+```
+
+#### 1.6 IoT Client Factory
+
+**File: `apps/api/src/lib/aws/iot-client.ts`**
+```typescript
+import { IoTDataPlaneClient, PublishCommand } from '@aws-sdk/client-iot-data-plane';
+
+// Real implementation
+async function publishToDeviceReal(
+  thingName: string,
+  payload: Record<string, unknown>
+): Promise<void> {
+  const iotClient = new IoTDataPlaneClient({
+    region: process.env.AWS_REGION,
+    endpoint: process.env.AWS_IOT_ENDPOINT,
+    credentials: {
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+    },
+  });
+
+  const topic = `rooted/machines/${thingName}/commands`;
+
+  await iotClient.send(
+    new PublishCommand({
+      topic,
+      qos: 1,
+      payload: Buffer.from(JSON.stringify(payload)),
+    })
+  );
+}
+
+// Export based on environment
+export const publishToDevice =
+  process.env.MOCK_IOT === 'true'
+    ? (await import('./iot-client.mock.js')).publishToDevice
+    : publishToDeviceReal;
+```
+
+#### 1.7 Testing Utilities
+
+**File: `apps/api/src/lib/testing/iot-test-helpers.ts`**
+```typescript
+import { mockPiSimulator } from './mock-pi-simulator.js';
+import { mockLambdaCaller } from './mock-lambda-caller.js';
+
+export const iotTestHelpers = {
+  // Simulate device connection
+  async simulateDeviceConnect(deviceId: string) {
+    await mockLambdaCaller.callLifecycleEvent({
+      deviceId,
+      eventType: 'connected',
+      timestamp: new Date().toISOString(),
+    });
+  },
+
+  // Simulate device disconnection
+  async simulateDeviceDisconnect(deviceId: string) {
+    await mockLambdaCaller.callLifecycleEvent({
+      deviceId,
+      eventType: 'disconnected',
+      timestamp: new Date().toISOString(),
+    });
+  },
+
+  // Set custom preset data for testing
+  setDevicePresets(thingName: string, presets: any) {
+    mockPiSimulator.setDevicePresets(thingName, presets);
+  },
+
+  // Reset device state
+  resetDevice(thingName: string) {
+    mockPiSimulator.resetDevice(thingName);
+  },
+
+  // Simulate timeout (set high delay)
+  simulateTimeout() {
+    process.env.MOCK_IOT_DELAY_MS = '30000';
+  },
+
+  // Simulate failures
+  simulateFailures(rate: number) {
+    process.env.MOCK_IOT_FAILURE_RATE = rate.toString();
+  },
+
+  // Reset to normal
+  resetSimulation() {
+    process.env.MOCK_IOT_DELAY_MS = '500';
+    process.env.MOCK_IOT_FAILURE_RATE = '0';
+  },
+};
+```
 
 ### Testing Phase 1
-- [ ] Create dev workspace and deploy
-- [ ] Verify dev resources created with `-dev` suffix
-- [ ] Test lifecycle Lambda calls localhost:8000
-- [ ] Verify prod resources unchanged
-- [ ] Document workspace switching in README
+
+#### Manual Testing
+```bash
+# Start API with mocks enabled (default in dev)
+cd apps/api
+pnpm dev
+
+# Test preset fetch
+curl -X POST http://localhost:8000/api/trpc/machines.requestConfig \
+  -H "Content-Type: application/json" \
+  -d '{"machineId": "test-machine-id"}'
+
+# Test preset update
+curl -X POST http://localhost:8000/api/trpc/machines.updateConfig \
+  -H "Content-Type: application/json" \
+  -d '{"machineId": "test-machine-id", "presets": {"1": {"blade_speed": 10}}}'
+```
+
+#### Automated Tests
+```typescript
+// Example test
+describe('Machine Config with Mocks', () => {
+  beforeEach(() => {
+    iotTestHelpers.resetSimulation();
+  });
+
+  it('should fetch presets from mock Pi', async () => {
+    const { requestId } = await requestMachineConfig(prisma, machineId, tenantId);
+    
+    // Wait for mock response
+    await new Promise(resolve => setTimeout(resolve, 600));
+    
+    const response = await getConfigResponse(requestId);
+    expect(response).toBeDefined();
+    expect(response.config).toHaveProperty('ready_to_run');
+  });
+
+  it('should handle timeout scenarios', async () => {
+    iotTestHelpers.simulateTimeout();
+    
+    const { requestId } = await requestMachineConfig(prisma, machineId, tenantId);
+    
+    // Should timeout after 15 seconds
+    await expect(
+      waitForResponse(requestId, 15000)
+    ).rejects.toThrow('timeout');
+  });
+});
+```
+
+### Extensibility for Future Actions
+
+Adding new Pi actions is straightforward:
+
+```typescript
+// Add diagnostics support
+mockPiSimulator.registerAction('get_diagnostics', {
+  handle: async (thingName: string) => {
+    return {
+      action: 'diagnostics_response',
+      data: {
+        cpu_temp: 45.2,
+        memory_usage: 62.5,
+        disk_space: 85.3,
+        uptime: 86400,
+      },
+    };
+  },
+});
+
+// Add firmware update support
+mockPiSimulator.registerAction('update_firmware', {
+  handle: async (thingName: string, payload: any) => {
+    // Simulate firmware update process
+    await new Promise(resolve => setTimeout(resolve, 5000));
+    
+    return {
+      action: 'firmware_updated',
+      success: true,
+      version: payload.version,
+    };
+  },
+});
+```
 
 ---
 
@@ -159,6 +491,14 @@ infra/terraform/*.tfvars
 - Eliminate `machine-config-response` Lambda
 - Subscribe to `rooted/machines/+/pong` directly from API
 - Reduce latency and infrastructure complexity
+
+### Why This Works
+The config response Lambda is unnecessary because:
+1. It subscribes to a regular MQTT topic (`rooted/machines/+/pong`)
+2. Regular MQTT topics can be consumed directly by any MQTT client
+3. The Lambda just forwards messages to the API - adding latency
+
+**Contrast**: The lifecycle Lambda is required because it subscribes to `$aws/events/presence/+/+` - a system topic that can ONLY be consumed via IoT Rules.
 
 ### Implementation
 
@@ -194,6 +534,10 @@ export async function initIoTMqttClient() {
     console.error('IoT connection error:', error);
   });
 
+  connection.on('disconnect', () => {
+    console.log('Disconnected from AWS IoT Core');
+  });
+
   await connection.connect();
 
   // Subscribe to config responses
@@ -209,6 +553,8 @@ export async function initIoTMqttClient() {
       }
     }
   );
+
+  console.log('Subscribed to rooted/machines/+/pong');
 
   return connection;
 }
@@ -228,49 +574,92 @@ export async function disconnectIoTMqtt() {
 import { initIoTMqttClient, disconnectIoTMqtt } from './lib/iot/mqtt-client.js';
 
 // After fastify.listen()
-await initIoTMqttClient();
+if (process.env.MOCK_IOT !== 'true') {
+  await initIoTMqttClient();
+  console.log('IoT MQTT client initialized');
+}
 
 // On shutdown
 fastify.addHook('onClose', async () => {
-  await disconnectIoTMqtt();
+  if (process.env.MOCK_IOT !== 'true') {
+    await disconnectIoTMqtt();
+  }
 });
 ```
 
 #### 2.3 Add Environment Variables
 
-**File: `apps/api/.env.example`**
+**File: `apps/api/.env.production`**
 ```env
-# AWS IoT Core
-IOT_ENDPOINT=your-iot-endpoint.iot.us-west-2.amazonaws.com
-IOT_CERT_PATH=/path/to/cert.pem
-IOT_KEY_PATH=/path/to/private.key
-IOT_CA_PATH=/path/to/AmazonRootCA1.pem
+# AWS IoT Core MQTT Client
+IOT_ENDPOINT=your-endpoint.iot.us-west-2.amazonaws.com
+IOT_CERT_PATH=/etc/rooted/certs/api-cert.pem
+IOT_KEY_PATH=/etc/rooted/certs/api-private.key
+IOT_CA_PATH=/etc/rooted/certs/AmazonRootCA1.pem
+ENVIRONMENT=prod
 ```
 
-#### 2.4 Remove Config Lambda from Terraform
+#### 2.4 Create IoT Thing for API
+
+```bash
+# Create IoT Thing for API
+aws iot create-thing --thing-name rooted-api-prod
+
+# Create certificates
+aws iot create-keys-and-certificate \
+  --set-as-active \
+  --certificate-pem-outfile api-cert.pem \
+  --public-key-outfile api-public.key \
+  --private-key-outfile api-private.key
+
+# Attach policy (use existing machine policy or create API-specific one)
+aws iot attach-policy \
+  --policy-name rooted-machine-policy-prod \
+  --target <certificate-arn>
+
+# Attach certificate to thing
+aws iot attach-thing-principal \
+  --thing-name rooted-api-prod \
+  --principal <certificate-arn>
+
+# Copy certificates to EC2
+scp api-cert.pem api-private.key ubuntu@<ec2-ip>:/etc/rooted/certs/
+```
+
+#### 2.5 Remove Config Lambda from Terraform
 
 **File: `infra/terraform/lambda.tf`**
 ```hcl
-# Remove entire machine_config_response Lambda resource
-# Remove machine_config_response CloudWatch log group
-# Keep only machine_lifecycle Lambda
+# DELETE these resources:
+# - aws_lambda_function.machine_config_response
+# - aws_cloudwatch_log_group.config_response_lambda_logs
+# - aws_lambda_permission.allow_iot_config_response
+# - aws_lambda_function_event_invoke_config.config_response
+
+# KEEP only machine_lifecycle Lambda
 ```
 
 **File: `infra/terraform/iot.tf`**
 ```hcl
-# Remove aws_iot_topic_rule.machine_config_response
-# Keep only aws_iot_topic_rule.machine_lifecycle
+# DELETE this resource:
+# - aws_iot_topic_rule.machine_config_response
+
+# KEEP only aws_iot_topic_rule.machine_lifecycle
 ```
 
-#### 2.5 Remove Internal Route (Optional)
+#### 2.6 Deploy Changes
 
-**File: `apps/api/src/domains/machine-domain/internal-routes.ts`**
-```typescript
-// Remove /internal/machines/config-response endpoint
-// No longer needed since API handles directly
+```bash
+cd infra/terraform
+
+# Review changes
+terraform plan -var-file="terraform.tfvars"
+
+# Apply (will destroy config Lambda and IoT rule)
+terraform apply -var-file="terraform.tfvars"
 ```
 
-#### 2.6 Install Dependencies
+#### 2.7 Install Dependencies
 
 ```bash
 cd apps/api
@@ -278,85 +667,97 @@ pnpm add aws-iot-device-sdk-v2
 ```
 
 ### Testing Phase 2
+
+#### Parallel Testing (Recommended)
+1. Deploy MQTT client to production
+2. Keep Lambda running in parallel
+3. Monitor both CloudWatch logs and API logs
+4. Verify both receive messages for 48 hours
+5. Remove Lambda after validation
+
+#### Validation Checklist
 - [ ] API connects to IoT Core on startup
 - [ ] API receives messages on `rooted/machines/+/pong`
 - [ ] Config responses processed correctly
-- [ ] No errors in CloudWatch logs
-- [ ] Verify Lambda no longer invoked
-- [ ] Test in dev environment first
+- [ ] No errors in API logs
+- [ ] Verify Lambda no longer invoked (after removal)
+- [ ] Test reconnection after API restart
 
 ---
 
-## Phase 3: Update Deployment Workflow
+## Phase 3: Production-Only Lambda Deployment
 
 ### Goals
-- Deploy correct environment from GitHub Actions
-- Support manual environment selection
-- Maintain prod safety
+- Keep Lambda deployment simple - production only
+- No separate dev/staging Lambda infrastructure
+- Test locally with mocks, deploy to prod with confidence
 
-### Implementation
+### Rationale
 
-#### 3.1 Update GitHub Actions Workflow
+**Why not multi-environment Lambdas?**
+- Lambda cannot call localhost - dev Lambda would need publicly accessible dev API
+- Setting up dev EC2 + dev Lambda adds complexity without much benefit
+- Mock system provides faster feedback loop than deploying to dev AWS
+- Production Lambda is simple and stable - rarely needs changes
 
-**File: `.github/workflows/deploy.yml`**
-```yaml
-name: Deploy
+**When to use mocks vs production:**
+- **Local development**: Always use mocks (`MOCK_IOT=true`)
+- **Production**: Real AWS IoT + Lambda (`MOCK_IOT=false`)
+- **Testing**: Mocks with configurable scenarios
 
-on:
-  workflow_dispatch:
-    inputs:
-      environment:
-        description: 'Environment to deploy'
-        required: true
-        type: choice
-        options:
-          - dev
-          - prod
-        default: prod
+### Current Setup (Keep As-Is)
 
-jobs:
-  deploy:
-    name: Deploy to ${{ github.event.inputs.environment }}
-    runs-on: ubuntu-latest
-    environment: ${{ github.event.inputs.environment }}
-
-    steps:
-      # ... existing build steps ...
-
-      - name: Deploy to EC2
-        env:
-          ENVIRONMENT: ${{ github.event.inputs.environment }}
-          EC2_HOST: ${{ secrets.EC2_HOST }}
-          EC2_USER: ${{ secrets.EC2_USER }}
-        run: |
-          # Deploy based on environment
-          # ... existing deployment logic ...
+**File: `infra/terraform/terraform.tfvars`**
+```hcl
+aws_region          = "us-west-2"
+project_name        = "rooted"
+environment         = "prod"
+api_endpoint        = "https://your-prod-domain.com"  # Update from ngrok
+lambda_secret_token = "<secure-token>"
+ec2_key_name        = "rooted-prod-key"
 ```
 
-#### 3.2 Add Terraform Deployment Step (Optional)
+**No changes needed** - current Terraform setup already works for prod-only deployment.
 
-If you want to deploy infrastructure from GitHub Actions:
+### Update Production API Endpoint
 
-```yaml
-      - name: Deploy Infrastructure
-        if: github.event.inputs.deploy_infra == 'true'
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          ENVIRONMENT: ${{ github.event.inputs.environment }}
-        run: |
-          cd infra/terraform
-          terraform init
-          terraform workspace select $ENVIRONMENT
-          terraform apply -var-file="${ENVIRONMENT}.tfvars" -auto-approve
+Once you have a permanent domain:
+
+```bash
+cd infra/terraform
+
+# Update terraform.tfvars
+# Change api_endpoint from ngrok URL to permanent domain
+
+# Apply changes
+terraform plan -var-file="terraform.tfvars"
+terraform apply -var-file="terraform.tfvars"
 ```
 
-### Testing Phase 3
-- [ ] Trigger workflow with dev environment
-- [ ] Verify deploys to dev EC2
-- [ ] Trigger workflow with prod environment
-- [ ] Verify deploys to prod EC2
-- [ ] Test rollback procedure
+### Deployment Workflow
+
+**Local Development:**
+```bash
+cd apps/api
+MOCK_IOT=true pnpm dev  # Mocks enabled by default
+```
+
+**Production Deployment:**
+```bash
+# Deploy via GitHub Actions (existing workflow)
+# Workflow already deploys to production EC2
+# No Lambda deployment needed (managed by Terraform)
+```
+
+**Lambda Updates (Rare):**
+```bash
+cd infra/lambda/machine-lifecycle
+# Update index.js
+zip -r ../machine-lifecycle.zip .
+
+cd ../../terraform
+terraform apply -var-file="terraform.tfvars"
+```
 
 ---
 
