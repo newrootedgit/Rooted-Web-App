@@ -201,7 +201,6 @@ sshpass -p "${SSH_PASSWORD}" ssh -o StrictHostKeyChecking=no "${PI_USER}@${PI_HO
 # Files to copy
 FILES_TO_COPY=(
     "provisioner.py"
-    "aws_iot_registration.py"
     "requirements.txt"
     "device_config.json"
     "rooted-ble.service"
@@ -219,6 +218,13 @@ for file in "${FILES_TO_COPY[@]}"; do
         echo -e "${YELLOW}  Warning: ${file} not found, skipping...${NC}"
     fi
 done
+
+# Copy aws/ directory
+echo "  Copying aws/ Python modules..."
+sshpass -p "${SSH_PASSWORD}" ssh -o StrictHostKeyChecking=no "${PI_USER}@${PI_HOST}" \
+    "mkdir -p ${REMOTE_DIR}/aws"
+sshpass -p "${SSH_PASSWORD}" scp -o StrictHostKeyChecking=no \
+    "${SCRIPT_DIR}/aws/"*.py "${PI_USER}@${PI_HOST}:${REMOTE_DIR}/aws/"
 
 # Copy IoT certificates if provisioning was done
 if [[ "$PROVISION_IOT" =~ ^[Yy]$ ]] && [ -d "${IOT_TEMP_DIR}" ]; then
@@ -320,6 +326,17 @@ echo "${SSH_PASSWORD}" | sudo -S bash -c "echo 'PRETTY_HOSTNAME=${MACHINE_NAME}'
 
 # Restart bluetooth service to apply the name change
 echo "${SSH_PASSWORD}" | sudo -S systemctl restart bluetooth
+
+# =============================================================================
+# Fix file permissions for preset lock file
+# =============================================================================
+echo "  Fixing preset file permissions..."
+echo "${SSH_PASSWORD}" | sudo -S mkdir -p /home/rooted/te-cli
+echo "${SSH_PASSWORD}" | sudo -S chown -R ${PI_USER}:${PI_USER} /home/rooted/te-cli
+# Remove stale lock file if owned by root
+if [ -f /home/rooted/te-cli/TE_Variable_Values.json.lock ]; then
+    echo "${SSH_PASSWORD}" | sudo -S rm -f /home/rooted/te-cli/TE_Variable_Values.json.lock
+fi
 
 # =============================================================================
 # Install and enable systemd services

@@ -45,10 +45,15 @@ echo ""
 echo -e "${GREEN}[1/4] Copying Python files to Pi...${NC}"
 
 sshpass -p "$SSH_PASSWORD" scp \
-  "$SCRIPT_DIR/aws_iot_registration.py" \
   "$SCRIPT_DIR/provisioner.py" \
   "$SCRIPT_DIR/requirements.txt" \
   "${PI_USER}@${PI_HOST}:/opt/rooted-ble/"
+
+# Copy aws/ directory
+sshpass -p "$SSH_PASSWORD" ssh "${PI_USER}@${PI_HOST}" "mkdir -p /opt/rooted-ble/aws"
+sshpass -p "$SSH_PASSWORD" scp \
+  "$SCRIPT_DIR/aws/"*.py \
+  "${PI_USER}@${PI_HOST}:/opt/rooted-ble/aws/"
 
 echo -e "${GREEN}[2/4] Copying systemd service files...${NC}"
 
@@ -64,6 +69,11 @@ sshpass -p "$SSH_PASSWORD" ssh "${PI_USER}@${PI_HOST}" << 'ENDSSH'
 cd /opt/rooted-ble
 source .venv/bin/activate
 pip3 install -q awsiotsdk
+
+# Fix preset file permissions (prevent root-owned lock files)
+sudo mkdir -p /home/rooted/te-cli
+sudo chown -R rooted:rooted /home/rooted/te-cli
+rm -f /home/rooted/te-cli/TE_Variable_Values.json.lock
 
 # Move service files and set up systemd
 echo "Setting up systemd services..."

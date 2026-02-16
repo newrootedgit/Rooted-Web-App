@@ -764,103 +764,144 @@ terraform apply -var-file="terraform.tfvars"
 ## Migration Plan
 
 ### Pre-Migration Checklist
-- [ ] Backup current Terraform state
-- [ ] Document current prod configuration
-- [ ] Create dev AWS resources (EC2, RDS if needed)
-- [ ] Test MQTT client locally
-- [ ] Review all environment variables
+- [ ] Implement mock system (Phase 1)
+- [ ] Test all IoT flows locally with mocks
+- [ ] Create IoT Thing and certificates for API
+- [ ] Test MQTT client connection in staging/dev
+- [ ] Document rollback procedure
 
 ### Migration Steps
 
-#### Step 1: Setup Dev Environment (Week 1)
-1. Create `dev.tfvars` and `prod.tfvars`
-2. Initialize Terraform workspaces
-3. Deploy dev infrastructure
-4. Test dev Lambda with localhost:8000
-5. Verify dev resources isolated from prod
+#### Week 1: Implement Mock System
+1. Create mock IoT client and Pi simulator
+2. Add environment configuration
+3. Test locally with frontend
+4. Verify all preset operations work
+5. Add test scenarios (timeouts, failures)
 
-#### Step 2: Add MQTT Client (Week 2)
-1. Install `aws-iot-device-sdk-v2` in API
-2. Create IoT certificates for API client
-3. Implement `mqtt-client.ts`
-4. Test in dev environment
-5. Monitor for 48 hours
+**Validation**: All IoT features work locally without AWS
 
-#### Step 3: Remove Config Lambda (Week 2-3)
-1. Deploy MQTT client to prod
-2. Monitor both Lambda and MQTT client in parallel
-3. Verify no messages lost
-4. Remove Lambda from Terraform
-5. Apply Terraform changes
-6. Clean up Lambda code and IoT Rule
+#### Week 2: Add MQTT Client to API
+1. Install `aws-iot-device-sdk-v2`
+2. Create IoT Thing for API (`rooted-api-prod`)
+3. Generate and configure certificates
+4. Implement MQTT client
+5. Deploy to production (keep Lambda running)
 
-#### Step 4: Update Workflows (Week 3)
-1. Update GitHub Actions with environment selection
-2. Test dev deployment
-3. Test prod deployment
-4. Document new deployment process
+**Validation**: API receives pong messages, both Lambda and MQTT client work
+
+#### Week 3: Remove Config Lambda
+1. Monitor both systems in parallel for 48 hours
+2. Verify zero message loss
+3. Remove Lambda from Terraform
+4. Apply infrastructure changes
+5. Clean up Lambda code and IoT Rule
+
+**Validation**: Only MQTT client receives messages, no errors
+
+#### Week 4: Documentation & Cleanup
+1. Update README with mock usage
+2. Document MQTT client setup
+3. Add troubleshooting guide
+4. Remove internal config-response endpoint (optional)
+5. Update architecture diagrams
 
 ### Rollback Plan
-- Keep Lambda code in git history
-- Terraform state backups before each apply
-- Can redeploy Lambda within 15 minutes if needed
-- MQTT client can be disabled via feature flag
+
+**If MQTT client fails:**
+1. Redeploy config Lambda from git history
+2. Apply Terraform to recreate IoT Rule
+3. Restart API without MQTT client
+4. Investigate and fix issues
+
+**Rollback time**: ~15 minutes
+
+**Rollback command:**
+```bash
+cd infra/terraform
+git checkout HEAD~1 lambda.tf iot.tf
+terraform apply -var-file="terraform.tfvars"
+```
 
 ---
 
 ## Environment Variables Summary
 
-### API Environment Variables
+### Local Development
 
-**Dev (`apps/api/.env.development`)**
+**File: `apps/api/.env.development`**
 ```env
-DATABASE_URL=postgresql://rooted:dev_password@localhost:5433/rooted_dev
+# Database
+DATABASE_URL=postgresql://rooted:rooted_dev_password@localhost:5433/rooted_planner
 REDIS_URL=redis://localhost:6379
-LAMBDA_SECRET_TOKEN=dev-secret-change-me
-IOT_ENDPOINT=your-iot-endpoint.iot.us-west-2.amazonaws.com
-IOT_CERT_PATH=/path/to/dev-cert.pem
-IOT_KEY_PATH=/path/to/dev-private.key
-IOT_CA_PATH=/path/to/AmazonRootCA1.pem
-ENVIRONMENT=dev
+
+# Mock IoT (enabled by default in dev)
+MOCK_IOT=true
+MOCK_IOT_DELAY_MS=500
+MOCK_IOT_FAILURE_RATE=0
+
+# Auth
+CLERK_SECRET_KEY=your_clerk_secret
+LAMBDA_SECRET_TOKEN=dev-secret-token
+
+# Server
 PORT=8000
+ENVIRONMENT=dev
 ```
 
-**Prod (`apps/api/.env.production` on EC2)**
+### Production
+
+**File: `apps/api/.env.production` (on EC2)**
 ```env
+# Database
 DATABASE_URL=postgresql://rooted:prod_password@prod-rds:5432/rooted_prod
 REDIS_URL=redis://prod-redis:6379
-LAMBDA_SECRET_TOKEN=<from-secrets-manager>
-IOT_ENDPOINT=your-iot-endpoint.iot.us-west-2.amazonaws.com
-IOT_CERT_PATH=/etc/rooted/certs/prod-cert.pem
-IOT_KEY_PATH=/etc/rooted/certs/prod-private.key
+
+# Real AWS IoT
+MOCK_IOT=false
+AWS_REGION=us-west-2
+AWS_IOT_ENDPOINT=your-endpoint.iot.us-west-2.amazonaws.com
+AWS_ACCESS_KEY_ID=<from-secrets-manager>
+AWS_SECRET_ACCESS_KEY=<from-secrets-manager>
+
+# IoT MQTT Client (for Phase 2)
+IOT_ENDPOINT=your-endpoint.iot.us-west-2.amazonaws.com
+IOT_CERT_PATH=/etc/rooted/certs/api-cert.pem
+IOT_KEY_PATH=/etc/rooted/certs/api-private.key
 IOT_CA_PATH=/etc/rooted/certs/AmazonRootCA1.pem
-ENVIRONMENT=prod
+
+# Auth
+CLERK_SECRET_KEY=<from-secrets-manager>
+LAMBDA_SECRET_TOKEN=<from-secrets-manager>
+
+# Server
 PORT=8000
+ENVIRONMENT=prod
 ```
 
 ---
 
 ## Success Metrics
 
-### Phase 1 Success
-- ✅ Dev and prod workspaces exist
-- ✅ Resources tagged with correct environment
-- ✅ Dev Lambda calls localhost:8000
-- ✅ Prod Lambda unchanged
-- ✅ No cross-environment interference
+### Phase 1 Success (Mock System)
+- ✅ All IoT operations work locally without AWS
+- ✅ Mock Pi simulator handles all actions correctly
+- ✅ Configurable test scenarios (success, timeout, failure)
+- ✅ Easy to add new Pi actions
+- ✅ Frontend can test preset sync end-to-end locally
 
-### Phase 2 Success
+### Phase 2 Success (Remove Config Lambda)
 - ✅ API subscribes to MQTT successfully
 - ✅ Config responses processed < 100ms latency
-- ✅ Zero message loss
+- ✅ Zero message loss during migration
 - ✅ Config Lambda removed from infrastructure
-- ✅ CloudWatch costs reduced
+- ✅ CloudWatch costs reduced by ~50%
 
-### Phase 3 Success
-- ✅ GitHub Actions deploys to correct environment
-- ✅ Manual environment selection works
-- ✅ Deployment time unchanged
-- ✅ Zero production incidents
+### Phase 3 Success (Simplified Deployment)
+- ✅ Production Lambda stable and unchanged
+- ✅ No dev/staging Lambda complexity
+- ✅ Clear separation: mocks for dev, real AWS for prod
+- ✅ Fast local development feedback loop
 
 ---
 
@@ -869,7 +910,7 @@ PORT=8000
 ### Current Costs
 - 2 Lambda functions × $0.20/million invocations
 - 2 CloudWatch log groups × $0.50/GB
-- IoT Rules: $0.15/million actions
+- 2 IoT Rules: $0.15/million actions
 
 ### After Migration
 - 1 Lambda function (50% reduction)
@@ -877,7 +918,12 @@ PORT=8000
 - 1 IoT Rule (50% reduction)
 - MQTT connection: ~$0.08/month (negligible)
 
-**Estimated Savings**: ~$5-10/month (minimal but cleaner architecture)
+**Estimated Savings**: ~$5-10/month
+
+**More Important Benefits**:
+- Reduced latency (no Lambda cold starts for config responses)
+- Simpler architecture (fewer moving parts)
+- Faster local development (no AWS required)
 
 ---
 
@@ -885,37 +931,47 @@ PORT=8000
 
 | Risk | Impact | Mitigation |
 |------|--------|------------|
-| MQTT connection drops | High | Auto-reconnect logic, health checks |
+| MQTT connection drops | High | Auto-reconnect logic in SDK, health checks |
 | Message loss during migration | Medium | Run both systems in parallel for 48h |
-| Dev Lambda can't reach localhost | Medium | Use ngrok or VPN for dev testing |
-| Terraform state corruption | High | S3 backend with versioning, backups |
-| Wrong environment deployment | High | Manual approval for prod, clear naming |
+| Mock diverges from real Pi | Medium | Keep mock handlers in sync with Pi code |
+| Certificate management | Low | Document cert creation, use secure storage |
+| API restart loses MQTT connection | Low | Reconnect on startup, PM2 handles restarts |
 
 ---
 
 ## Documentation Updates
 
 After completion, update:
-- [ ] `README.md` - Add environment setup instructions
+- [ ] `README.md` - Add mock system usage
 - [ ] `docs/machine-iot/ARCH.md` - Update architecture diagram
-- [ ] `infra/terraform/README.md` - Document workspace usage
-- [ ] `.github/workflows/README.md` - Document deployment process
+- [ ] `apps/api/README.md` - Document MQTT client setup
+- [ ] `infra/terraform/README.md` - Clarify prod-only deployment
+- [ ] Add troubleshooting guide for MQTT connection issues
 
 ---
 
 ## Future Enhancements
 
-### Phase 4 (Optional): Terraform Remote State
-- Move to S3 backend with DynamoDB locking
-- Enable state sharing across team
-- Add state versioning and backups
+### Additional Pi Actions (Planned)
+Using the extensible mock system:
 
-### Phase 5 (Optional): Secrets Management
+```typescript
+// Diagnostics
+mockPiSimulator.registerAction('get_diagnostics', handler);
+
+// Firmware updates
+mockPiSimulator.registerAction('update_firmware', handler);
+
+// Real-time sensor data
+mockPiSimulator.registerAction('stream_sensors', handler);
+```
+
+### Monitoring & Alerts
+- CloudWatch alarms for MQTT disconnects
+- Lambda error rate alerts (lifecycle Lambda)
+- Cost anomaly detection
+
+### Certificate Rotation
+- Automate certificate renewal
 - Move secrets to AWS Secrets Manager
 - Rotate Lambda secret tokens
-- Automate certificate renewal
-
-### Phase 6 (Optional): Monitoring & Alerts
-- CloudWatch alarms for MQTT disconnects
-- Lambda error rate alerts
-- Cost anomaly detection

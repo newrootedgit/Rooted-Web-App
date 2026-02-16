@@ -9,7 +9,7 @@ Type=simple
 User=rooted
 Group=rooted
 WorkingDirectory=/opt/rooted-ble
-ExecStart=/opt/rooted-ble/.venv/bin/python3 -u /opt/rooted-ble/command_handler.py
+ExecStart=/opt/rooted-ble/.venv/bin/python3 -u /opt/rooted-ble/aws/command_handler.py
 Restart=always
 RestartSec=10
 
@@ -19,7 +19,7 @@ Environment=PYTHONUNBUFFERED=1
 # Hardening
 NoNewPrivileges=true
 ProtectSystem=strict
-ProtectHome=read-only
+ProtectHome=false
 ReadWritePaths=/opt/rooted-ble /home/rooted/te-cli
 
 [Install]

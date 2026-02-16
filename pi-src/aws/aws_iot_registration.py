@@ -13,9 +13,9 @@ from datetime import datetime, timezone
 from awsiot import mqtt_connection_builder
 from awscrt.mqtt import QoS
 
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-DEVICE_FILE = os.path.join(SCRIPT_DIR, 'device_config.json')
-CERTS_DIR = os.path.join(SCRIPT_DIR, 'certs')
+PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DEVICE_FILE = os.path.join(PROJECT_DIR, 'device_config.json')
+CERTS_DIR = os.path.join(PROJECT_DIR, 'certs')
 
 
 def get_device_config():
