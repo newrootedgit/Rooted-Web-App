@@ -226,6 +226,9 @@ export function createMockDbMachine(overrides: Partial<{
   name: string;
   display_name: string | null;
   device_id: string;
+  status: string | null;
+  last_seen_at: Date | null;
+  current_wifi_ssid: string | null;
   created_at: Date | null;
 }> = {}) {
   return {
@@ -235,6 +238,9 @@ export function createMockDbMachine(overrides: Partial<{
     name: overrides.name ?? 'Test Machine',
     display_name: 'display_name' in overrides ? overrides.display_name : overrides.name ?? 'Test Machine',
     device_id: overrides.device_id ?? 'device-001',
+    status: overrides.status ?? null,
+    last_seen_at: overrides.last_seen_at ?? null,
+    current_wifi_ssid: overrides.current_wifi_ssid ?? null,
     created_at: 'created_at' in overrides ? overrides.created_at : new Date('2024-01-01'),
   };
 }

@@ -66,9 +66,9 @@ describe('listMachines', () => {
       deviceId: 'dev-001',
       createdAt: dbMachine.created_at,
       awsIotThingName: undefined,
-      status: undefined,
-      lastSeenAt: undefined,
-      currentWifiSsid: undefined,
+      status: null,
+      lastSeenAt: null,
+      currentWifiSsid: null,
     });
     expect(mockPrisma.machines.findMany).toHaveBeenCalledWith(
       expect.objectContaining({

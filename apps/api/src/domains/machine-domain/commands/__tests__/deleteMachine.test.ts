@@ -1,31 +1,31 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { getMachine } from '../getMachine.js';
+import { deleteMachine } from '../deleteMachine.js';
 import { createMockPrisma, createMockDbMachine, type MockPrismaClient } from '../../../../test/mockPrisma.js';
 import type { PrismaClient } from '../../../../generated/prisma/client.js';
 
-describe('getMachine', () => {
+describe('deleteMachine', () => {
   let mockPrisma: MockPrismaClient;
 
   beforeEach(() => {
     mockPrisma = createMockPrisma();
   });
 
-  it('should return machine with camelCase fields', async () => {
-    const machine = createMockDbMachine({ id: 'machine-1', tenant_id: 'tenant-1', farm_id: 'farm-1' });
+  it('should delete machine and return success', async () => {
+    const machine = createMockDbMachine({ device_id: 'dev-1', tenant_id: 'tenant-1' });
     mockPrisma.machines.findFirst.mockResolvedValue(machine);
+    mockPrisma.machines.delete.mockResolvedValue(machine);
 
-    const result = await getMachine(mockPrisma as unknown as PrismaClient, 'machine-1', 'tenant-1', 'farm-1');
+    const result = await deleteMachine(mockPrisma as unknown as PrismaClient, 'dev-1', 'tenant-1');
 
-    expect(result.id).toBe('machine-1');
-    expect(result.tenantId).toBe('tenant-1');
-    expect(result.farmId).toBe('farm-1');
+    expect(mockPrisma.machines.delete).toHaveBeenCalledWith({ where: { id: machine.id } });
+    expect(result).toEqual({ success: true });
   });
 
   it('should throw NOT_FOUND when machine does not exist', async () => {
     mockPrisma.machines.findFirst.mockResolvedValue(null);
 
     await expect(
-      getMachine(mockPrisma as unknown as PrismaClient, 'nonexistent', 'tenant-1', 'farm-1')
+      deleteMachine(mockPrisma as unknown as PrismaClient, 'nonexistent', 'tenant-1')
     ).rejects.toThrow('Machine not found');
   });
 });

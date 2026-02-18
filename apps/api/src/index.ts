@@ -11,6 +11,7 @@ import { createContext } from './lib/trpc/context.js';
 import { isProd } from './lib/env.js';
 import { appRouter } from './lib/trpc/router.js';
 import { registerInternalRoutes } from './domains/machine-domain/internal-routes.js';
+import { startMqttSubscriber, stopMqttSubscriber } from './lib/aws/mqtt-subscriber.js';
 
 const PORT = parseInt(process.env.PORT || '8000', 10);
 const HOST = process.env.HOST || '0.0.0.0';
@@ -75,9 +76,19 @@ async function main() {
     },
   });
 
+  app.addHook('onClose', async () => {
+    await stopMqttSubscriber();
+  });
+
   try {
     await app.listen({ port: PORT, host: HOST });
     logger.info('Server started', { host: HOST, port: PORT });
+
+    if (process.env.MOCK_IOT !== 'true') {
+      startMqttSubscriber().catch((err) => {
+        logger.error('Failed to start MQTT subscriber', { err });
+      });
+    }
   } catch (err) {
     logger.error('Failed to start server', { err });
     process.exit(1);

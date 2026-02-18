@@ -38,6 +38,7 @@ describe('createOrUpdateMachine', () => {
         name: 'New Machine',
         display_name: 'New Machine',
         device_id: 'new-device',
+        current_wifi_ssid: null,
       },
     });
     expect(mockPrisma.machines.update).not.toHaveBeenCalled();
@@ -86,6 +87,7 @@ describe('createOrUpdateMachine', () => {
         display_name: 'Updated Name',
         tenant_id: 'tenant-2',
         farm_id: 'farm-2',
+        current_wifi_ssid: null,
       },
     });
     expect(mockPrisma.machines.create).not.toHaveBeenCalled();
@@ -136,6 +138,7 @@ describe('createOrUpdateMachine', () => {
         name: 'No Farm Machine',
         display_name: 'No Farm Machine',
         device_id: 'device-123',
+        current_wifi_ssid: null,
       },
     });
     expect(result.farmId).toBeNull();
@@ -169,6 +172,7 @@ describe('createOrUpdateMachine', () => {
       name: 'Formatted Machine',
       displayName: dbMachine.display_name,
       deviceId: 'device-456',
+      currentWifiSsid: null,
       createdAt: createdAt,
     });
   });
