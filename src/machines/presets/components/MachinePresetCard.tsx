@@ -3,6 +3,7 @@ import { ChevronDown, ChevronUp, Loader2, AlertCircle, CheckCircle, RefreshCw, P
 import type { Machine } from '../../../../shared';
 import { useMachineConfig } from '../hooks/useMachineConfig';
 import PresetEditor from './PresetEditor';
+import { isProd } from '@/lib/env';
 
 interface MachinePresetCardProps {
   machine: Machine;
@@ -80,7 +81,7 @@ export default function MachinePresetCard({ machine }: MachinePresetCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [activePreset, setActivePreset] = useState<string | null>(null);
   const { status, config, error, fetchConfig, updatePresets } = useMachineConfig(machine.id);
-  const isOnline = machine.status === 'online'; 
+  const isOnline = machine.status === 'online' || !isProd(); 
   const isBusy = status === 'fetching' || status === 'updating';
 
   // Lifted edit state
@@ -96,7 +97,7 @@ export default function MachinePresetCard({ machine }: MachinePresetCardProps) {
   }, [status]);
 
   useEffect(() => {
-    if (isExpanded && status === 'idle' && isOnline) {
+    if ((isExpanded && status === 'idle' && isOnline)) {
       fetchConfig();
     }
   }, [isExpanded, status, isOnline, fetchConfig]);

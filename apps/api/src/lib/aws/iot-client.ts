@@ -10,9 +10,9 @@ const iotClient = new IoTDataPlaneClient({
 });
 
 export async function publishToDevice(
-    thingName: string, 
+    thingName: string,
     payload: Record<string, unknown>
-): Promise<void> { 
+): Promise<void> {
     const topic = `rooted/machines/${thingName}/commands`;
 
     await iotClient.send(new PublishCommand({
