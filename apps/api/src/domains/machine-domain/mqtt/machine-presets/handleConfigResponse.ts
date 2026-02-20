@@ -1,4 +1,4 @@
-import { storeResponse } from '../../../lib/aws/config-store.js';
+import { storeResponse } from '../../../../lib/aws/config-store.js';
 
 interface ConfigResponseInput { 
     requestId: string;

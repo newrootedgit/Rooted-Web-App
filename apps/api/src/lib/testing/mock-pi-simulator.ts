@@ -3,7 +3,7 @@
  * Used when MOCK_IOT=true to make the full request/poll flow work locally.
  */
 
-import { handleConfigResponse } from '../../domains/machine-domain/mqtt/handleConfigResponse.js';
+import { handleConfigResponse } from '../../domains/machine-domain/mqtt/machine-presets/handleConfigResponse.js';
 import { getMockPresetData } from './mock-preset-data.js';
 
 interface CommandPayload {

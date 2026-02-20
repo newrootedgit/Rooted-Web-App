@@ -1,4 +1,4 @@
-import { getResponse } from '../../../lib/aws/config-store.js';
+import { getResponse } from '../../../../lib/aws/config-store.js';
 
 export function getConfigResponse(requestId: string): {
   status: 'pending' | 'received' | 'error';

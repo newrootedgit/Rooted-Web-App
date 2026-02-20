@@ -8,7 +8,7 @@ export interface AuthContext {
 }
 
 export interface AuthMiddlewareOptions {
-  logger: import('../logger/types.js').Logger;
+  logger: import('winston').Logger;
 }
 
 declare module 'fastify' {

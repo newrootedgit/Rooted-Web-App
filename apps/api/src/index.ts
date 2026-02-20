@@ -4,14 +4,13 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { fastifyTRPCPlugin } from '@trpc/server/adapters/fastify';
 
-import { logger, withLogContext } from './lib/logger/index.js';
+import { logger } from './lib/logger/index.js';
 import { errorHandler, NotFoundError } from './lib/errors/index.js';
 import { farmAuthMiddleware } from './lib/auth/middleware.js';
 import { createContext } from './lib/trpc/context.js';
 import { isProd } from './lib/env.js';
 import { appRouter } from './lib/trpc/router.js';
-import { registerInternalRoutes } from './domains/machine-domain/internal-routes.js';
-import { startMqttSubscriber, stopMqttSubscriber } from './lib/aws/mqtt-subscriber.js';
+import { startMqttSubscriber, stopMqttSubscriber } from './domains/machine-domain/mqtt/index.js';
 
 const PORT = parseInt(process.env.PORT || '8000', 10);
 const HOST = process.env.HOST || '0.0.0.0';
@@ -33,18 +32,10 @@ async function main() {
   await app.register(farmAuthMiddleware, { logger });
 
   app.addHook('onRequest', (request, _reply, done) => {
-    const context = {
-      requestId: request.id,
-      method: request.method,
-      url: request.url,
-    };
-
-    withLogContext(context, () => {
-      const reqLogger = logger.child({ component: 'http' });
-      (request as unknown as { log: typeof reqLogger }).log = reqLogger;
-      reqLogger.info('Request received', { event: 'http.request' });
-      done();
-    });
+    const reqLogger = logger.child({ component: 'http', requestId: request.id, method: request.method, url: request.url });
+    (request as unknown as { log: typeof reqLogger }).log = reqLogger;
+    reqLogger.info('Request received', { event: 'http.request' });
+    done();
   });
 
   app.addHook('onResponse', (request, reply, done) => {
@@ -65,8 +56,6 @@ async function main() {
   app.get('/health', async () => {
     return { status: 'ok', timestamp: new Date().toISOString() };
   });
-
-  await registerInternalRoutes(app);
 
   await app.register(fastifyTRPCPlugin, {
     prefix: '/trpc',

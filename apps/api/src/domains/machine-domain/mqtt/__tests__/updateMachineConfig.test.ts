@@ -7,7 +7,7 @@ vi.mock('../../../../lib/aws/iot-client.js', () => ({
 }));
 
 const { publishToDevice } = await import('../../../../lib/aws/iot-client.js');
-const { updateMachineConfig } = await import('../updateMachineConfig.js');
+const { updateMachineConfig } = await import('../machine-presets/updateMachineConfig.js');
 
 describe('updateMachineConfig', () => {
   let mockPrisma: MockPrismaClient;

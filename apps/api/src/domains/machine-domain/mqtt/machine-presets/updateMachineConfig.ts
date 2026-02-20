@@ -1,9 +1,9 @@
-import type { PrismaClient } from '../../../generated/prisma/client.js';
+import type { PrismaClient } from '../../../../generated/prisma/client.js';
 import { TRPCError } from '@trpc/server';
-import { publishToDevice } from '../../../lib/aws/iot-client.js';
+import { publishToDevice } from '../../../../lib/aws/iot-client.js';
 import { randomUUID } from 'crypto';
-import { isProd } from '../../../lib/env.js';
-import type { VarietyPreset } from '../types.js';
+import { isProd } from '../../../../lib/env.js';
+import type { VarietyPreset } from '../../types.js';
 
 interface UpdatePayload {
   presets?: Record<string, VarietyPreset>;

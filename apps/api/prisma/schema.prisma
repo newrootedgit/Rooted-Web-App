@@ -157,11 +157,30 @@ model machines {
   current_wifi_ssid  String?   @db.VarChar(255)
   farms              farms?    @relation(fields: [farm_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   tenants            tenants?  @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  machine_telemetry  machine_telemetry[]
 
   @@index([device_id], map: "idx_machines_device_id")
   @@index([farm_id], map: "idx_machines_farm_id")
   @@index([tenant_id], map: "idx_machines_tenant_id")
+
+
 }
+
+/// This model conatins useful telemetry data from a machine, which can be used for monitoring and debugging. It is not currently exposed via the API, but can be accessed directly from the database for analysis.
+  model machine_telemetry {
+    id          String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+    machine_id  String   @db.Uuid
+    session_id  String   @db.VarChar(36)
+    received_at DateTime @db.Timestamp(6)
+    uptime_s    Int
+    delta_steps Int
+
+    machines machines @relation(fields: [machine_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+    @@index([machine_id], map: "idx_machine_telemetry_machine_id")
+    @@index([session_id], map: "idx_machine_telemetry_session_id")
+    @@index([received_at], map: "idx_machine_telemetry_received_at")
+  }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model order_items {

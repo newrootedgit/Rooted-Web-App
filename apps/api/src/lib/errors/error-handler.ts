@@ -11,7 +11,7 @@ import { ZodError } from 'zod';
 import { AppError } from './base-error.js';
 import { ValidationError, InternalServerError, NotFoundError, ConflictError } from './http-errors.js';
 import type { ErrorResponse, FieldError } from './types.js';
-import type { Logger } from '../logger/types.js';
+import type { Logger } from 'winston';
 
 interface ErrorHandlerOptions {
   logger: Logger;
