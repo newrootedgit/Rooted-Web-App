@@ -34,6 +34,17 @@ export interface Machine {
   status?: 'online' | 'offline';
   lastSeenAt?: Date | null;
   currentWifiSsid?: string | null;
+  totalSteps?: string | null;
+  totalUptimeMs?: string | null;
+  currentBootUptimeMs?: string | null;
+  rebootCount?: number | null;
+  beltFaultCount?: number | null;
+  bladeFaultCount?: number | null;
+  lastBeltFault?: number | null;
+  lastBladeFault?: number | null;
+  lastEventCode?: string | null;
+  lastEventValue?: number | null;
+  lastEventAt?: Date | null;
 }
 
 
@@ -73,5 +84,4 @@ export const updateConfigSchema = z.object({
 export const requestConfigSchema = z.object({
   machineId: z.string().uuid(),
 });
-
 

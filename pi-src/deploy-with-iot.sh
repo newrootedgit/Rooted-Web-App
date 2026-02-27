@@ -60,6 +60,7 @@ echo -e "${GREEN}[2/4] Copying systemd service files...${NC}"
 sshpass -p "$SSH_PASSWORD" scp \
   "$SCRIPT_DIR/rooted-ble.service" \
   "$SCRIPT_DIR/rooted-iot.service" \
+  "$SCRIPT_DIR/rooted-telemetry.service" \
   "${PI_USER}@${PI_HOST}:/tmp/"
 
 echo -e "${GREEN}[3/4] Installing services on Pi...${NC}"
@@ -79,6 +80,7 @@ rm -f /home/rooted/te-cli/TE_Variable_Values.json.lock
 echo "Setting up systemd services..."
 sudo mv /tmp/rooted-ble.service /etc/systemd/system/
 sudo mv /tmp/rooted-iot.service /etc/systemd/system/
+sudo mv /tmp/rooted-telemetry.service /etc/systemd/system/
 
 # Reload systemd
 sudo systemctl daemon-reload
@@ -86,10 +88,12 @@ sudo systemctl daemon-reload
 # Enable services to start on boot
 sudo systemctl enable rooted-ble.service
 sudo systemctl enable rooted-iot.service
+sudo systemctl enable rooted-telemetry.service
 
 # Restart services
 sudo systemctl restart rooted-ble.service
 sudo systemctl restart rooted-iot.service
+sudo systemctl restart rooted-telemetry.service
 
 echo "Services installed and started"
 ENDSSH
@@ -105,6 +109,9 @@ sudo systemctl is-active rooted-ble.service || true
 echo ""
 echo "rooted-iot (AWS IoT Connection):"
 sudo systemctl is-active rooted-iot.service || true
+echo ""
+echo "rooted-telemetry (Telemetry Uplink):"
+sudo systemctl is-active rooted-telemetry.service || true
 ENDSSH
 
 echo ""
@@ -114,7 +121,8 @@ echo -e "${GREEN}================================================${NC}"
 echo ""
 echo "Services running:"
 echo "  - rooted-ble.service  : BLE provisioning (WiFi setup)"
-echo "  - rooted-iot.service  : AWS IoT connection (stays online)"
+echo "  - rooted-iot.service       : AWS IoT connection (stays online)
+  - rooted-telemetry.service : Telemetry uplink (drains DB every 5 min)"
 echo ""
 echo "Useful commands:"
 echo "  ssh ${PI_USER}@${PI_HOST}"

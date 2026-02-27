@@ -36,7 +36,7 @@ services:
       dockerfile: Dockerfile
     container_name: rooted-api
     ports:
-      - "8001:8000"
+      - "8000:8000"
     env_file:
       - ../.env
     environment:
@@ -44,6 +44,7 @@ services:
       PORT: 8000
       DATABASE_URL: postgresql://rooted:rooted_dev_password@postgres:5432/rooted_planner
       REDIS_URL: redis://redis:6379
+      AWS_REGION: us-west-2
     depends_on:
       postgres:
         condition: service_healthy

@@ -10,4 +10,15 @@ export interface Machine {
   status?: 'online' | 'offline';
   lastSeenAt?: string | Date | null;
   currentWifiSsid?: string | null;
+  totalSteps?: string | number | null;
+  totalUptimeMs?: string | number | null;
+  currentBootUptimeMs?: string | number | null;
+  rebootCount?: number | null;
+  beltFaultCount?: number | null;
+  bladeFaultCount?: number | null;
+  lastBeltFault?: number | null;
+  lastBladeFault?: number | null;
+  lastEventCode?: string | null;
+  lastEventValue?: number | null;
+  lastEventAt?: string | Date | null;
 }

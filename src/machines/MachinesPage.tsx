@@ -8,7 +8,7 @@ import MachinePresets from './presets/MachinePresets';
 
 
 const sidebarItems: NavItem[] = [
-  { id: 'dashboard', label: 'Provisioning', icon: <Bot size={20} /> },
+  { id: 'dashboard', label: 'Robot Dashboard', icon: <Bot size={20} /> },
   { id: 'presets', label: 'Presets', icon: <UserRoundCog size={20} /> }
 
 ];

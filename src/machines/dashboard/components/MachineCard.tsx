@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronUp, Trash2, Settings, Calendar, Cpu, Wifi, WifiOff, Power, PowerOff } from 'lucide-react';
+import { ChevronDown, ChevronUp, Trash2, Settings, Calendar, Cpu, Wifi, Power, PowerOff, RotateCcw, AlertTriangle, Timer, Bell } from 'lucide-react';
 import type { Machine } from '../../../../shared';
 import { getMachineImage } from '../../utils/machine-images';
 import ChangeWifiModal from '../../wifi-provisioning/components/ChangeWifiModal';
@@ -35,6 +35,57 @@ export default function MachineCard({ machine, onDelete }: MachineCardProps) {
       minute: '2-digit',
     });
   };
+
+  const parseIntegerValue = (value: string | number | bigint | null | undefined): bigint | null => {
+    if (value === null || value === undefined) return null;
+    if (typeof value === 'bigint') return value;
+    if (typeof value === 'number') return BigInt(Math.trunc(value));
+    if (typeof value === 'string' && value.trim() !== '') {
+      try {
+        return BigInt(value);
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  };
+
+  const formatInteger = (value: string | number | bigint | null | undefined) => {
+    const parsed = parseIntegerValue(value);
+    if (parsed === null) return '0';
+    return parsed.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  };
+
+  const formatDurationMs = (value: string | number | bigint | null | undefined) => {
+    const parsed = parseIntegerValue(value);
+    if (parsed === null) return 'Unknown';
+
+    const totalSeconds = parsed / 1000n;
+    const days = totalSeconds / 86400n;
+    const hours = (totalSeconds % 86400n) / 3600n;
+    const minutes = (totalSeconds % 3600n) / 60n;
+
+    if (days > 0n) return `${days.toString()}d ${hours.toString()}h`;
+    if (hours > 0n) return `${hours.toString()}h ${minutes.toString()}m`;
+    return `${minutes.toString()}m`;
+  };
+
+  const formatEventCode = (eventCode: string | null | undefined) => {
+    if (!eventCode) return 'No events yet';
+    return eventCode
+      .split('_')
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
+  };
+
+  const totalUptimeMs = (() => {
+    const historical = parseIntegerValue(machine.totalUptimeMs);
+    const currentBoot = parseIntegerValue(machine.currentBootUptimeMs);
+    if (historical === null && currentBoot === null) return null;
+    return (historical ?? 0n) + (currentBoot ?? 0n);
+  })();
+  const bladeFaultCountValue = parseIntegerValue(machine.bladeFaultCount) ?? 0n;
+  const showBladeFaultCount = bladeFaultCountValue > 0n;
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -79,7 +130,7 @@ export default function MachineCard({ machine, onDelete }: MachineCardProps) {
                 <div className="w-px bg-border my-2" />
               </>
             )}
-            <div className={`flex flex-col gap-4 ${machineImage ? 'flex-1 pl-2' : 'grid grid-cols-3 gap-4'}`}>
+            <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${machineImage ? 'flex-1 pl-2' : ''}`}>
               <div className="flex items-start gap-2">
                 <Cpu size={16} className="text-muted-foreground mt-0.5 flex-shrink-0" />
                 <div className="flex flex-col gap-0.5 min-w-0">
@@ -115,15 +166,14 @@ export default function MachineCard({ machine, onDelete }: MachineCardProps) {
                   </span>
                 </div>
               </div>
-              {machine.currentWifiSsid && (
-                <div className="flex items-start gap-2">
-                  <Wifi size={16} className="text-muted-foreground mt-0.5 flex-shrink-0" />
-                  <div className="flex flex-col gap-0.5">
-                    <span className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Network</span>
-                    <span className="text-sm text-foreground font-mono">{machine.currentWifiSsid.toUpperCase()}</span>
-                  </div>
+
+              <div className="flex items-start gap-2">
+                <Wifi size={16} className="text-muted-foreground mt-0.5 flex-shrink-0" />
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Network</span>
+                  <span className="text-sm text-foreground font-mono">{machine.currentWifiSsid?.toUpperCase() || 'Unknown'}</span>
                 </div>
-              )}
+              </div>
               {machine.lastSeenAt && (
                 <div className="flex items-start gap-2">
                   <Calendar size={16} className="text-muted-foreground mt-0.5 flex-shrink-0" />
@@ -133,6 +183,43 @@ export default function MachineCard({ machine, onDelete }: MachineCardProps) {
                   </div>
                 </div>
               )}
+              <div className="flex items-start gap-2">
+                <RotateCcw size={16} className="text-muted-foreground mt-0.5 flex-shrink-0" />
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Reboots</span>
+                  <span className="text-sm text-foreground">{formatInteger(machine.rebootCount)}</span>
+                </div>
+              </div>
+              <div className="flex items-start gap-2">
+                <AlertTriangle size={16} className="text-muted-foreground mt-0.5 flex-shrink-0" />
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Fault Counts</span>
+                  <span className="text-sm text-foreground">
+                    Belt {formatInteger(machine.beltFaultCount)}
+                    {showBladeFaultCount ? ` | Blade ${formatInteger(machine.bladeFaultCount)}` : ''}
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-start gap-2">
+                <Timer size={16} className="text-muted-foreground mt-0.5 flex-shrink-0" />
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Total Uptime</span>
+                  <span className="text-sm text-foreground">{formatDurationMs(totalUptimeMs)}</span>
+                </div>
+              </div>
+              <div className="flex items-start gap-2">
+                <Bell size={16} className="text-muted-foreground mt-0.5 flex-shrink-0" />
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Last Event</span>
+                  <span className="text-sm text-foreground">
+                    {formatEventCode(machine.lastEventCode)}
+                    {machine.lastEventValue !== null && machine.lastEventValue !== undefined ? ` (${machine.lastEventValue})` : ''}
+                  </span>
+                  {machine.lastEventAt && (
+                    <span className="text-xs text-muted-foreground">{formatDateTime(machine.lastEventAt)}</span>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
 

@@ -238,6 +238,16 @@ export function createMockDbMachine(overrides: Partial<{
   last_seen_at: Date | null;
   current_wifi_ssid: string | null;
   created_at: Date | null;
+  // Aggregate fields
+  total_steps: bigint;
+  total_uptime_ms: bigint;
+  current_boot_id: bigint | null;
+  current_boot_uptime_ms: bigint;
+  reboot_count: number;
+  belt_fault_count: number;
+  blade_fault_count: number;
+  last_belt_fault: number;
+  last_blade_fault: number;
 }> = {}) {
   return {
     id: overrides.id ?? 'machine-uuid-1',
@@ -250,6 +260,15 @@ export function createMockDbMachine(overrides: Partial<{
     last_seen_at: overrides.last_seen_at ?? null,
     current_wifi_ssid: overrides.current_wifi_ssid ?? null,
     created_at: 'created_at' in overrides ? overrides.created_at : new Date('2024-01-01'),
+    total_steps: overrides.total_steps ?? BigInt(0),
+    total_uptime_ms: overrides.total_uptime_ms ?? BigInt(0),
+    current_boot_id: 'current_boot_id' in overrides ? overrides.current_boot_id! : null,
+    current_boot_uptime_ms: overrides.current_boot_uptime_ms ?? BigInt(0),
+    reboot_count: overrides.reboot_count ?? 0,
+    belt_fault_count: overrides.belt_fault_count ?? 0,
+    blade_fault_count: overrides.blade_fault_count ?? 0,
+    last_belt_fault: overrides.last_belt_fault ?? 0,
+    last_blade_fault: overrides.last_blade_fault ?? 0,
   };
 }
 

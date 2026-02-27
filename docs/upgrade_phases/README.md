@@ -10,6 +10,9 @@ This directory contains comprehensive documentation for implementing the Rooted 
 ### [IOT_LAMBDA_ENVIRONMENT_FIX.md](./IOT_LAMBDA_ENVIRONMENT_FIX.md)
 **IoT Lambda environment & architecture optimization** - Fix environment configuration (dev/prod), remove unnecessary config Lambda, and improve deployment workflow.
 
+### [TELEMETRY_INFRASTRUCTURE.md](./TELEMETRY_INFRASTRUCTURE.md)
+**Telemetry infrastructure upgrade** ✅ *Complete* — Extended `machine_telemetry` DB schema to capture full `status_update` and `event` payloads from the Pi, rewrote `handleTelemetry.ts` to route both schemas, and switched the MQTT subscriber to a persistent session so messages are buffered by AWS IoT when the API is offline.
+
 ### [PRODUCTION_LOGGING_UPGRADE.md](./PRODUCTION_LOGGING_UPGRADE.md)
 **Production logging and observability upgrade** - Comprehensive plan to improve production logging with structured events, performance monitoring, and business context.
 

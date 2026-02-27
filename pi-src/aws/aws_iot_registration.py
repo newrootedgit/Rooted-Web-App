@@ -47,8 +47,13 @@ def verify_certificates():
     return True
 
 
-def connect_to_aws_iot():
+def connect_to_aws_iot(client_id_suffix: str = ''):
     """Establish MQTT connection to AWS IoT Core.
+
+    Args:
+        client_id_suffix: Optional suffix appended to the device_id to form a
+            unique MQTT client ID. Use this when multiple processes on the same
+            device need simultaneous connections (e.g. '-telemetry', '-cmd').
 
     Returns:
         mqtt.Connection: The active MQTT connection
@@ -80,7 +85,7 @@ def connect_to_aws_iot():
         cert_filepath=cert_path,
         pri_key_filepath=key_path,
         ca_filepath=ca_path,
-        client_id=device_id,
+        client_id=f"{device_id}{client_id_suffix}",
         clean_session=False,
         keep_alive_secs=60,
     )

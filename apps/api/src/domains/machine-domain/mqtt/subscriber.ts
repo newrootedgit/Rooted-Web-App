@@ -27,8 +27,8 @@ export async function startMqttSubscriber(): Promise<void> {
     .new_builder_for_websocket()
     .with_endpoint(host)
     .with_credentials(region, accessKeyId, secretAccessKey)
-    .with_client_id(`rooted-api-${process.pid}-${Date.now()}`)
-    .with_clean_session(true)
+    .with_client_id('rooted-api-subscriber')
+    .with_clean_session(false)
     .with_keep_alive_seconds(30);
 
   const config = configBuilder.build();

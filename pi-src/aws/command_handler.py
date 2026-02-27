@@ -4,28 +4,31 @@ MQTT Command Handler
 
 Subscribes to the commands topic and handles get_presets / update_presets actions.
 Publishes responses back on the pong topic.
+Runs telemetry uplink in a background thread sharing the same MQTT connection.
 """
 
 import json
-import os
+import time
 from awscrt.mqtt import QoS
 from aws_iot_registration import connect_to_aws_iot, disconnect_from_aws_iot, get_device_config
 from machine_preset import load_presets, save_presets
+from telemetry import start_telemetry_thread
 
 
 def start_command_handler():
-    config = get_device_config()
+    config    = get_device_config()
     device_id = config['device_id']
 
-    commands_topic = f'rooted/machines/{device_id}/commands'
-    pong_topic = f'rooted/machines/{device_id}/pong'
+    commands_topic  = f'rooted/machines/{device_id}/commands'
+    pong_topic      = f'rooted/machines/{device_id}/pong'
+    telemetry_topic = f'rooted/machines/{device_id}/telemetry'
 
     mqtt_connection = connect_to_aws_iot()
 
     def on_message(topic, payload, **kwargs):
         try:
-            message = json.loads(payload)
-            action = message.get('action')
+            message    = json.loads(payload)
+            action     = message.get('action')
             request_id = message.get('requestId')
 
             print(f"Received command: action={action}, requestId={request_id}")
@@ -36,17 +39,17 @@ def start_command_handler():
 
             if action == 'get_presets':
                 try:
-                    presets = load_presets()
+                    presets  = load_presets()
                     response = {
                         'requestId': request_id,
-                        'action': 'presets_response',
-                        'config': presets,
+                        'action':    'presets_response',
+                        'config':    presets,
                     }
                 except Exception as e:
                     response = {
                         'requestId': request_id,
-                        'action': 'presets_response',
-                        'error': str(e),
+                        'action':    'presets_response',
+                        'error':     str(e),
                     }
 
             elif action == 'update_presets':
@@ -72,15 +75,15 @@ def start_command_handler():
                     save_presets(current)
                     response = {
                         'requestId': request_id,
-                        'action': 'presets_updated',
-                        'success': True,
+                        'action':    'presets_updated',
+                        'success':   True,
                     }
                 except Exception as e:
                     response = {
                         'requestId': request_id,
-                        'action': 'presets_updated',
-                        'success': False,
-                        'error': str(e),
+                        'action':    'presets_updated',
+                        'success':   False,
+                        'error':     str(e),
                     }
 
             else:
@@ -105,19 +108,17 @@ def start_command_handler():
     subscribe_future.result()
     print(f"Subscribed to {commands_topic}")
 
-    return mqtt_connection
+    stop_event = start_telemetry_thread(mqtt_connection, telemetry_topic)
+
+    return mqtt_connection, stop_event
 
 
 if __name__ == '__main__':
-    import time
-
-    # Ping Google.com First
-    
-
     print("=== Rooted Command Handler ===")
-    mqtt_conn = None
+    mqtt_conn  = None
+    stop_event = None
     try:
-        mqtt_conn = start_command_handler()
+        mqtt_conn, stop_event = start_command_handler()
         print("Listening for commands... Press Ctrl+C to stop.")
         while True:
             time.sleep(1)
@@ -126,5 +127,7 @@ if __name__ == '__main__':
     except Exception as e:
         print(f"Error: {e}")
     finally:
+        if stop_event:
+            stop_event.set()
         if mqtt_conn:
             disconnect_from_aws_iot(mqtt_conn)
