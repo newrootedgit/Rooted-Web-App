@@ -69,6 +69,17 @@ describe('listMachines', () => {
       status: null,
       lastSeenAt: null,
       currentWifiSsid: null,
+      totalSteps: '0',
+      totalUptimeMs: '0',
+      currentBootUptimeMs: '0',
+      rebootCount: 0,
+      beltFaultCount: 0,
+      bladeFaultCount: 0,
+      lastBeltFault: 0,
+      lastBladeFault: 0,
+      lastEventCode: null,
+      lastEventValue: null,
+      lastEventAt: null,
     });
     expect(mockPrisma.machines.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
