@@ -29,14 +29,16 @@ jobs:
       - name: Run ESLint
         run: pnpm lint
 
+      - name: Generate Prisma Client (API)
+        env:
+          DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
+        run: cd apps/api && pnpm exec prisma generate
+
       - name: Type-check Root/Frontend
         run: pnpm exec tsc
 
       - name: Type-check API
-        run: |
-          cd apps/api
-          DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy" pnpm exec prisma generate
-          pnpm exec tsc
+        run: cd apps/api && pnpm exec tsc
 
   security:
     name: Security Scan
@@ -105,6 +107,11 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install
+
+      - name: Generate Prisma Client (API)
+        env:
+          DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
+        run: cd apps/api && pnpm exec prisma generate
 
       - name: Build Frontend
         run: pnpm build
