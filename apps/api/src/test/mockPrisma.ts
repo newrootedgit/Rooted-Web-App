@@ -248,6 +248,7 @@ export function createMockDbMachine(overrides: Partial<{
   blade_fault_count: number;
   last_belt_fault: number;
   last_blade_fault: number;
+  machine_telemetry?: any[];
 }> = {}) {
   return {
     id: overrides.id ?? 'machine-uuid-1',
@@ -269,6 +270,7 @@ export function createMockDbMachine(overrides: Partial<{
     blade_fault_count: overrides.blade_fault_count ?? 0,
     last_belt_fault: overrides.last_belt_fault ?? 0,
     last_blade_fault: overrides.last_blade_fault ?? 0,
+    machine_telemetry: overrides.machine_telemetry ?? [],
   };
 }
 
