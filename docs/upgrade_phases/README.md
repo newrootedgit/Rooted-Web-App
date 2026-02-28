@@ -7,6 +7,9 @@ This directory contains comprehensive documentation for implementing the Rooted 
 ### [PLANNER_IMPLEMENTATION_ROADMAP.md](./PLANNER_IMPLEMENTATION_ROADMAP.md)
 **The complete implementation guide** - This is the primary document you should reference.
 
+### [STAGING_ENVIRONMENT_SETUP.md](./STAGING_ENVIRONMENT_SETUP.md)
+**Full staging environment setup guide** — Spin up isolated AWS infrastructure (EC2, RDS, IoT, Lambda), configure Clerk staging instance, set up Nginx + SSL, and add a GitHub Actions `deploy-staging.yml` workflow. Includes a phase-by-phase checklist and cost estimate (~$35/month).
+
 ### [IOT_LAMBDA_ENVIRONMENT_FIX.md](./IOT_LAMBDA_ENVIRONMENT_FIX.md)
 **IoT Lambda environment & architecture optimization** - Fix environment configuration (dev/prod), remove unnecessary config Lambda, and improve deployment workflow.
 
