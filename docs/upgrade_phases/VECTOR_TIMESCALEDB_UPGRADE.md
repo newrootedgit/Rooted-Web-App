@@ -86,6 +86,9 @@ model machine_telemetry {
 }
 ```
 
+AWS payload values such as `trays_processed` are currently not persisted in
+`machine_telemetry`.
+
 Rows accumulate indefinitely. At 10 devices: ~39M rows / year (~19 GB) with no
 retention or compression.
 
@@ -108,6 +111,7 @@ interval with `unref()` for graceful shutdown. No action needed here.
 | 5 | ~~No TTL on preset store~~ | Already fixed in `config-store.ts` |
 | 6 | No data retention policy | TimescaleDB `add_retention_policy` |
 | 7 | Single MQTT connection drops all processing | Vector disk buffer survives disconnects |
+| 8 | `trays_processed` from AWS is not stored | Add nullable `trays_processed` column and map it during ingest |
 
 ---
 
@@ -148,6 +152,16 @@ SELECT create_hypertable(
 
 After this, `machine_telemetry` looks identical to the rest of the codebase — it is
 still queryable as one table. TimescaleDB manages the chunk files transparently.
+
+### 1.2.1 — Add `trays_processed` column for AWS telemetry
+
+This keeps the schema aligned with the AWS payload and is safe for older rows/events
+that do not include the field.
+
+```sql
+ALTER TABLE machine_telemetry
+  ADD COLUMN IF NOT EXISTS trays_processed INTEGER;
+```
 
 ### 1.3 — Add the deduplication index
 
@@ -198,6 +212,7 @@ SELECT
   machine_id,
   time_bucket('1 day', received_at)            AS day,
   SUM(delta_steps)                             AS total_steps,
+  COALESCE(SUM(trays_processed), 0)            AS total_trays_processed,
   AVG(torque_pct)                              AS avg_torque_pct,
   COUNT(*) FILTER (WHERE belt_fault  > 0)      AS belt_fault_count,
   COUNT(*) FILTER (WHERE blade_fault > 0)      AS blade_fault_count,
@@ -225,6 +240,7 @@ SELECT add_continuous_aggregate_policy(
 - [ ] TimescaleDB extension enabled on Postgres instance
 - [ ] Migration file created and applied (`prisma migrate deploy`)
 - [ ] Hypertable confirmed: `SELECT * FROM timescaledb_information.hypertables;`
+- [ ] Column confirmed: `\d machine_telemetry` includes `trays_processed`
 - [ ] Dedup index confirmed: `\d machine_telemetry_dedup_idx`
 - [ ] Retention policy confirmed: `SELECT * FROM timescaledb_information.jobs;`
 - [ ] Continuous aggregate refreshing: `SELECT * FROM machine_telemetry_daily LIMIT 5;`
@@ -271,6 +287,7 @@ const rows = payloads.map(payload => ({
     uptime_ms:      payload.uptime_ms      != null ? BigInt(payload.uptime_ms) : null,
     uptime_s:       payload.uptime_s       ?? null,
     delta_steps:    payload.delta_steps    ?? null,
+    trays_processed: payload.trays_processed ?? null,
     torque_pct:     payload.torque_pct     ?? null,
     belt_fault:     payload.belt_fault     ?? null,
     blade_fault:    payload.blade_fault    ?? null,
@@ -407,6 +424,7 @@ await connection.subscribe(TELEMETRY_TOPIC, mqtt.QoS.AtLeastOnce, (topic, payloa
 
 - [ ] `handleTelemetry.ts` updated to accept `TelemetryPayload[]`
 - [ ] `createMany` with `skipDuplicates` replaces `create`
+- [ ] `trays_processed` is mapped from AWS payload into `machine_telemetry`
 - [ ] Atomic `{ increment }` used for `total_steps`
 - [ ] `SELECT ... FOR UPDATE` transaction handles boot + fault state
 - [ ] `subscriber.ts` normalises single-object and array payloads
