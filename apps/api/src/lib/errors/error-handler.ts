@@ -47,9 +47,11 @@ function isPrismaError(error: unknown): error is { code: string; meta?: { target
  */
 function fromPrismaError(error: { code: string; meta?: { target?: string[] } }): AppError {
   switch (error.code) {
-    case 'P2002': // Unique constraint violation
+    case 'P2002': {
+      // Unique constraint violation
       const fields = error.meta?.target?.join(', ') || 'unknown';
       return new ConflictError(`Duplicate value for: ${fields}`);
+    }
     case 'P2025': // Record not found
       return new NotFoundError('Record not found');
     default:

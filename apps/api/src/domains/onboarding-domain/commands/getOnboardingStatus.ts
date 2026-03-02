@@ -5,7 +5,7 @@ export async function getOnboardingStatus(
   prisma: PrismaClient,
   userId: string
 ): Promise<OnboardingStatus> {
-  let farmUser = await prisma.farm_users.findFirst({
+  const farmUser = await prisma.farm_users.findFirst({
     where: { clerk_user_id: userId, is_active: true },
     include: { farms: true },
   });
