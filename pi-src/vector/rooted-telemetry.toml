@@ -1,0 +1,50 @@
+# Vector configuration for Rooted telemetry pipeline
+# Tails the JSONL telemetry log and publishes batches to AWS IoT Core via MQTT
+
+# ---------- Source: tail the JSONL log ----------
+[sources.telemetry_log]
+type = "file"
+include = ["/home/rooted/telemetry_log.jsonl"]
+read_from = "beginning"
+fingerprint.strategy = "device_and_inode"
+
+# ---------- Transform: parse JSON ----------
+[transforms.parse_json]
+type = "remap"
+inputs = ["telemetry_log"]
+source = '''
+. = parse_json!(.message)
+'''
+
+# ---------- Transform: filter incomplete / invalid records ----------
+[transforms.filter_valid]
+type = "filter"
+inputs = ["parse_json"]
+condition = '''
+includes(["status_update", "event"], .type)
+'''
+
+# ---------- Sink: MQTT to AWS IoT Core ----------
+[sinks.mqtt_iot]
+type = "mqtt"
+inputs = ["filter_valid"]
+host = "${AWS_IOT_ENDPOINT}"
+port = 8883
+topic = "rooted/machines/${ROOTED_DEVICE_ID}/telemetry"
+encoding.codec = "json"
+quality_of_service = "atleastonce"
+
+# TLS mutual auth (X.509 certs provisioned by provision-iot-device.sh)
+tls.enabled = true
+tls.ca_file = "/opt/rooted-ble/certs/AmazonRootCA1.pem"
+tls.crt_file = "/opt/rooted-ble/certs/certificate.pem.crt"
+tls.key_file = "/opt/rooted-ble/certs/private.pem.key"
+
+# Batching: up to 50 events or 30s, whichever comes first
+batch.max_events = 50
+batch.timeout_secs = 30
+
+# Disk buffer for resilience across reboots / connectivity drops
+buffer.type = "disk"
+buffer.max_size = 268435488  # ~256 MB (Vector minimum for disk buffer)
+buffer.when_full = "block"

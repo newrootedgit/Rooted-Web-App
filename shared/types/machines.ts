@@ -18,6 +18,8 @@ export interface Machine {
   bladeFaultCount?: number | null;
   lastBeltFault?: number | null;
   lastBladeFault?: number | null;
+  beltMotorUptimeMs?: string | number | null;
+  bladeMotorUptimeMs?: string | number | null;
   lastEventCode?: string | null;
   lastEventValue?: number | null;
   lastEventAt?: string | Date | null;

@@ -77,6 +77,8 @@ describe('listMachines', () => {
       bladeFaultCount: 0,
       lastBeltFault: 0,
       lastBladeFault: 0,
+      beltMotorUptimeMs: null,
+      bladeMotorUptimeMs: null,
       lastEventCode: null,
       lastEventValue: null,
       lastEventAt: null,

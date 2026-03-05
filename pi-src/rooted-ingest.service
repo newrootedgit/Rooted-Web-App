@@ -1,0 +1,16 @@
+[Unit]
+Description=Rooted Telemetry Ingest (UDP → JSONL)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=rooted
+Group=rooted
+ExecStart=/home/rooted/.venv/bin/python3 /home/rooted/te-cli/telemetry_ingest.py
+Restart=always
+RestartSec=5
+ReadWritePaths=/home/rooted /opt/rooted-ble
+
+[Install]
+WantedBy=multi-user.target

@@ -1,7 +1,7 @@
 import { mqtt, iot } from 'aws-iot-device-sdk-v2';
 import { handleConfigResponse } from './machine-presets/handleConfigResponse.js';
 import { handleLifecycleEvent } from './machine-lifecycle/handleLifecycleEvent.js';
-import { handleTelemetry } from './machine-telemetry/handleTelemetry.js';
+import { handleTelemetry, TelemetryPayload } from './machine-telemetry/handleTelemetry.js';
 
 const PONG_TOPIC = 'rooted/machines/+/pong';
 const TELEMETRY_TOPIC = 'rooted/machines/+/telemetry';
@@ -9,6 +9,44 @@ const LIFECYCLE_CONNECTED_TOPIC = '$aws/events/presence/connected/+';
 const LIFECYCLE_DISCONNECTED_TOPIC = '$aws/events/presence/disconnected/+';
 
 let connection: mqtt.MqttClientConnection | null = null;
+
+// Fixed-interval buffer: collect per-device telemetry events and flush on a timer
+const TELEMETRY_FLUSH_MS = parseInt(process.env.TELEMETRY_FLUSH_MS || '30000', 10);
+const telemetryBuffers = new Map<string, TelemetryPayload[]>();
+let flushInterval: ReturnType<typeof setInterval> | null = null;
+
+function bufferTelemetry(deviceId: string, payloads: TelemetryPayload[]): void {
+  const buffer = telemetryBuffers.get(deviceId) ?? [];
+  buffer.push(...payloads);
+  telemetryBuffers.set(deviceId, buffer);
+}
+
+function flushAllTelemetry(): void {
+  for (const [deviceId, batch] of telemetryBuffers) {
+    if (batch.length > 0) {
+      console.log(`[MQTT] Flushing ${batch.length} telemetry events for ${deviceId}`);
+      handleTelemetry(deviceId, batch).catch((err) => {
+        console.error('[MQTT] Error handling telemetry:', err);
+      });
+    }
+  }
+  telemetryBuffers.clear();
+}
+
+function startTelemetryFlushInterval(): void {
+  if (flushInterval) return;
+  console.log(`[MQTT] Telemetry flush interval: ${TELEMETRY_FLUSH_MS}ms`);
+  flushInterval = setInterval(flushAllTelemetry, TELEMETRY_FLUSH_MS);
+}
+
+function stopTelemetryFlushInterval(): void {
+  if (flushInterval) {
+    clearInterval(flushInterval);
+    flushInterval = null;
+  }
+  // Flush any remaining events
+  flushAllTelemetry();
+}
 
 export async function startMqttSubscriber(): Promise<void> {
   const endpoint = process.env.AWS_IOT_ENDPOINT;
@@ -97,11 +135,12 @@ export async function startMqttSubscriber(): Promise<void> {
   await connection.subscribe(LIFECYCLE_DISCONNECTED_TOPIC, mqtt.QoS.AtLeastOnce, lifecycleHandler);
   console.log('[MQTT] Subscribed to', LIFECYCLE_DISCONNECTED_TOPIC);
 
-  // Telemetry
+  startTelemetryFlushInterval();
+
+  // Telemetry (buffered — collects events per device, flushes on fixed interval)
   await connection.subscribe(TELEMETRY_TOPIC, mqtt.QoS.AtLeastOnce, (topic, payload) => {
     try {
       const message = JSON.parse(new TextDecoder().decode(payload));
-      console.log('[MQTT] Telemetry on', topic, ':', JSON.stringify(message));
 
       // Extract deviceId from topic: rooted/machines/<deviceId>/telemetry
       const deviceId = topic.split('/')[2];
@@ -110,9 +149,10 @@ export async function startMqttSubscriber(): Promise<void> {
         return;
       }
 
-      handleTelemetry(deviceId, message).catch((err) => {
-        console.error('[MQTT] Error handling telemetry:', err);
-      });
+      // Normalize: single object → array for backward compatibility
+      const payloads = Array.isArray(message) ? message : [message];
+
+      bufferTelemetry(deviceId, payloads);
     } catch (err) {
       console.error('[MQTT] Error processing telemetry message:', err);
     }
@@ -122,6 +162,7 @@ export async function startMqttSubscriber(): Promise<void> {
 }
 
 export async function stopMqttSubscriber(): Promise<void> {
+  stopTelemetryFlushInterval();
   if (connection) {
     try {
       await connection.disconnect();

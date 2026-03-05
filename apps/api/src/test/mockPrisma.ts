@@ -106,9 +106,12 @@ export type MockPrismaClient = {
     count: ReturnType<typeof vi.fn>;
   };
   machine_telemetry: {
+    findMany: ReturnType<typeof vi.fn>;
     create: ReturnType<typeof vi.fn>;
+    createMany: ReturnType<typeof vi.fn>;
   };
   $transaction: ReturnType<typeof vi.fn>;
+  $queryRawUnsafe: ReturnType<typeof vi.fn>;
 };
 
 export function createMockPrisma(): MockPrismaClient {
@@ -217,11 +220,14 @@ export function createMockPrisma(): MockPrismaClient {
       count: vi.fn(),
     },
     machine_telemetry: {
+      findMany: vi.fn().mockResolvedValue([]),
       create: vi.fn(),
+      createMany: vi.fn(),
     },
     $transaction: vi.fn((opsOrCb: unknown) =>
       Array.isArray(opsOrCb) ? Promise.all(opsOrCb) : (opsOrCb as (tx: unknown) => unknown)(mock)
     ),
+    $queryRawUnsafe: vi.fn(),
   };
   return mock;
 }

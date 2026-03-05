@@ -76,50 +76,13 @@ def fetch_unsynced_jsonl(cursor: int) -> list[dict]:
 
 
 def publish_batch(mqtt_connection, topic: str, records: list[dict]) -> int:
-    """
-    Publish each record and return the count of successfully published records.
-    Stops at the first failure so the cursor only advances past confirmed sends.
-    """
-    synced_count = 0
-    for record in records:
-        payload = json.dumps(record)
-        try:
-            pub_future, _ = mqtt_connection.publish(
-                topic=topic,
-                payload=payload,
-                qos=QoS.AT_LEAST_ONCE,
-            )
-            pub_future.result()  # blocks until puback
-            synced_count += 1
-            print(
-                f"[telemetry] ↑ type={record.get('type', '?')}  "
-                f"uptime={record.get('uptime_s', '?'):>6}  "
-                f"delta={record.get('delta_steps', '?'):>6}  [sent]"
-            )
-        except Exception as e:
-            print(f"[telemetry] Publish failed: {e}")
-            break
-    return synced_count
+    """Stubbed — Vector now handles MQTT publishing. Returns 0."""
+    return 0
 
 
 def _run_loop(mqtt_connection, topic: str, stop_event: threading.Event) -> None:
-    print(f"[telemetry] Started. Draining every {POLL_INTERVAL_S}s to {topic}")
-    try:
-        while not stop_event.is_set():
-            cursor  = read_cursor()
-            records = fetch_unsynced_jsonl(cursor)
-
-            if records:
-                synced_count = publish_batch(mqtt_connection, topic, records)
-                if synced_count:
-                    write_cursor(cursor + synced_count)
-                    print(f"[telemetry] Cursor advanced to {cursor + synced_count}.")
-            else:
-                print("[telemetry] No unsynced records.")
-
-            stop_event.wait(POLL_INTERVAL_S)
-    finally:
-        print("[telemetry] Stopped.")
+    print("[telemetry] MQTT publishing is now handled by Vector. Thread parked.")
+    stop_event.wait()
 
 
 def start_telemetry_thread(mqtt_connection, topic: str) -> threading.Event:

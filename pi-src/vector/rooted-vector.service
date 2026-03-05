@@ -1,0 +1,16 @@
+[Unit]
+Description=Vector telemetry pipeline for Rooted
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/default/vector
+ExecStart=/usr/bin/vector --config /opt/rooted-ble/vector/rooted-telemetry.toml
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

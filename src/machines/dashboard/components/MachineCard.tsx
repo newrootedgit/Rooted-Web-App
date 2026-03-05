@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronUp, Trash2, Settings, Calendar, Cpu, Wifi, Power, PowerOff, RotateCcw, AlertTriangle, Timer, Bell } from 'lucide-react';
+import { ChevronDown, ChevronUp, Trash2, Settings, Calendar, Cpu, Wifi, Power, PowerOff, RotateCcw, AlertTriangle, Timer } from 'lucide-react';
 import type { Machine } from '../../../../shared';
 import { getMachineImage } from '../../utils/machine-images';
 import ChangeWifiModal from '../../wifi-provisioning/components/ChangeWifiModal';
@@ -67,15 +67,8 @@ export default function MachineCard({ machine, onDelete }: MachineCardProps) {
 
     if (days > 0n) return `${days.toString()}d ${hours.toString()}h`;
     if (hours > 0n) return `${hours.toString()}h ${minutes.toString()}m`;
-    return `${minutes.toString()}m`;
-  };
-
-  const formatEventCode = (eventCode: string | null | undefined) => {
-    if (!eventCode) return 'No events yet';
-    return eventCode
-      .split('_')
-      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-      .join(' ');
+    if (minutes > 0n) return `${minutes.toString()}m`;
+    return `${totalSeconds.toString()}s`;
   };
 
   const totalUptimeMs = (() => {
@@ -86,6 +79,9 @@ export default function MachineCard({ machine, onDelete }: MachineCardProps) {
   })();
   const bladeFaultCountValue = parseIntegerValue(machine.bladeFaultCount) ?? 0n;
   const showBladeFaultCount = bladeFaultCountValue > 0n;
+
+  const bladeMotorUptimeValue = parseIntegerValue(machine.bladeMotorUptimeMs) ?? 0n;
+  const showBladeMotorUptime = bladeMotorUptimeValue > 0n;
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -207,19 +203,18 @@ export default function MachineCard({ machine, onDelete }: MachineCardProps) {
                   <span className="text-sm text-foreground">{formatDurationMs(totalUptimeMs)}</span>
                 </div>
               </div>
-              <div className="flex items-start gap-2">
-                <Bell size={16} className="text-muted-foreground mt-0.5 flex-shrink-0" />
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Last Event</span>
-                  <span className="text-sm text-foreground">
-                    {formatEventCode(machine.lastEventCode)}
-                    {machine.lastEventValue !== null && machine.lastEventValue !== undefined ? ` (${machine.lastEventValue})` : ''}
-                  </span>
-                  {machine.lastEventAt && (
-                    <span className="text-xs text-muted-foreground">{formatDateTime(machine.lastEventAt)}</span>
-                  )}
+              {(machine.beltMotorUptimeMs != null || machine.bladeMotorUptimeMs != null) && (
+                <div className="flex items-start gap-2">
+                  <Timer size={16} className="text-muted-foreground mt-0.5 flex-shrink-0" />
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Motor Uptime</span>
+                    <span className="text-sm text-foreground">
+                      Belt {formatDurationMs(machine.beltMotorUptimeMs)}
+                      {showBladeMotorUptime ? ` | Blade ${formatDurationMs(machine.bladeMotorUptimeMs)}` : ''}
+                    </span>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
 

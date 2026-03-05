@@ -205,6 +205,7 @@ FILES_TO_COPY=(
     "device_config.json"
     "rooted-ble.service"
     "rooted-iot.service"
+    "rooted-ingest.service"
     "rooted-ble.timer"
     "ble-wrapper.sh"
 )
@@ -243,6 +244,15 @@ if [[ "$PROVISION_IOT" =~ ^[Yy]$ ]] && [ -d "${IOT_TEMP_DIR}" ]; then
     sshpass -p "${SSH_PASSWORD}" ssh -o StrictHostKeyChecking=no "${PI_USER}@${PI_HOST}" \
         "chmod 600 ${REMOTE_DIR}/certs/private.pem.key"
 fi
+
+# Copy Vector config files
+echo "  Copying Vector telemetry config..."
+sshpass -p "${SSH_PASSWORD}" ssh -o StrictHostKeyChecking=no "${PI_USER}@${PI_HOST}" \
+    "mkdir -p ${REMOTE_DIR}/vector"
+sshpass -p "${SSH_PASSWORD}" scp -o StrictHostKeyChecking=no \
+    "${SCRIPT_DIR}/vector/rooted-telemetry.toml" \
+    "${SCRIPT_DIR}/vector/rooted-vector.service" \
+    "${PI_USER}@${PI_HOST}:${REMOTE_DIR}/vector/"
 
 echo -e "${GREEN}Files copied successfully${NC}"
 
@@ -351,6 +361,12 @@ if [ -f "\${REMOTE_DIR}/rooted-iot.service" ]; then
     echo "${SSH_PASSWORD}" | sudo -S cp \${REMOTE_DIR}/rooted-iot.service /etc/systemd/system/
 fi
 
+# Install ingest service if it exists
+if [ -f "\${REMOTE_DIR}/rooted-ingest.service" ]; then
+    echo "  Installing telemetry ingest service..."
+    echo "${SSH_PASSWORD}" | sudo -S cp \${REMOTE_DIR}/rooted-ingest.service /etc/systemd/system/
+fi
+
 # Reload systemd
 echo "  Reloading systemd..."
 echo "${SSH_PASSWORD}" | sudo -S systemctl daemon-reload
@@ -369,6 +385,43 @@ if [ -f "\${REMOTE_DIR}/certs/certificate.pem.crt" ]; then
     echo "${SSH_PASSWORD}" | sudo -S systemctl enable rooted-iot.service
     echo "  Starting AWS IoT service..."
     echo "${SSH_PASSWORD}" | sudo -S systemctl start rooted-iot.service
+fi
+
+# Enable and start ingest service (always — it listens for UDP from ClearCore)
+if [ -f /etc/systemd/system/rooted-ingest.service ]; then
+    echo "  Enabling telemetry ingest service..."
+    echo "${SSH_PASSWORD}" | sudo -S systemctl enable rooted-ingest.service
+    echo "  Starting telemetry ingest service..."
+    echo "${SSH_PASSWORD}" | sudo -S systemctl restart rooted-ingest.service
+fi
+
+# =============================================================================
+# Install and configure Vector for telemetry
+# =============================================================================
+echo "  Setting up Vector telemetry pipeline..."
+
+# Install Vector if not already installed
+if ! command -v vector &> /dev/null; then
+    echo "  Installing Vector..."
+    curl --proto '=https' --tlsv1.2 -sSfL https://sh.vector.dev | bash -s -- -y
+fi
+
+# Write environment file with device ID and IoT endpoint
+echo "${SSH_PASSWORD}" | sudo -S tee /etc/default/vector > /dev/null << VECTORENV
+ROOTED_DEVICE_ID=${DEVICE_UUID}
+AWS_IOT_ENDPOINT=${IOT_ENDPOINT}
+VECTORENV
+
+# Install Vector config and service
+echo "${SSH_PASSWORD}" | sudo -S cp \${REMOTE_DIR}/vector/rooted-vector.service /etc/systemd/system/
+echo "${SSH_PASSWORD}" | sudo -S systemctl daemon-reload
+
+# Enable and start Vector if IoT is provisioned
+if [ -f "\${REMOTE_DIR}/certs/certificate.pem.crt" ] && [ -n "${IOT_ENDPOINT}" ]; then
+    echo "  Enabling Vector service..."
+    echo "${SSH_PASSWORD}" | sudo -S systemctl enable rooted-vector.service
+    echo "  Starting Vector service..."
+    echo "${SSH_PASSWORD}" | sudo -S systemctl start rooted-vector.service
 fi
 
 echo "  Setup complete!"
@@ -400,17 +453,20 @@ echo "  IoT Status:   Not provisioned"
 fi
 echo ""
 echo "Services:"
-echo "  - rooted-ble.timer   : BLE provisioning (runs on boot)"
+echo "  - rooted-ble.timer        : BLE provisioning (runs on boot)"
 if [ -n "$IOT_ENDPOINT" ]; then
-echo "  - rooted-iot.service : AWS IoT connection (always running)"
+echo "  - rooted-iot.service       : AWS IoT connection (always running)"
+echo "  - rooted-vector.service    : Vector telemetry pipeline (always running)"
 fi
 echo ""
 echo "Useful commands on the Pi:"
 echo "  sudo systemctl status rooted-ble.timer   # Check BLE timer"
 echo "  sudo systemctl status rooted-ble.service # Check BLE service"
 if [ -n "$IOT_ENDPOINT" ]; then
-echo "  sudo systemctl status rooted-iot.service # Check IoT service"
-echo "  sudo journalctl -u rooted-iot -f         # Watch IoT logs"
+echo "  sudo systemctl status rooted-iot.service    # Check IoT service"
+echo "  sudo systemctl status rooted-vector.service  # Check Vector telemetry"
+echo "  sudo journalctl -u rooted-iot -f             # Watch IoT logs"
+echo "  sudo journalctl -u rooted-vector -f          # Watch Vector logs"
 fi
 echo ""
 echo -e "${YELLOW}Important: Save the Device ID above - you'll need it to identify this machine.${NC}"

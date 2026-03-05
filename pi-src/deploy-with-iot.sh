@@ -42,7 +42,7 @@ if ! command -v sshpass &> /dev/null; then
 fi
 
 echo ""
-echo -e "${GREEN}[1/4] Copying Python files to Pi...${NC}"
+echo -e "${GREEN}[1/5] Copying Python files to Pi...${NC}"
 
 sshpass -p "$SSH_PASSWORD" scp \
   "$SCRIPT_DIR/provisioner.py" \
@@ -55,17 +55,35 @@ sshpass -p "$SSH_PASSWORD" scp \
   "$SCRIPT_DIR/aws/"*.py \
   "${PI_USER}@${PI_HOST}:/opt/rooted-ble/aws/"
 
-echo -e "${GREEN}[2/4] Copying systemd service files...${NC}"
+echo -e "${GREEN}[2/5] Copying systemd service files...${NC}"
 
 sshpass -p "$SSH_PASSWORD" scp \
   "$SCRIPT_DIR/rooted-ble.service" \
   "$SCRIPT_DIR/rooted-iot.service" \
   "$SCRIPT_DIR/rooted-telemetry.service" \
+  "$SCRIPT_DIR/rooted-ingest.service" \
   "${PI_USER}@${PI_HOST}:/tmp/"
 
-echo -e "${GREEN}[3/4] Installing services on Pi...${NC}"
+echo -e "${GREEN}[3/5] Copying Vector config...${NC}"
 
-sshpass -p "$SSH_PASSWORD" ssh "${PI_USER}@${PI_HOST}" << 'ENDSSH'
+sshpass -p "$SSH_PASSWORD" ssh "${PI_USER}@${PI_HOST}" "mkdir -p /opt/rooted-ble/vector"
+sshpass -p "$SSH_PASSWORD" scp \
+  "$SCRIPT_DIR/vector/rooted-telemetry.toml" \
+  "$SCRIPT_DIR/vector/rooted-vector.service" \
+  "${PI_USER}@${PI_HOST}:/opt/rooted-ble/vector/"
+
+echo -e "${GREEN}[4/5] Installing services on Pi...${NC}"
+
+# Read device_id and IoT endpoint from Pi's existing config
+DEVICE_ID=$(sshpass -p "$SSH_PASSWORD" ssh "${PI_USER}@${PI_HOST}" \
+  "python3 -c \"import json; c=json.load(open('/opt/rooted-ble/device_config.json')); print(c['device_id'])\"")
+IOT_ENDPOINT=$(sshpass -p "$SSH_PASSWORD" ssh "${PI_USER}@${PI_HOST}" \
+  "python3 -c \"import json; c=json.load(open('/opt/rooted-ble/device_config.json')); print(c.get('aws_iot_endpoint',''))\"")
+
+echo "  Device ID:    ${DEVICE_ID}"
+echo "  IoT Endpoint: ${IOT_ENDPOINT}"
+
+sshpass -p "$SSH_PASSWORD" ssh "${PI_USER}@${PI_HOST}" << ENDSSH
 # Install Python dependencies
 cd /opt/rooted-ble
 source .venv/bin/activate
@@ -81,6 +99,22 @@ echo "Setting up systemd services..."
 sudo mv /tmp/rooted-ble.service /etc/systemd/system/
 sudo mv /tmp/rooted-iot.service /etc/systemd/system/
 sudo mv /tmp/rooted-telemetry.service /etc/systemd/system/
+sudo mv /tmp/rooted-ingest.service /etc/systemd/system/
+
+# Install Vector if not already installed
+if ! command -v vector &> /dev/null; then
+    echo "Installing Vector..."
+    curl --proto '=https' --tlsv1.2 -sSfL https://sh.vector.dev | bash -s -- -y
+fi
+
+# Write Vector environment file with device ID and IoT endpoint
+sudo tee /etc/default/vector > /dev/null << VECTORENV
+ROOTED_DEVICE_ID=${DEVICE_ID}
+AWS_IOT_ENDPOINT=${IOT_ENDPOINT}
+VECTORENV
+
+# Install Vector service
+sudo cp /opt/rooted-ble/vector/rooted-vector.service /etc/systemd/system/
 
 # Reload systemd
 sudo systemctl daemon-reload
@@ -89,16 +123,20 @@ sudo systemctl daemon-reload
 sudo systemctl enable rooted-ble.service
 sudo systemctl enable rooted-iot.service
 sudo systemctl enable rooted-telemetry.service
+sudo systemctl enable rooted-ingest.service
+sudo systemctl enable rooted-vector.service
 
 # Restart services
 sudo systemctl restart rooted-ble.service
 sudo systemctl restart rooted-iot.service
 sudo systemctl restart rooted-telemetry.service
+sudo systemctl restart rooted-ingest.service
+sudo systemctl restart rooted-vector.service
 
 echo "Services installed and started"
 ENDSSH
 
-echo -e "${GREEN}[4/4] Verifying services...${NC}"
+echo -e "${GREEN}[5/5] Verifying services...${NC}"
 
 sshpass -p "$SSH_PASSWORD" ssh "${PI_USER}@${PI_HOST}" << 'ENDSSH'
 echo ""
@@ -112,6 +150,12 @@ sudo systemctl is-active rooted-iot.service || true
 echo ""
 echo "rooted-telemetry (Telemetry Uplink):"
 sudo systemctl is-active rooted-telemetry.service || true
+echo ""
+echo "rooted-ingest (UDP Telemetry Ingest):"
+sudo systemctl is-active rooted-ingest.service || true
+echo ""
+echo "rooted-vector (Vector Telemetry Pipeline):"
+sudo systemctl is-active rooted-vector.service || true
 ENDSSH
 
 echo ""
@@ -120,9 +164,11 @@ echo -e "${GREEN}  Deployment complete!                         ${NC}"
 echo -e "${GREEN}================================================${NC}"
 echo ""
 echo "Services running:"
-echo "  - rooted-ble.service  : BLE provisioning (WiFi setup)"
-echo "  - rooted-iot.service       : AWS IoT connection (stays online)
-  - rooted-telemetry.service : Telemetry uplink (drains DB every 5 min)"
+echo "  - rooted-ble.service       : BLE provisioning (WiFi setup)"
+echo "  - rooted-iot.service       : AWS IoT connection (stays online)"
+echo "  - rooted-telemetry.service : Telemetry uplink (legacy, parked)"
+echo "  - rooted-ingest.service    : UDP telemetry ingest (ClearCore → JSONL)"
+echo "  - rooted-vector.service    : Vector telemetry pipeline (tails JSONL → MQTT)"
 echo ""
 echo "Useful commands:"
 echo "  ssh ${PI_USER}@${PI_HOST}"
