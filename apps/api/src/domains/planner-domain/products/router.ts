@@ -10,7 +10,7 @@ import {
   createBlendSchema,
   updateBlendSchema,
 } from './types.js';
-import { listProducts, getProductById, listCategories, listBlends, getBlendById } from './queries/index.js';
+import { listProducts, getProductById, listCategories, getCategoryById, listBlends, getBlendById } from './queries/index.js';
 import {
   createProduct,
   updateProduct,
@@ -47,6 +47,10 @@ export const productRouter = router({
   categories: router({
     list: farmProcedure
       .query(({ ctx }) => listCategories(ctx.prisma, ctx.farmId)),
+
+    byId: farmProcedure
+      .input(getByIdSchema)
+      .query(({ ctx, input }) => getCategoryById(ctx.prisma, ctx.farmId, input.id)),
 
     create: farmProcedure
       .input(createCategorySchema)

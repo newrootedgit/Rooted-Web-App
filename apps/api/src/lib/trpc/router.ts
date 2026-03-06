@@ -7,6 +7,7 @@ import { customerRouter } from '../../domains/planner-domain/customers/router.js
 import { orderRouter } from '../../domains/planner-domain/orders/router.js';
 import { taskRouter } from '../../domains/planner-domain/tasks/router.js';
 import { farmLayoutRouter } from '../../domains/planner-domain/farm-layout/router.js';
+import { userRouter } from '../../domains/user-domain/router.js';
 
 export const appRouter = router({
   machines: machineRouter,
@@ -17,6 +18,7 @@ export const appRouter = router({
   orders: orderRouter,
   tasks: taskRouter,
   farmLayouts: farmLayoutRouter,
+  user: userRouter,
 });
 
 export type AppRouter = typeof appRouter;
