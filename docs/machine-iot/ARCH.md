@@ -14,7 +14,8 @@ graph TB
     subgraph "Backend Layer"
         tRPC[tRPC + Fastify]
         CLERK[Clerk Auth]
-        DB[(PostgreSQL)]
+        DB[(PostgreSQL - Relational)]
+        TIMESCALE[(TimescaleDB - Telemetry)]
         IOT[AWS IoT Core]
     end
     
@@ -29,6 +30,7 @@ graph TB
     BROWSER --> CLERK
     BROWSER -.BLE for WiFi Provisioning.-> GATT
     tRPC --> DB
+    tRPC --> TIMESCALE
     tRPC --> IOT
     GATT --> BLUEZERO
     BLUEZERO --> WIFI
@@ -58,7 +60,8 @@ graph TB
 - **Fastify** with TypeScript
 - **tRPC** for type-safe API procedures
 - **Prisma ORM** for database operations
-- **PostgreSQL** with row-level security
+- **PostgreSQL** with row-level security (Relational metadata)
+- **TimescaleDB** (Time-series telemetry)
 - **Clerk** for authentication and user management
 - **AWS IoT Core SDK** for device management
 

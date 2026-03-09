@@ -71,7 +71,8 @@ graph TB
     
     subgraph "Infrastructure"
         PI[Raspberry Pi + BLE]
-        DB[(PostgreSQL)]
+        DB[(PostgreSQL - Relational)]
+        TIMESCALE[(TimescaleDB - Telemetry)]
         REDIS[(Redis Cache)]
     end
     
@@ -84,6 +85,7 @@ graph TB
     API --> MACHINE_DOMAIN
     API --> PLANNER_DOMAIN
     MACHINE_DOMAIN --> DB
+    MACHINE_DOMAIN --> TIMESCALE
     PLANNER_DOMAIN --> DB
     API --> REDIS
 ```
@@ -105,14 +107,14 @@ cd Rooted-Web-App
 # Install dependencies
 pnpm install
 
-# Start infrastructure (PostgreSQL + Redis)
+# Start infrastructure (PostgreSQL + TimescaleDB + Redis)
 docker compose -f docker/docker-compose.yml up -d
 
 # Setup environment
 cp .env.example .env
 cp apps/api/.env.example apps/api/.env
 
-# Run database migrations
+# Run database migrations (PostgreSQL)
 cd apps/api
 pnpm prisma migrate dev
 cd ../..
@@ -133,6 +135,7 @@ VITE_CLERK_PUBLISHABLE_KEY=your_clerk_key
 **`apps/api/.env`:**
 ```env
 DATABASE_URL=postgresql://rooted:rooted_dev_password@localhost:5433/rooted_planner
+TIMESCALE_DATABASE_URL=postgresql://rooted:rooted_dev_password@localhost:5434/rooted_telemetry
 REDIS_URL=redis://localhost:6379
 CLERK_SECRET_KEY=your_clerk_secret
 PORT=3001
@@ -205,7 +208,8 @@ pnpm prisma migrate reset
 - Fastify
 - tRPC
 - Prisma ORM
-- PostgreSQL
+- PostgreSQL (Relational)
+- TimescaleDB (Telemetry)
 - Redis
 - Clerk (authentication)
 
