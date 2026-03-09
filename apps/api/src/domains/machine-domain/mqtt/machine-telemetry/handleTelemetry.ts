@@ -1,5 +1,48 @@
 import { prisma } from '../../../../lib/db/index.js';
 
+type LockedMachineBase = {
+    current_boot_id: bigint | null;
+    current_boot_uptime_ms: bigint;
+    total_uptime_ms: bigint;
+    reboot_count: number;
+    belt_fault_count: number;
+    blade_fault_count: number;
+    last_belt_fault: number;
+    last_blade_fault: number;
+    current_belt_motor_uptime_ms: bigint;
+    total_belt_motor_uptime_ms: bigint;
+    current_blade_motor_uptime_ms: bigint;
+    total_blade_motor_uptime_ms: bigint;
+    last_raw_belt_motor_uptime_ms: bigint;
+    last_raw_blade_motor_uptime_ms: bigint;
+    last_motor_boot_id: bigint | null;
+};
+
+type LockedMachineWithTray = LockedMachineBase & {
+    tray_count: number;
+    last_raw_tray_count: number;
+};
+
+let warnedTrayColumnsMissing = false;
+
+function isMissingTrayColumnError(error: unknown): boolean {
+    const code = typeof error === 'object' && error !== null && 'code' in error
+        ? String((error as { code?: unknown }).code)
+        : '';
+    const metaColumn = typeof error === 'object' && error !== null && 'meta' in error
+        ? String((error as { meta?: { column?: unknown } }).meta?.column ?? '')
+        : '';
+    const message = error instanceof Error ? error.message : String(error);
+
+    return (
+        (code === 'P2022' && (metaColumn.includes('tray_count') || metaColumn.includes('last_raw_tray_count'))) ||
+        message.includes('machines.tray_count') ||
+        message.includes('machines.last_raw_tray_count') ||
+        message.includes('"tray_count" does not exist') ||
+        message.includes('"last_raw_tray_count" does not exist')
+    );
+}
+
 export interface TelemetryPayload {
     type?: string;
     session_id?: string;
@@ -27,6 +70,8 @@ export async function handleTelemetry(deviceId: string, payloads: TelemetryPaylo
     // Filter to valid types only
     const valid = payloads.filter(p => p.type === 'status_update' || p.type === 'event');
 
+    console.log(`[MQTT] handleTelemetry: received batch of ${payloads.length} payloads for device ${deviceId}, ${valid.length} valid`);
+
     if (valid.length === 0) {
         if (payloads.length > 0) {
             console.warn(`[MQTT] handleTelemetry: no valid types in batch of ${payloads.length} for device ${deviceId}, skipping`);
@@ -36,6 +81,7 @@ export async function handleTelemetry(deviceId: string, payloads: TelemetryPaylo
 
     const machine = await prisma.machines.findFirst({
         where: { device_id: deviceId },
+        select: { id: true },
     });
 
     if (!machine) {
@@ -89,41 +135,78 @@ export async function handleTelemetry(deviceId: string, payloads: TelemetryPaylo
     const hasStatefulUpdates = statusUpdates.some(p =>
         (p.boot_id != null && p.uptime_ms != null) ||
         p.belt_fault != null ||
-        p.blade_fault != null
+        p.blade_fault != null ||
+        p.trays_processed != null ||
+        p.belt_motor_uptime_ms != null ||
+        p.blade_motor_uptime_ms != null
     );
 
     if (hasStatefulUpdates) {
         await prisma.$transaction(async (tx) => {
             // Lock the machine row
-            const [locked] = await tx.$queryRawUnsafe<Array<{
-                current_boot_id: bigint | null;
-                current_boot_uptime_ms: bigint;
-                total_uptime_ms: bigint;
-                reboot_count: number;
-                belt_fault_count: number;
-                blade_fault_count: number;
-                last_belt_fault: number;
-                last_blade_fault: number;
-            }>>(
-                `SELECT current_boot_id, current_boot_uptime_ms, total_uptime_ms,
-                        reboot_count, belt_fault_count, blade_fault_count,
-                        last_belt_fault, last_blade_fault
-                 FROM machines WHERE id = $1::uuid FOR UPDATE`,
-                machine.id
-            );
+            let trayColumnsAvailable = true;
+            let locked: LockedMachineBase | LockedMachineWithTray;
+
+            try {
+                [locked] = await tx.$queryRawUnsafe<Array<LockedMachineWithTray>>(
+                    `SELECT current_boot_id, current_boot_uptime_ms, total_uptime_ms,
+                            reboot_count, belt_fault_count, blade_fault_count,
+                            tray_count, last_raw_tray_count,
+                            last_belt_fault, last_blade_fault,
+                            current_belt_motor_uptime_ms, total_belt_motor_uptime_ms,
+                            current_blade_motor_uptime_ms, total_blade_motor_uptime_ms,
+                            last_raw_belt_motor_uptime_ms, last_raw_blade_motor_uptime_ms,
+                            last_motor_boot_id
+                     FROM machines WHERE id = $1::uuid FOR UPDATE`,
+                    machine.id
+                );
+            } catch (error) {
+                if (!isMissingTrayColumnError(error)) {
+                    throw error;
+                }
+                trayColumnsAvailable = false;
+                if (!warnedTrayColumnsMissing) {
+                    warnedTrayColumnsMissing = true;
+                    console.warn('[MQTT] tray_count columns missing on machines table; continuing without tray aggregation until migrations are applied');
+                }
+                [locked] = await tx.$queryRawUnsafe<Array<LockedMachineBase>>(
+                    `SELECT current_boot_id, current_boot_uptime_ms, total_uptime_ms,
+                            reboot_count, belt_fault_count, blade_fault_count,
+                            last_belt_fault, last_blade_fault,
+                            current_belt_motor_uptime_ms, total_belt_motor_uptime_ms,
+                            current_blade_motor_uptime_ms, total_blade_motor_uptime_ms,
+                            last_raw_belt_motor_uptime_ms, last_raw_blade_motor_uptime_ms,
+                            last_motor_boot_id
+                     FROM machines WHERE id = $1::uuid FOR UPDATE`,
+                    machine.id
+                );
+            }
 
             // Walk status_updates in order for boot/fault state transitions
+
             let currentBootId = locked.current_boot_id;
             let currentBootUptimeMs = locked.current_boot_uptime_ms;
             let totalUptimeMs = locked.total_uptime_ms;
             let rebootCount = locked.reboot_count;
             let beltFaultCount = locked.belt_fault_count;
             let bladeFaultCount = locked.blade_fault_count;
+            let trayCount = trayColumnsAvailable ? (locked as LockedMachineWithTray).tray_count : 0;
+            let lastRawTrayCount = trayColumnsAvailable ? (locked as LockedMachineWithTray).last_raw_tray_count : 0;
             let lastBeltFault = locked.last_belt_fault;
             let lastBladeFault = locked.last_blade_fault;
 
+            let currentBeltMotorUptimeMs = locked.current_belt_motor_uptime_ms;
+            let totalBeltMotorUptimeMs = locked.total_belt_motor_uptime_ms;
+            let currentBladeMotorUptimeMs = locked.current_blade_motor_uptime_ms;
+            let totalBladeMotorUptimeMs = locked.total_blade_motor_uptime_ms;
+            let lastRawBelt = locked.last_raw_belt_motor_uptime_ms;
+            let lastRawBlade = locked.last_raw_blade_motor_uptime_ms;
+            let lastMotorBootId = locked.last_motor_boot_id;
+
             let bootChanged = false;
             let faultChanged = false;
+            let trayChanged = false;
+            let motorChanged = false;
 
             for (const p of statusUpdates) {
                 // Boot / uptime tracking
@@ -164,6 +247,70 @@ export async function handleTelemetry(deviceId: string, payloads: TelemetryPaylo
                     lastBladeFault = p.blade_fault;
                     faultChanged = true;
                 }
+
+                // Tray count tracking (raw per-session counter -> accumulated total)
+                if (p.trays_processed != null) {
+                    const rawTrayCount = p.trays_processed;
+
+                    if (rawTrayCount < lastRawTrayCount) {
+                        // New session detected by counter reset: archive completed session total
+                        trayCount += lastRawTrayCount;
+                        lastRawTrayCount = rawTrayCount;
+                    } else if (rawTrayCount > lastRawTrayCount) {
+                        // Same session: accumulate incremental delta
+                        trayCount += rawTrayCount - lastRawTrayCount;
+                        lastRawTrayCount = rawTrayCount;
+                    }
+
+                    trayChanged = true;
+                }
+
+                // Detect new motor session via boot_id change
+                const motorBootId = p.boot_id != null ? BigInt(p.boot_id) : null;
+                const isNewMotorBoot = motorBootId !== null &&
+                    lastMotorBootId !== null &&
+                    motorBootId !== lastMotorBootId;
+
+                // Belt motor uptime tracking (delta-based)
+                if (p.belt_motor_uptime_ms != null) {
+                    const newRaw = BigInt(p.belt_motor_uptime_ms);
+                    const isNewSession = isNewMotorBoot || newRaw < lastRawBelt;
+
+                    if (isNewSession) {
+                        // Archive completed session, reset delta
+                        totalBeltMotorUptimeMs = totalBeltMotorUptimeMs + currentBeltMotorUptimeMs;
+                        currentBeltMotorUptimeMs = BigInt(0);
+                        lastRawBelt = newRaw;
+                    } else if (newRaw > lastRawBelt) {
+                        // Accumulate incremental delta
+                        currentBeltMotorUptimeMs = currentBeltMotorUptimeMs + (newRaw - lastRawBelt);
+                        lastRawBelt = newRaw;
+                    }
+                    motorChanged = true;
+                }
+
+                // Blade motor uptime tracking (delta-based)
+                if (p.blade_motor_uptime_ms != null) {
+                    const newRaw = BigInt(p.blade_motor_uptime_ms);
+                    const isNewSession = isNewMotorBoot || newRaw < lastRawBlade;
+
+                    if (isNewSession) {
+                        // Archive completed session, reset delta
+                        totalBladeMotorUptimeMs = totalBladeMotorUptimeMs + currentBladeMotorUptimeMs;
+                        currentBladeMotorUptimeMs = BigInt(0);
+                        lastRawBlade = newRaw;
+                    } else if (newRaw > lastRawBlade) {
+                        // Accumulate incremental delta
+                        currentBladeMotorUptimeMs = currentBladeMotorUptimeMs + (newRaw - lastRawBlade);
+                        lastRawBlade = newRaw;
+                    }
+                    motorChanged = true;
+                }
+
+                // Track the motor boot_id after processing both motors
+                if (motorBootId !== null) {
+                    lastMotorBootId = motorBootId;
+                }
             }
 
             // Merge stateful fields into update
@@ -178,6 +325,19 @@ export async function handleTelemetry(deviceId: string, payloads: TelemetryPaylo
                 updateData.blade_fault_count = bladeFaultCount;
                 updateData.last_belt_fault = lastBeltFault;
                 updateData.last_blade_fault = lastBladeFault;
+            }
+            if (trayChanged && trayColumnsAvailable) {
+                updateData.tray_count = trayCount;
+                updateData.last_raw_tray_count = lastRawTrayCount;
+            }
+            if (motorChanged) {
+                updateData.current_belt_motor_uptime_ms = currentBeltMotorUptimeMs;
+                updateData.total_belt_motor_uptime_ms = totalBeltMotorUptimeMs;
+                updateData.current_blade_motor_uptime_ms = currentBladeMotorUptimeMs;
+                updateData.total_blade_motor_uptime_ms = totalBladeMotorUptimeMs;
+                updateData.last_raw_belt_motor_uptime_ms = lastRawBelt;
+                updateData.last_raw_blade_motor_uptime_ms = lastRawBlade;
+                updateData.last_motor_boot_id = lastMotorBootId;
             }
 
             // Batch insert telemetry rows + update machine in the same transaction

@@ -18,8 +18,17 @@ function mockLockedMachine(machine: ReturnType<typeof createMockDbMachine>) {
     reboot_count: machine.reboot_count,
     belt_fault_count: machine.belt_fault_count,
     blade_fault_count: machine.blade_fault_count,
+    tray_count: machine.tray_count,
+    last_raw_tray_count: machine.last_raw_tray_count,
     last_belt_fault: machine.last_belt_fault,
     last_blade_fault: machine.last_blade_fault,
+    current_belt_motor_uptime_ms: machine.current_belt_motor_uptime_ms,
+    total_belt_motor_uptime_ms: machine.total_belt_motor_uptime_ms,
+    current_blade_motor_uptime_ms: machine.current_blade_motor_uptime_ms,
+    total_blade_motor_uptime_ms: machine.total_blade_motor_uptime_ms,
+    last_raw_belt_motor_uptime_ms: machine.last_raw_belt_motor_uptime_ms,
+    last_raw_blade_motor_uptime_ms: machine.last_raw_blade_motor_uptime_ms,
+    last_motor_boot_id: machine.last_motor_boot_id,
   }]);
 }
 
@@ -311,6 +320,7 @@ describe('handleTelemetry', () => {
         }),
       });
     });
+
   });
 
   describe('aggregate: fault onset detection', () => {
@@ -407,6 +417,58 @@ describe('handleTelemetry', () => {
       // Since blade_fault was not in any payload, faultChanged still true (belt_fault was present)
       // but lastBladeFault stays 0 from locked row
       expect(updateData.last_blade_fault).toBe(0);
+    });
+  });
+
+  describe('aggregate: tray count tracking', () => {
+    it('same session: accumulates tray_count by delta and updates last_raw_tray_count', async () => {
+      const machine = createMockDbMachine({
+        device_id: 'dev-trays-delta',
+        tray_count: 10,
+        last_raw_tray_count: 4,
+      });
+      mockPrisma.machines.findFirst.mockResolvedValue(machine);
+      mockPrisma.machine_telemetry.createMany.mockResolvedValue({ count: 1 });
+      mockPrisma.machines.update.mockResolvedValue(machine);
+      mockLockedMachine(machine);
+
+      await handleTelemetry('dev-trays-delta', [{
+        type: 'status_update',
+        trays_processed: 9,
+      }]);
+
+      expect(mockPrisma.machines.update).toHaveBeenCalledWith({
+        where: { id: machine.id },
+        data: expect.objectContaining({
+          tray_count: 15,
+          last_raw_tray_count: 9,
+        }),
+      });
+    });
+
+    it('counter reset: archives prior raw count and resets last_raw_tray_count', async () => {
+      const machine = createMockDbMachine({
+        device_id: 'dev-trays-reset',
+        tray_count: 10,
+        last_raw_tray_count: 8,
+      });
+      mockPrisma.machines.findFirst.mockResolvedValue(machine);
+      mockPrisma.machine_telemetry.createMany.mockResolvedValue({ count: 1 });
+      mockPrisma.machines.update.mockResolvedValue(machine);
+      mockLockedMachine(machine);
+
+      await handleTelemetry('dev-trays-reset', [{
+        type: 'status_update',
+        trays_processed: 2,
+      }]);
+
+      expect(mockPrisma.machines.update).toHaveBeenCalledWith({
+        where: { id: machine.id },
+        data: expect.objectContaining({
+          tray_count: 18,
+          last_raw_tray_count: 2,
+        }),
+      });
     });
   });
 

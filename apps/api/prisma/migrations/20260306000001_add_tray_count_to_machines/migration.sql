@@ -1,0 +1,2 @@
+ALTER TABLE "machines" ADD COLUMN "tray_count" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "machines" ADD COLUMN "last_raw_tray_count" INTEGER NOT NULL DEFAULT 0;

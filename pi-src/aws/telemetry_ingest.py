@@ -9,7 +9,7 @@ parses STATUS_UPDATE and EVENT frames, and appends each as a JSON line to
 New ClearCore CSV format (schema version 1):
 
 STATUS_UPDATE,1,boot_id,seq,uptime_ms,belt_motor_uptime_ms,blade_motor_uptime_ms,
-              torque_pct,belt_fault,blade_fault,alert_bits,kill_switch,cmd_age_ms,udp_fail
+              torque_pct,belt_fault,blade_fault,alert_bits,kill_switch,cmd_age_ms,udp_fail,tray_count
 
 EVENT,1,boot_id,seq,uptime_ms,event_code,value,belt_motor_uptime_ms,blade_motor_uptime_ms,
       belt_fault,blade_fault,alert_bits,kill_switch,cmd_age_ms,udp_fail
@@ -37,7 +37,7 @@ STATUS_FIELDS = [
     "boot_id", "seq", "uptime_ms",
     "belt_motor_uptime_ms", "blade_motor_uptime_ms",
     "torque_pct", "belt_fault", "blade_fault",
-    "alert_bits", "kill_switch", "cmd_age_ms", "udp_fail",
+    "alert_bits", "kill_switch", "cmd_age_ms", "udp_fail", "tray_count",
 ]
 
 EVENT_FIELDS = [
@@ -83,22 +83,20 @@ def parse_csv(raw: str, device_cfg: dict, session_id: str) -> dict | None:
     schema_ver = parts[1].strip()
 
     if frame_type == "STATUS_UPDATE":
-        expected = len(STATUS_FIELDS) + 2  # +2 for type and schema_ver
-        if len(parts) < expected:
-            print(f"[ingest] WARNING: STATUS_UPDATE has {len(parts)} fields, expected {expected}")
-            return None
         fields = STATUS_FIELDS
-        values = parts[2: 2 + len(fields)]
     elif frame_type == "EVENT":
-        expected = len(EVENT_FIELDS) + 2
-        if len(parts) < expected:
-            print(f"[ingest] WARNING: EVENT has {len(parts)} fields, expected {expected}")
-            return None
         fields = EVENT_FIELDS
-        values = parts[2: 2 + len(fields)]
     else:
         print(f"[ingest] WARNING: Unknown frame type '{frame_type}', skipping")
         return None
+
+    values = parts[2:]
+    if len(values) < len(fields):
+        print(
+            f"[ingest] WARNING: {frame_type} has {len(parts)} fields, "
+            f"expected {len(fields) + 2}; parsing available trailing fields only"
+        )
+    values = values[:len(fields)]
 
     record: dict = {
         "type": frame_type.lower(),  # "status_update" or "event"
@@ -119,6 +117,10 @@ def parse_csv(raw: str, device_cfg: dict, session_id: str) -> dict | None:
     # Rename 'udp_fail' → 'udp_fail_count' to match API schema
     if "udp_fail" in record:
         record["udp_fail_count"] = record.pop("udp_fail")
+
+    # Rename 'tray_count' → 'trays_processed' to match API schema
+    if "tray_count" in record:
+        record["trays_processed"] = record.pop("tray_count")
 
     # Add metadata
     record["device_id"] = device_cfg["device_id"]
@@ -181,7 +183,8 @@ def main() -> None:
                           f"up={record.get('uptime_ms')}ms belt_up={record.get('belt_motor_uptime_ms')}ms "
                           f"blade_up={record.get('blade_motor_uptime_ms')}ms torque={record.get('torque_pct')}% "
                           f"faults=b{record.get('belt_fault')}/s{record.get('blade_fault')} "
-                          f"kill={record.get('kill_switch')} udp_fail={record.get('udp_fail_count')}")
+                          f"kill={record.get('kill_switch')} udp_fail={record.get('udp_fail_count')} "
+                          f"trays={record.get('trays_processed')}")
                 elif record["type"] == "event":
                     print(f"[ingest] #{count} EVENT  boot={record.get('boot_id')} seq={record.get('seq')} "
                           f"code={record.get('event_code')} value={record.get('event_value')} "

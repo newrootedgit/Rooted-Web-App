@@ -162,8 +162,17 @@ model machines {
   reboot_count            Int       @default(0)
   belt_fault_count        Int       @default(0)
   blade_fault_count       Int       @default(0)
+  tray_count              Int       @default(0)
+  last_raw_tray_count     Int       @default(0)
   last_belt_fault         Int       @default(0) @db.SmallInt
   last_blade_fault        Int       @default(0) @db.SmallInt
+  current_belt_motor_uptime_ms  BigInt  @default(0)
+  total_belt_motor_uptime_ms    BigInt  @default(0)
+  current_blade_motor_uptime_ms BigInt  @default(0)
+  total_blade_motor_uptime_ms   BigInt  @default(0)
+  last_raw_belt_motor_uptime_ms   BigInt  @default(0)
+  last_raw_blade_motor_uptime_ms  BigInt  @default(0)
+  last_motor_boot_id              BigInt?
   farms                   farms?    @relation(fields: [farm_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   tenants                 tenants?  @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   machine_telemetry       machine_telemetry[]

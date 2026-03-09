@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronUp, Trash2, Settings, Calendar, Cpu, Wifi, Power, PowerOff, RotateCcw, AlertTriangle, Timer } from 'lucide-react';
+import { ChevronDown, ChevronUp, Trash2, Settings, Calendar, Cpu, Wifi, Power, PowerOff, RotateCcw, AlertTriangle, Timer, Layers } from 'lucide-react';
 import type { Machine } from '../../../../shared';
 import { getMachineImage } from '../../utils/machine-images';
 import ChangeWifiModal from '../../wifi-provisioning/components/ChangeWifiModal';
@@ -79,6 +79,9 @@ export default function MachineCard({ machine, onDelete }: MachineCardProps) {
   })();
   const bladeFaultCountValue = parseIntegerValue(machine.bladeFaultCount) ?? 0n;
   const showBladeFaultCount = bladeFaultCountValue > 0n;
+
+  const trayCountValue = parseIntegerValue(machine.trayCount) ?? 0n;
+  const showTrayCount = trayCountValue > 0n;
 
   const bladeMotorUptimeValue = parseIntegerValue(machine.bladeMotorUptimeMs) ?? 0n;
   const showBladeMotorUptime = bladeMotorUptimeValue > 0n;
@@ -196,11 +199,20 @@ export default function MachineCard({ machine, onDelete }: MachineCardProps) {
                   </span>
                 </div>
               </div>
+              {showTrayCount && (
+                <div className="flex items-start gap-2">
+                  <Layers size={16} className="text-muted-foreground mt-0.5 flex-shrink-0" />
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Tray Count</span>
+                    <span className="text-sm text-foreground">{formatInteger(machine.trayCount)}</span>
+                  </div>
+                </div>
+              )}
               <div className="flex items-start gap-2">
                 <Timer size={16} className="text-muted-foreground mt-0.5 flex-shrink-0" />
                 <div className="flex flex-col gap-0.5">
-                  <span className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Total Uptime</span>
-                  <span className="text-sm text-foreground">{formatDurationMs(totalUptimeMs)}</span>
+                  <span className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Current Boot Uptime</span>
+                  <span className="text-sm text-foreground">{formatDurationMs(machine.currentBootUptimeMs)}</span>
                 </div>
               </div>
               {(machine.beltMotorUptimeMs != null || machine.bladeMotorUptimeMs != null) && (

@@ -40,6 +40,7 @@ export interface Machine {
   rebootCount?: number | null;
   beltFaultCount?: number | null;
   bladeFaultCount?: number | null;
+  trayCount?: number | null;
   lastBeltFault?: number | null;
   lastBladeFault?: number | null;
   beltMotorUptimeMs?: string | null;
@@ -86,4 +87,3 @@ export const updateConfigSchema = z.object({
 export const requestConfigSchema = z.object({
   machineId: z.string().uuid(),
 });
-

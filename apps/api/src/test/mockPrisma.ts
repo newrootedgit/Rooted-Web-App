@@ -252,8 +252,17 @@ export function createMockDbMachine(overrides: Partial<{
   reboot_count: number;
   belt_fault_count: number;
   blade_fault_count: number;
+  tray_count: number;
+  last_raw_tray_count: number;
   last_belt_fault: number;
   last_blade_fault: number;
+  current_belt_motor_uptime_ms: bigint;
+  total_belt_motor_uptime_ms: bigint;
+  current_blade_motor_uptime_ms: bigint;
+  total_blade_motor_uptime_ms: bigint;
+  last_raw_belt_motor_uptime_ms: bigint;
+  last_raw_blade_motor_uptime_ms: bigint;
+  last_motor_boot_id: bigint | null;
   machine_telemetry?: any[];
 }> = {}) {
   return {
@@ -274,8 +283,17 @@ export function createMockDbMachine(overrides: Partial<{
     reboot_count: overrides.reboot_count ?? 0,
     belt_fault_count: overrides.belt_fault_count ?? 0,
     blade_fault_count: overrides.blade_fault_count ?? 0,
+    tray_count: overrides.tray_count ?? 0,
+    last_raw_tray_count: overrides.last_raw_tray_count ?? 0,
     last_belt_fault: overrides.last_belt_fault ?? 0,
     last_blade_fault: overrides.last_blade_fault ?? 0,
+    current_belt_motor_uptime_ms: overrides.current_belt_motor_uptime_ms ?? BigInt(0),
+    total_belt_motor_uptime_ms: overrides.total_belt_motor_uptime_ms ?? BigInt(0),
+    current_blade_motor_uptime_ms: overrides.current_blade_motor_uptime_ms ?? BigInt(0),
+    total_blade_motor_uptime_ms: overrides.total_blade_motor_uptime_ms ?? BigInt(0),
+    last_raw_belt_motor_uptime_ms: overrides.last_raw_belt_motor_uptime_ms ?? BigInt(0),
+    last_raw_blade_motor_uptime_ms: overrides.last_raw_blade_motor_uptime_ms ?? BigInt(0),
+    last_motor_boot_id: 'last_motor_boot_id' in overrides ? overrides.last_motor_boot_id! : null,
     machine_telemetry: overrides.machine_telemetry ?? [],
   };
 }
