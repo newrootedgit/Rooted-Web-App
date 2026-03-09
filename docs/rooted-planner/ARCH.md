@@ -22,6 +22,7 @@ graph TB
     
     subgraph "Data Layer"
         DB[(PostgreSQL + RLS)]
+        TIMESCALE[(TimescaleDB)]
         FILES[Local File Storage]
     end
     
@@ -37,6 +38,7 @@ graph TB
     tRPC --> CLERK
     tRPC --> CACHE
     tRPC --> DB
+    tRPC --> TIMESCALE
     tRPC --> FILES
     EC2 --> DOCKER
     DOCKER --> tRPC
@@ -67,6 +69,7 @@ graph TB
 - **tRPC** for end-to-end type-safe API procedures
 - **Prisma ORM** for database operations
 - **PostgreSQL** with row-level security
+- **TimescaleDB** for time-series telemetry data
 - **Redis** for caching and session storage
 - **Clerk** for authentication and user management
 

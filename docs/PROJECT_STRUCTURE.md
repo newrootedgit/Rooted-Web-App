@@ -6,7 +6,7 @@ Rooted Web App is a unified application designed to host two distinct platforms:
 1. **Machine IoT** - BLE-based device provisioning for Raspberry Pi machines ✅ **IMPLEMENTED**
 2. **Rooted Planner** - Microgreen farm management ERP system 🚧 **PLANNED**
 
-The application uses a multi-tenant architecture with shared authentication (Clerk) and backend infrastructure (Fastify + tRPC + PostgreSQL). Currently, only the Machine IoT platform is fully implemented.
+The application uses a multi-tenant architecture with shared authentication (Clerk) and backend infrastructure (Fastify + tRPC + PostgreSQL/TimescaleDB). Currently, only the Machine IoT platform is fully implemented.
 
 ## Directory Structure
 
@@ -113,8 +113,9 @@ Rooted-Web-App/
 │       │   │   │   ├── middleware.ts  # Clerk JWT validation
 │       │   │   │   ├── admin.ts       # Admin authorization
 │       │   │   │   └── types.ts       # Auth types
-│       │   │   ├── db/                # Database client
-│       │   │   │   └── index.ts       # Prisma client
+            ├── db/                # Database clients
+            │   ├── index.ts       # Prisma client (PostgreSQL)
+            │   └── timescale.ts   # TimescaleDB pool (Telemetry)
 │       │   │   ├── errors/            # Error handling
 │       │   │   │   ├── base-error.ts  # Base error class
 │       │   │   │   ├── http-errors.ts # HTTP error classes
@@ -270,7 +271,7 @@ Rooted-Web-App/
 ### Rooted Planner 🚧 **NOT IMPLEMENTED**
 - **Source**: `src/planner/` (placeholder only)
 - **Route**: `/planner/*`
-- **Technology**: React + tRPC + Fastify + PostgreSQL (planned)
+- **Technology**: React + tRPC + Fastify + PostgreSQL/TimescaleDB (planned)
 - **State**: Server state via tRPC + React Query (planned)
 - **Backend**: `apps/api/src/domains/planner-domain/` (not created yet)
 - **Authentication**: Clerk (shared infrastructure ready)
@@ -413,6 +414,7 @@ docker compose -f docker/docker-compose.prod.yml up -d
 - Fastify (backend - infrastructure ready)
 - Prisma ORM (infrastructure ready)
 - PostgreSQL + RLS (infrastructure ready)
+- TimescaleDB (telemetry - infrastructure ready)
 - Clerk (authentication - infrastructure ready)
 - Redis (caching - not yet integrated)
 
@@ -424,6 +426,7 @@ docker compose -f docker/docker-compose.prod.yml up -d
 - Clerk authentication
 - Fastify + tRPC backend
 - PostgreSQL with Prisma
+- TimescaleDB (Telemetry)
 - ESLint + Prettier
 
 ## File Naming Conventions

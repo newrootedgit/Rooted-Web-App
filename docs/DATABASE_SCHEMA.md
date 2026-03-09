@@ -2,15 +2,23 @@
 
 Complete database schema for both Rooted Planner and Machine IoT platforms.
 
+## Architecture: Database Split
+
+The application uses a dual-database architecture to optimize for different data access patterns:
+
+1. **PostgreSQL (Relational)**: Stores business logic, multi-tenant hierarchy, machine registry, and farm management data. Managed via Prisma ORM.
+2. **TimescaleDB (Telemetry)**: A PostgreSQL extension optimized for time-series data. Stores high-volume machine telemetry and provides continuous aggregates for performance metrics.
+
 ## Implementation Status
 
 **✅ IMPLEMENTED & IN USE:**
-- Multi-tenant architecture (tenants, farms, farm_users)
-- Machine IoT tables (machines)
+- Multi-tenant architecture (tenants, farms, farm_users) - **PostgreSQL**
+- Machine IoT registry (machines, machine_faults) - **PostgreSQL**
+- Machine Telemetry (raw_telemetry, machine_stats) - **TimescaleDB**
 - Authentication and onboarding
 
 **🚧 DEFINED BUT NOT USED:**
-- All Rooted Planner tables (products, orders, tasks, customers, etc.)
+- All Rooted Planner tables (products, orders, tasks, customers, etc.) - **PostgreSQL**
 - These tables exist in the schema but have no application logic yet
 
 ## Multi-Tenant Architecture ✅ **IN USE**
@@ -143,7 +151,7 @@ CREATE POLICY machines_isolation ON machines
   );
 ```
 
-**Status**: ✅ Fully implemented and actively used. Machines are onboarded via BLE, registered with AWS IoT Core, and monitored for connectivity.
+**Status**: ✅ Fully implemented and actively used. Machines are onboarded via BLE, registered with AWS IoT Core, and monitored for connectivity. Relational metadata is stored in PostgreSQL.
 
 **Notes:**
 - `name` comes from BLE device name during onboarding.
@@ -153,6 +161,66 @@ CREATE POLICY machines_isolation ON machines
 - `status` is updated via periodic AWS IoT Core connectivity checks.
 - Both `tenant_id` and `farm_id` are used for multi-tenant isolation.
 - RLS policy defined but enforcement happens at application level via tRPC middleware.
+
+---
+
+## Telemetry Data (TimescaleDB) ✅ **IMPLEMENTED & IN USE**
+
+High-volume time-series data is stored in **TimescaleDB** (database: `rooted_telemetry`). This data is managed outside of Prisma using raw SQL migrations and the `pg` driver.
+
+### raw_telemetry
+The primary hypertable for all machine telemetry points. Partitioned by `received_at`.
+
+```sql
+CREATE TABLE raw_telemetry (
+    machine_id            UUID NOT NULL,
+    session_id            VARCHAR(36),
+    received_at           TIMESTAMPTZ NOT NULL,
+    type                  VARCHAR(50),
+    schema_ver            INTEGER,
+    boot_id               BIGINT,
+    seq                   INTEGER,
+    uptime_ms             BIGINT,
+    uptime_s              INTEGER,
+    delta_steps           INTEGER,
+    torque_pct            SMALLINT,
+    belt_fault            SMALLINT,
+    blade_fault           SMALLINT,
+    alert_bits            INTEGER,
+    kill_switch           SMALLINT,
+    cmd_age_ms            INTEGER,
+    udp_fail_count        INTEGER,
+    belt_motor_uptime_ms  BIGINT,
+    blade_motor_uptime_ms BIGINT,
+    event_code            VARCHAR(100),
+    event_value           INTEGER,
+    trays_processed       INTEGER
+);
+
+SELECT create_hypertable('raw_telemetry', 'received_at');
+```
+
+**Retention Policy**: Raw telemetry is retained for **90 days**.
+
+### machine_stats (Continuous Aggregate)
+Automated hourly rollups of machine performance metrics.
+
+```sql
+CREATE MATERIALIZED VIEW machine_stats
+WITH (timescaledb.continuous) AS
+SELECT
+    machine_id,
+    SUM(delta_steps)          AS total_steps,
+    MAX(uptime_ms)            AS total_uptime_ms,
+    COUNT(DISTINCT boot_id)-1 AS reboot_count,
+    SUM(trays_processed)      AS tray_count,
+    last(event_code, received_at)  FILTER (WHERE type = 'event') AS last_event_code,
+    last(received_at, received_at) FILTER (WHERE type = 'event') AS last_event_at
+FROM raw_telemetry
+GROUP BY machine_id, time_bucket('1 hour', received_at);
+```
+
+**Status**: ✅ Actively used for dashboard performance widgets and machine health monitoring.
 
 ---
 
@@ -667,10 +735,10 @@ All tables include:
 ## Implementation Status Summary
 
 ### ✅ Fully Implemented & In Use
-- `tenants` - Multi-tenant organization structure
-- `farms` - Farm locations under tenants
-- `farm_users` - User-farm relationships with roles
-- `machines` - IoT device registry with AWS IoT Core integration
+- `tenants`, `farms`, `farm_users` - Multi-tenant organization structure (**PostgreSQL**)
+- `machines`, `machine_faults` - IoT device registry (**PostgreSQL**)
+- `raw_telemetry` - Time-series telemetry hypertable (**TimescaleDB**)
+- `machine_stats` - Performance metric rollups (**TimescaleDB**)
 
 ### 🚧 Defined But Not Used (Rooted Planner)
 All Rooted Planner tables are defined in the Prisma schema but have no application logic:
