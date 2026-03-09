@@ -1,13 +1,21 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { getMachine } from '../getMachine.js';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createMockPrisma, createMockDbMachine, type MockPrismaClient } from '../../../../test/mockPrisma.js';
+import { mockTimescale } from '../../../../test/mockTimescale.js';
 import type { PrismaClient } from '../../../../generated/prisma/client.js';
+
+vi.mock('../../../../lib/db/timescale.js', () => ({
+  timescale: mockTimescale,
+}));
+
+const { getMachine } = await import('../getMachine.js');
 
 describe('getMachine', () => {
   let mockPrisma: MockPrismaClient;
 
   beforeEach(() => {
+    vi.clearAllMocks();
     mockPrisma = createMockPrisma();
+    mockTimescale.query.mockResolvedValue({ rows: [] });
   });
 
   it('should return machine with camelCase fields', async () => {

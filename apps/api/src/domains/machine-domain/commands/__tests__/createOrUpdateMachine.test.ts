@@ -51,7 +51,7 @@ describe('createOrUpdateMachine', () => {
       deviceId: 'new-device',
       currentWifiSsid: null,
       createdAt: createdMachine.created_at,
-      awsIotThingName: undefined,
+      awsIotThingName: null,
       status: null,
       lastSeenAt: null,
       totalSteps: '0',
@@ -60,8 +60,11 @@ describe('createOrUpdateMachine', () => {
       rebootCount: 0,
       beltFaultCount: 0,
       bladeFaultCount: 0,
+      trayCount: 0,
       lastBeltFault: 0,
       lastBladeFault: 0,
+      beltMotorUptimeMs: '0',
+      bladeMotorUptimeMs: '0',
     });
   });
 
@@ -185,7 +188,7 @@ describe('createOrUpdateMachine', () => {
       deviceId: 'device-456',
       currentWifiSsid: null,
       createdAt: createdAt,
-      awsIotThingName: undefined,
+      awsIotThingName: null,
       status: null,
       lastSeenAt: null,
       totalSteps: '0',
@@ -194,8 +197,11 @@ describe('createOrUpdateMachine', () => {
       rebootCount: 0,
       beltFaultCount: 0,
       bladeFaultCount: 0,
+      trayCount: 0,
       lastBeltFault: 0,
       lastBladeFault: 0,
+      beltMotorUptimeMs: '0',
+      bladeMotorUptimeMs: '0',
     });
   });
 });

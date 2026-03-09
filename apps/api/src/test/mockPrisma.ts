@@ -105,13 +105,13 @@ export type MockPrismaClient = {
     updateMany: ReturnType<typeof vi.fn>;
     count: ReturnType<typeof vi.fn>;
   };
-  machine_telemetry: {
+  machine_faults: {
     findMany: ReturnType<typeof vi.fn>;
     create: ReturnType<typeof vi.fn>;
     createMany: ReturnType<typeof vi.fn>;
+    groupBy: ReturnType<typeof vi.fn>;
   };
   $transaction: ReturnType<typeof vi.fn>;
-  $queryRawUnsafe: ReturnType<typeof vi.fn>;
 };
 
 export function createMockPrisma(): MockPrismaClient {
@@ -219,20 +219,20 @@ export function createMockPrisma(): MockPrismaClient {
       updateMany: vi.fn(),
       count: vi.fn(),
     },
-    machine_telemetry: {
+    machine_faults: {
       findMany: vi.fn().mockResolvedValue([]),
       create: vi.fn(),
       createMany: vi.fn(),
+      groupBy: vi.fn().mockResolvedValue([]),
     },
     $transaction: vi.fn((opsOrCb: unknown) =>
       Array.isArray(opsOrCb) ? Promise.all(opsOrCb) : (opsOrCb as (tx: unknown) => unknown)(mock)
     ),
-    $queryRawUnsafe: vi.fn(),
   };
   return mock;
 }
 
-// Helper to create a mock machine DB record
+// Helper to create a mock machine DB record (without aggregate columns)
 export function createMockDbMachine(overrides: Partial<{
   id: string;
   tenant_id: string | null;
@@ -244,26 +244,8 @@ export function createMockDbMachine(overrides: Partial<{
   last_seen_at: Date | null;
   current_wifi_ssid: string | null;
   created_at: Date | null;
-  // Aggregate fields
-  total_steps: bigint;
-  total_uptime_ms: bigint;
-  current_boot_id: bigint | null;
-  current_boot_uptime_ms: bigint;
-  reboot_count: number;
-  belt_fault_count: number;
-  blade_fault_count: number;
-  tray_count: number;
-  last_raw_tray_count: number;
-  last_belt_fault: number;
-  last_blade_fault: number;
-  current_belt_motor_uptime_ms: bigint;
-  total_belt_motor_uptime_ms: bigint;
-  current_blade_motor_uptime_ms: bigint;
-  total_blade_motor_uptime_ms: bigint;
-  last_raw_belt_motor_uptime_ms: bigint;
-  last_raw_blade_motor_uptime_ms: bigint;
-  last_motor_boot_id: bigint | null;
-  machine_telemetry?: any[];
+  aws_iot_thing_name: string | null;
+  machine_faults: any[];
 }> = {}) {
   return {
     id: overrides.id ?? 'machine-uuid-1',
@@ -276,25 +258,8 @@ export function createMockDbMachine(overrides: Partial<{
     last_seen_at: overrides.last_seen_at ?? null,
     current_wifi_ssid: overrides.current_wifi_ssid ?? null,
     created_at: 'created_at' in overrides ? overrides.created_at : new Date('2024-01-01'),
-    total_steps: overrides.total_steps ?? BigInt(0),
-    total_uptime_ms: overrides.total_uptime_ms ?? BigInt(0),
-    current_boot_id: 'current_boot_id' in overrides ? overrides.current_boot_id! : null,
-    current_boot_uptime_ms: overrides.current_boot_uptime_ms ?? BigInt(0),
-    reboot_count: overrides.reboot_count ?? 0,
-    belt_fault_count: overrides.belt_fault_count ?? 0,
-    blade_fault_count: overrides.blade_fault_count ?? 0,
-    tray_count: overrides.tray_count ?? 0,
-    last_raw_tray_count: overrides.last_raw_tray_count ?? 0,
-    last_belt_fault: overrides.last_belt_fault ?? 0,
-    last_blade_fault: overrides.last_blade_fault ?? 0,
-    current_belt_motor_uptime_ms: overrides.current_belt_motor_uptime_ms ?? BigInt(0),
-    total_belt_motor_uptime_ms: overrides.total_belt_motor_uptime_ms ?? BigInt(0),
-    current_blade_motor_uptime_ms: overrides.current_blade_motor_uptime_ms ?? BigInt(0),
-    total_blade_motor_uptime_ms: overrides.total_blade_motor_uptime_ms ?? BigInt(0),
-    last_raw_belt_motor_uptime_ms: overrides.last_raw_belt_motor_uptime_ms ?? BigInt(0),
-    last_raw_blade_motor_uptime_ms: overrides.last_raw_blade_motor_uptime_ms ?? BigInt(0),
-    last_motor_boot_id: 'last_motor_boot_id' in overrides ? overrides.last_motor_boot_id! : null,
-    machine_telemetry: overrides.machine_telemetry ?? [],
+    aws_iot_thing_name: overrides.aws_iot_thing_name ?? null,
+    machine_faults: overrides.machine_faults ?? [],
   };
 }
 

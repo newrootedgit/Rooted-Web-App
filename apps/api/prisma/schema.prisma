@@ -144,76 +144,39 @@ model farms {
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model machines {
-  id                 String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  tenant_id          String?   @db.Uuid
-  farm_id            String?   @db.Uuid
-  name               String    @db.VarChar(255)
-  display_name       String?   @db.VarChar(255)
-  device_id          String    @db.VarChar(255)
-  created_at         DateTime? @default(now()) @db.Timestamp(6)
-  aws_iot_thing_name      String?   @unique @db.VarChar(255)
-  status                  String?   @default("offline") @db.VarChar(50)
-  last_seen_at            DateTime? @db.Timestamp(6)
-  current_wifi_ssid       String?   @db.VarChar(255)
-  total_steps             BigInt    @default(0)
-  total_uptime_ms         BigInt    @default(0)
-  current_boot_id         BigInt?
-  current_boot_uptime_ms  BigInt    @default(0)
-  reboot_count            Int       @default(0)
-  belt_fault_count        Int       @default(0)
-  blade_fault_count       Int       @default(0)
-  tray_count              Int       @default(0)
-  last_raw_tray_count     Int       @default(0)
-  last_belt_fault         Int       @default(0) @db.SmallInt
-  last_blade_fault        Int       @default(0) @db.SmallInt
-  current_belt_motor_uptime_ms  BigInt  @default(0)
-  total_belt_motor_uptime_ms    BigInt  @default(0)
-  current_blade_motor_uptime_ms BigInt  @default(0)
-  total_blade_motor_uptime_ms   BigInt  @default(0)
-  last_raw_belt_motor_uptime_ms   BigInt  @default(0)
-  last_raw_blade_motor_uptime_ms  BigInt  @default(0)
-  last_motor_boot_id              BigInt?
-  farms                   farms?    @relation(fields: [farm_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  tenants                 tenants?  @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  machine_telemetry       machine_telemetry[]
+  id                      String            @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenant_id               String?           @db.Uuid
+  farm_id                 String?           @db.Uuid
+  name                    String            @db.VarChar(255)
+  display_name            String?           @db.VarChar(255)
+  device_id               String            @db.VarChar(255)
+  created_at              DateTime?         @default(now()) @db.Timestamp(6)
+  aws_iot_thing_name      String?           @unique @db.VarChar(255)
+  status                  String?           @default("offline") @db.VarChar(50)
+  last_seen_at            DateTime?         @db.Timestamp(6)
+  current_wifi_ssid       String?           @db.VarChar(255)
+  farms                   farms?            @relation(fields: [farm_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tenants                 tenants?          @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  machine_faults          machine_faults[]
 
   @@index([device_id], map: "idx_machines_device_id")
   @@index([farm_id], map: "idx_machines_farm_id")
   @@index([tenant_id], map: "idx_machines_tenant_id")
-
-
 }
 
-/// This model contains telemetry data from a machine (status_update and event schemas), used for monitoring and debugging.
-model machine_telemetry {
-  id              String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  machine_id      String   @db.Uuid
-  session_id      String?  @db.VarChar(36)
-  received_at     DateTime @db.Timestamp(6)
-  type            String?  @db.VarChar(50)
-  schema_ver      Int?
-  boot_id         BigInt?
-  seq             Int?
-  uptime_ms       BigInt?
-  uptime_s        Int?
-  delta_steps     Int?
-  torque_pct      Int?     @db.SmallInt
-  belt_fault      Int?     @db.SmallInt
-  blade_fault     Int?     @db.SmallInt
-  alert_bits      Int?
-  kill_switch     Int?     @db.SmallInt
-  cmd_age_ms      Int?
-  udp_fail_count  Int?
-  belt_motor_uptime_ms  BigInt?
-  blade_motor_uptime_ms BigInt?
-  event_code      String?  @db.VarChar(100)
-  event_value     Int?
-  trays_processed Int?
+/// Discrete fault events stored in RDS for quick access.
+model machine_faults {
+  id          String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  machine_id  String   @db.Uuid
+  fault_type  String   @db.VarChar(50)
+  fault_value Int
+  event_code  String?  @db.VarChar(100)
+  created_at  DateTime @default(now()) @db.Timestamp(6)
 
   machines machines @relation(fields: [machine_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  @@index([machine_id], map: "idx_machine_telemetry_machine_id")
-  @@index([session_id], map: "idx_machine_telemetry_session_id")
-  @@index([received_at], map: "idx_machine_telemetry_received_at")
+
+  @@index([machine_id], map: "idx_machine_faults_machine_id")
+  @@index([created_at], map: "idx_machine_faults_created_at")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.

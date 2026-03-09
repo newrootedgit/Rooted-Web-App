@@ -17,6 +17,24 @@ services:
       timeout: 5s
       retries: 5
 
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    container_name: rooted-timescaledb
+    environment:
+      POSTGRES_USER: rooted
+      POSTGRES_PASSWORD: rooted_dev_password
+      POSTGRES_DB: rooted_telemetry
+    ports:
+      - "5434:5432"
+    volumes:
+      - timescale_data:/var/lib/postgresql/data
+      - ./init-timescale.sql:/docker-entrypoint-initdb.d/init-timescale.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rooted -d rooted_telemetry"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   redis:
     image: redis:7-alpine
     container_name: rooted-redis
@@ -43,14 +61,18 @@ services:
       NODE_ENV: development
       PORT: 8000
       DATABASE_URL: postgresql://rooted:rooted_dev_password@postgres:5432/rooted_planner
+      TIMESCALE_DATABASE_URL: postgresql://rooted:rooted_dev_password@timescaledb:5432/rooted_telemetry
       REDIS_URL: redis://redis:6379
       AWS_REGION: us-west-2
     depends_on:
       postgres:
+        condition: service_healthy
+      timescaledb:
         condition: service_healthy
       redis:
         condition: service_healthy
 
 volumes:
   postgres_data:
+  timescale_data:
   redis_data:

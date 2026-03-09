@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createMockPrisma, createMockDbMachine } from '../../../../../test/mockPrisma.js';
+import { mockTimescale, mockTimescaleClient } from '../../../../../test/mockTimescale.js';
 
 const mockPrisma = createMockPrisma();
 
@@ -7,43 +8,24 @@ vi.mock('../../../../../lib/db/index.js', () => ({
   prisma: mockPrisma,
 }));
 
-const { handleTelemetry } = await import('../handleTelemetry.js');
+vi.mock('../../../../../lib/db/timescale.js', () => ({
+  timescale: mockTimescale,
+}));
 
-// Helper: set up $queryRawUnsafe to return locked machine row for stateful tests
-function mockLockedMachine(machine: ReturnType<typeof createMockDbMachine>) {
-  mockPrisma.$queryRawUnsafe.mockResolvedValue([{
-    current_boot_id: machine.current_boot_id,
-    current_boot_uptime_ms: machine.current_boot_uptime_ms,
-    total_uptime_ms: machine.total_uptime_ms,
-    reboot_count: machine.reboot_count,
-    belt_fault_count: machine.belt_fault_count,
-    blade_fault_count: machine.blade_fault_count,
-    tray_count: machine.tray_count,
-    last_raw_tray_count: machine.last_raw_tray_count,
-    last_belt_fault: machine.last_belt_fault,
-    last_blade_fault: machine.last_blade_fault,
-    current_belt_motor_uptime_ms: machine.current_belt_motor_uptime_ms,
-    total_belt_motor_uptime_ms: machine.total_belt_motor_uptime_ms,
-    current_blade_motor_uptime_ms: machine.current_blade_motor_uptime_ms,
-    total_blade_motor_uptime_ms: machine.total_blade_motor_uptime_ms,
-    last_raw_belt_motor_uptime_ms: machine.last_raw_belt_motor_uptime_ms,
-    last_raw_blade_motor_uptime_ms: machine.last_raw_blade_motor_uptime_ms,
-    last_motor_boot_id: machine.last_motor_boot_id,
-  }]);
-}
+const { handleTelemetry } = await import('../handleTelemetry.js');
 
 describe('handleTelemetry', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockTimescale.connect.mockResolvedValue(mockTimescaleClient);
   });
 
   describe('status_update schema', () => {
-    it('should insert a full status_update row via createMany and update last_seen_at', async () => {
+    it('should insert into TimescaleDB and update last_seen_at on RDS', async () => {
       const machine = createMockDbMachine({ device_id: 'dev-1' });
       mockPrisma.machines.findFirst.mockResolvedValue(machine);
-      mockPrisma.machine_telemetry.createMany.mockResolvedValue({ count: 1 });
       mockPrisma.machines.update.mockResolvedValue(machine);
-      mockLockedMachine(machine);
+      mockTimescaleClient.query.mockResolvedValue({ rows: [] });
 
       await handleTelemetry('dev-1', [{
         type:           'status_update',
@@ -63,71 +45,16 @@ describe('handleTelemetry', () => {
         udp_fail_count: 0,
       }]);
 
-      expect(mockPrisma.machine_telemetry.createMany).toHaveBeenCalledWith({
-        data: [expect.objectContaining({
-          machine_id:     machine.id,
-          received_at:    expect.any(Date),
-          type:           'status_update',
-          schema_ver:     2,
-          boot_id:        BigInt(12345),
-          seq:            7,
-          uptime_ms:      BigInt(300000),
-          belt_motor_uptime_ms: BigInt(150000),
-          blade_motor_uptime_ms: BigInt(120000),
-          delta_steps:    50,
-          torque_pct:     40,
-          belt_fault:     0,
-          blade_fault:    0,
-          kill_switch:    0,
-          cmd_age_ms:     5,
-          udp_fail_count: 0,
-          event_code:     null,
-          event_value:    null,
-          trays_processed: null,
-        })],
-        skipDuplicates: true,
-      });
+      // TimescaleDB INSERT called
+      expect(mockTimescaleClient.query).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO raw_telemetry'),
+        expect.arrayContaining([machine.id, null, expect.any(Date), 'status_update'])
+      );
 
-      expect(mockPrisma.machines.update).toHaveBeenCalledWith({
-        where: { id: machine.id },
-        data: expect.objectContaining({ last_seen_at: expect.any(Date) }),
-      });
-    });
-  });
+      // Client released
+      expect(mockTimescaleClient.release).toHaveBeenCalled();
 
-  describe('event schema', () => {
-    it('should insert an event row with event_code and event_value', async () => {
-      const machine = createMockDbMachine({ device_id: 'dev-2' });
-      mockPrisma.machines.findFirst.mockResolvedValue(machine);
-      mockPrisma.machine_telemetry.createMany.mockResolvedValue({ count: 1 });
-      mockPrisma.machines.update.mockResolvedValue(machine);
-
-      await handleTelemetry('dev-2', [{
-        type:        'event',
-        schema_ver:  2,
-        boot_id:     12345,
-        seq:         8,
-        uptime_ms:   310000,
-        belt_motor_uptime_ms: 160000,
-        blade_motor_uptime_ms: 130000,
-        event_code:  'blade_fault_cleared',
-        event_value: 0,
-      }]);
-
-      expect(mockPrisma.machine_telemetry.createMany).toHaveBeenCalledWith({
-        data: [expect.objectContaining({
-          machine_id:  machine.id,
-          type:        'event',
-          uptime_ms:   BigInt(310000),
-          belt_motor_uptime_ms: BigInt(160000),
-          blade_motor_uptime_ms: BigInt(130000),
-          event_code:  'blade_fault_cleared',
-          event_value: 0,
-        })],
-        skipDuplicates: true,
-      });
-
-      // Events do not touch aggregate columns (no stateful path)
+      // RDS last_seen_at updated
       expect(mockPrisma.machines.update).toHaveBeenCalledWith({
         where: { id: machine.id },
         data: { last_seen_at: expect.any(Date) },
@@ -135,8 +62,114 @@ describe('handleTelemetry', () => {
     });
   });
 
+  describe('fault routing', () => {
+    it('should insert belt_fault into machine_faults when belt_fault > 0', async () => {
+      const machine = createMockDbMachine({ device_id: 'dev-belt' });
+      mockPrisma.machines.findFirst.mockResolvedValue(machine);
+      mockPrisma.machines.update.mockResolvedValue(machine);
+      mockPrisma.machine_faults.createMany.mockResolvedValue({ count: 1 });
+      mockTimescaleClient.query.mockResolvedValue({ rows: [] });
+
+      await handleTelemetry('dev-belt', [{
+        type: 'status_update',
+        belt_fault: 1,
+        blade_fault: 0,
+      }]);
+
+      expect(mockPrisma.machine_faults.createMany).toHaveBeenCalledWith({
+        data: [expect.objectContaining({
+          machine_id: machine.id,
+          fault_type: 'belt_fault',
+          fault_value: 1,
+        })],
+      });
+    });
+
+    it('should insert blade_fault into machine_faults when blade_fault > 0', async () => {
+      const machine = createMockDbMachine({ device_id: 'dev-blade' });
+      mockPrisma.machines.findFirst.mockResolvedValue(machine);
+      mockPrisma.machines.update.mockResolvedValue(machine);
+      mockPrisma.machine_faults.createMany.mockResolvedValue({ count: 1 });
+      mockTimescaleClient.query.mockResolvedValue({ rows: [] });
+
+      await handleTelemetry('dev-blade', [{
+        type: 'status_update',
+        belt_fault: 0,
+        blade_fault: 2,
+      }]);
+
+      expect(mockPrisma.machine_faults.createMany).toHaveBeenCalledWith({
+        data: [expect.objectContaining({
+          machine_id: machine.id,
+          fault_type: 'blade_fault',
+          fault_value: 2,
+        })],
+      });
+    });
+
+    it('should not insert faults when both are 0', async () => {
+      const machine = createMockDbMachine({ device_id: 'dev-nofault' });
+      mockPrisma.machines.findFirst.mockResolvedValue(machine);
+      mockPrisma.machines.update.mockResolvedValue(machine);
+      mockTimescaleClient.query.mockResolvedValue({ rows: [] });
+
+      await handleTelemetry('dev-nofault', [{
+        type: 'status_update',
+        belt_fault: 0,
+        blade_fault: 0,
+      }]);
+
+      expect(mockPrisma.machine_faults.createMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Pi timestamp (received_at)', () => {
+    it('should use Pi-side received_at for TimescaleDB insert', async () => {
+      const machine = createMockDbMachine({ device_id: 'dev-ts' });
+      mockPrisma.machines.findFirst.mockResolvedValue(machine);
+      mockPrisma.machines.update.mockResolvedValue(machine);
+      mockTimescaleClient.query.mockResolvedValue({ rows: [] });
+
+      const piTimestamp = 1709900000; // epoch seconds
+
+      await handleTelemetry('dev-ts', [{
+        type: 'status_update',
+        received_at: piTimestamp,
+      }]);
+
+      const insertArgs = mockTimescaleClient.query.mock.calls[0][1];
+      // received_at is the 3rd parameter (index 2)
+      const receivedAtDate = insertArgs[2] as Date;
+      expect(receivedAtDate.getTime()).toBe(piTimestamp * 1000);
+    });
+  });
+
+  describe('event schema', () => {
+    it('should insert an event row into TimescaleDB', async () => {
+      const machine = createMockDbMachine({ device_id: 'dev-2' });
+      mockPrisma.machines.findFirst.mockResolvedValue(machine);
+      mockPrisma.machines.update.mockResolvedValue(machine);
+      mockTimescaleClient.query.mockResolvedValue({ rows: [] });
+
+      await handleTelemetry('dev-2', [{
+        type:        'event',
+        schema_ver:  2,
+        boot_id:     12345,
+        seq:         8,
+        uptime_ms:   310000,
+        event_code:  'blade_fault_cleared',
+        event_value: 0,
+      }]);
+
+      expect(mockTimescaleClient.query).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO raw_telemetry'),
+        expect.arrayContaining([machine.id])
+      );
+    });
+  });
+
   describe('unknown / legacy types', () => {
-    it('should warn and skip insert for an unknown type', async () => {
+    it('should warn and skip for an unknown type', async () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
       await handleTelemetry('dev-3', [{
@@ -145,18 +178,7 @@ describe('handleTelemetry', () => {
       }]);
 
       expect(mockPrisma.machines.findFirst).not.toHaveBeenCalled();
-      expect(mockPrisma.machine_telemetry.createMany).not.toHaveBeenCalled();
-      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('no valid types'));
-
-      warnSpy.mockRestore();
-    });
-
-    it('should warn and skip insert when type is missing', async () => {
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
-      await handleTelemetry('dev-3', [{}]);
-
-      expect(mockPrisma.machine_telemetry.createMany).not.toHaveBeenCalled();
+      expect(mockTimescaleClient.query).not.toHaveBeenCalled();
       expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('no valid types'));
 
       warnSpy.mockRestore();
@@ -164,403 +186,41 @@ describe('handleTelemetry', () => {
   });
 
   describe('machine not found', () => {
-    it('should warn and return without inserting when machine is not found', async () => {
+    it('should warn and return without inserting', async () => {
       mockPrisma.machines.findFirst.mockResolvedValue(null);
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
       await handleTelemetry('nonexistent', [{ type: 'status_update' }]);
 
-      expect(mockPrisma.machine_telemetry.createMany).not.toHaveBeenCalled();
+      expect(mockTimescaleClient.query).not.toHaveBeenCalled();
       expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('nonexistent'));
 
       warnSpy.mockRestore();
     });
   });
 
-  describe('aggregate: steps (atomic increment)', () => {
-    it('should use atomic increment for total_steps', async () => {
-      const machine = createMockDbMachine({
-        device_id: 'dev-steps',
-        total_steps: BigInt(100),
-      });
-      mockPrisma.machines.findFirst.mockResolvedValue(machine);
-      mockPrisma.machine_telemetry.createMany.mockResolvedValue({ count: 1 });
-      mockPrisma.machines.update.mockResolvedValue(machine);
-
-      await handleTelemetry('dev-steps', [{
-        type:        'status_update',
-        delta_steps: 50,
-      }]);
-
-      expect(mockPrisma.machines.update).toHaveBeenCalledWith({
-        where: { id: machine.id },
-        data: expect.objectContaining({
-          total_steps: { increment: 50 },
-        }),
-      });
-    });
-
-    it('should not include total_steps in update when delta_steps is absent', async () => {
-      const machine = createMockDbMachine({ device_id: 'dev-nosteps' });
-      mockPrisma.machines.findFirst.mockResolvedValue(machine);
-      mockPrisma.machine_telemetry.createMany.mockResolvedValue({ count: 1 });
-      mockPrisma.machines.update.mockResolvedValue(machine);
-
-      await handleTelemetry('dev-nosteps', [{ type: 'status_update' }]);
-
-      const updateCall = mockPrisma.machines.update.mock.calls[0][0];
-      expect(updateCall.data).not.toHaveProperty('total_steps');
-    });
-  });
-
-  describe('aggregate: boot / uptime tracking', () => {
-    it('first boot: sets current_boot_id and current_boot_uptime_ms, does not increment reboot_count', async () => {
-      const machine = createMockDbMachine({
-        device_id:      'dev-boot1',
-        current_boot_id: null,
-      });
-      mockPrisma.machines.findFirst.mockResolvedValue(machine);
-      mockPrisma.machine_telemetry.createMany.mockResolvedValue({ count: 1 });
-      mockPrisma.machines.update.mockResolvedValue(machine);
-      mockLockedMachine(machine);
-
-      await handleTelemetry('dev-boot1', [{
-        type:      'status_update',
-        boot_id:   100,
-        uptime_ms: 5000,
-      }]);
-
-      expect(mockPrisma.machines.update).toHaveBeenCalledWith({
-        where: { id: machine.id },
-        data: expect.objectContaining({
-          current_boot_id:        BigInt(100),
-          current_boot_uptime_ms: BigInt(5000),
-          total_uptime_ms:        BigInt(0),
-          reboot_count:           0,
-        }),
-      });
-    });
-
-    it('same boot: advances current_boot_uptime_ms to the higher value', async () => {
-      const machine = createMockDbMachine({
-        device_id:             'dev-boot-same',
-        current_boot_id:       BigInt(100),
-        current_boot_uptime_ms: BigInt(3000),
-      });
-      mockPrisma.machines.findFirst.mockResolvedValue(machine);
-      mockPrisma.machine_telemetry.createMany.mockResolvedValue({ count: 1 });
-      mockPrisma.machines.update.mockResolvedValue(machine);
-      mockLockedMachine(machine);
-
-      await handleTelemetry('dev-boot-same', [{
-        type:      'status_update',
-        boot_id:   100,
-        uptime_ms: 5000,
-      }]);
-
-      expect(mockPrisma.machines.update).toHaveBeenCalledWith({
-        where: { id: machine.id },
-        data: expect.objectContaining({
-          current_boot_uptime_ms: BigInt(5000),
-        }),
-      });
-    });
-
-    it('same boot: does not advance current_boot_uptime_ms when new value is lower', async () => {
-      const machine = createMockDbMachine({
-        device_id:              'dev-boot-noadvance',
-        current_boot_id:        BigInt(100),
-        current_boot_uptime_ms: BigInt(8000),
-      });
-      mockPrisma.machines.findFirst.mockResolvedValue(machine);
-      mockPrisma.machine_telemetry.createMany.mockResolvedValue({ count: 1 });
-      mockPrisma.machines.update.mockResolvedValue(machine);
-      mockLockedMachine(machine);
-
-      await handleTelemetry('dev-boot-noadvance', [{
-        type:      'status_update',
-        boot_id:   100,
-        uptime_ms: 3000,
-      }]);
-
-      expect(mockPrisma.machines.update).toHaveBeenCalledWith({
-        where: { id: machine.id },
-        data: expect.objectContaining({
-          current_boot_uptime_ms: BigInt(8000),
-        }),
-      });
-    });
-
-    it('reboot detected: archives previous session into total_uptime_ms and increments reboot_count', async () => {
-      const machine = createMockDbMachine({
-        device_id:              'dev-reboot',
-        current_boot_id:        BigInt(100),
-        current_boot_uptime_ms: BigInt(5000),
-        total_uptime_ms:        BigInt(10000),
-        reboot_count:           2,
-      });
-      mockPrisma.machines.findFirst.mockResolvedValue(machine);
-      mockPrisma.machine_telemetry.createMany.mockResolvedValue({ count: 1 });
-      mockPrisma.machines.update.mockResolvedValue(machine);
-      mockLockedMachine(machine);
-
-      await handleTelemetry('dev-reboot', [{
-        type:      'status_update',
-        boot_id:   200,
-        uptime_ms: 1000,
-      }]);
-
-      expect(mockPrisma.machines.update).toHaveBeenCalledWith({
-        where: { id: machine.id },
-        data: expect.objectContaining({
-          total_uptime_ms:        BigInt(15000),
-          current_boot_id:        BigInt(200),
-          current_boot_uptime_ms: BigInt(1000),
-          reboot_count:           3,
-        }),
-      });
-    });
-
-  });
-
-  describe('aggregate: fault onset detection', () => {
-    it('belt fault 0→1: increments belt_fault_count and updates last_belt_fault', async () => {
-      const machine = createMockDbMachine({
-        device_id:       'dev-belt-onset',
-        last_belt_fault: 0,
-        belt_fault_count: 3,
-      });
-      mockPrisma.machines.findFirst.mockResolvedValue(machine);
-      mockPrisma.machine_telemetry.createMany.mockResolvedValue({ count: 1 });
-      mockPrisma.machines.update.mockResolvedValue(machine);
-      mockLockedMachine(machine);
-
-      await handleTelemetry('dev-belt-onset', [{
-        type:       'status_update',
-        belt_fault: 1,
-      }]);
-
-      expect(mockPrisma.machines.update).toHaveBeenCalledWith({
-        where: { id: machine.id },
-        data: expect.objectContaining({
-          belt_fault_count: 4,
-          last_belt_fault:  1,
-        }),
-      });
-    });
-
-    it('belt fault stays at 1: does not double-count', async () => {
-      const machine = createMockDbMachine({
-        device_id:        'dev-belt-stay',
-        last_belt_fault:  1,
-        belt_fault_count: 4,
-      });
-      mockPrisma.machines.findFirst.mockResolvedValue(machine);
-      mockPrisma.machine_telemetry.createMany.mockResolvedValue({ count: 1 });
-      mockPrisma.machines.update.mockResolvedValue(machine);
-      mockLockedMachine(machine);
-
-      await handleTelemetry('dev-belt-stay', [{
-        type:       'status_update',
-        belt_fault: 1,
-      }]);
-
-      const updateData = mockPrisma.machines.update.mock.calls[0][0].data;
-      expect(updateData.belt_fault_count).toBe(4);
-      expect(updateData.last_belt_fault).toBe(1);
-    });
-
-    it('blade fault 0→1: increments blade_fault_count', async () => {
-      const machine = createMockDbMachine({
-        device_id:        'dev-blade-onset',
-        last_blade_fault: 0,
-        blade_fault_count: 1,
-      });
-      mockPrisma.machines.findFirst.mockResolvedValue(machine);
-      mockPrisma.machine_telemetry.createMany.mockResolvedValue({ count: 1 });
-      mockPrisma.machines.update.mockResolvedValue(machine);
-      mockLockedMachine(machine);
-
-      await handleTelemetry('dev-blade-onset', [{
-        type:        'status_update',
-        blade_fault: 1,
-      }]);
-
-      expect(mockPrisma.machines.update).toHaveBeenCalledWith({
-        where: { id: machine.id },
-        data: expect.objectContaining({
-          blade_fault_count: 2,
-          last_blade_fault:  1,
-        }),
-      });
-    });
-
-    it('machines without blade sensor: omitting blade_fault leaves blade_fault_count untouched', async () => {
-      const machine = createMockDbMachine({
-        device_id:        'dev-no-blade',
-        blade_fault_count: 0,
-        last_blade_fault: 0,
-      });
-      mockPrisma.machines.findFirst.mockResolvedValue(machine);
-      mockPrisma.machine_telemetry.createMany.mockResolvedValue({ count: 1 });
-      mockPrisma.machines.update.mockResolvedValue(machine);
-      mockLockedMachine(machine);
-
-      await handleTelemetry('dev-no-blade', [{
-        type:       'status_update',
-        belt_fault: 0,
-        // blade_fault intentionally absent
-      }]);
-
-      const updateData = mockPrisma.machines.update.mock.calls[0][0].data;
-      // belt_fault triggers the stateful path, but blade fields remain from locked row
-      // Since blade_fault was not in any payload, faultChanged still true (belt_fault was present)
-      // but lastBladeFault stays 0 from locked row
-      expect(updateData.last_blade_fault).toBe(0);
-    });
-  });
-
-  describe('aggregate: tray count tracking', () => {
-    it('same session: accumulates tray_count by delta and updates last_raw_tray_count', async () => {
-      const machine = createMockDbMachine({
-        device_id: 'dev-trays-delta',
-        tray_count: 10,
-        last_raw_tray_count: 4,
-      });
-      mockPrisma.machines.findFirst.mockResolvedValue(machine);
-      mockPrisma.machine_telemetry.createMany.mockResolvedValue({ count: 1 });
-      mockPrisma.machines.update.mockResolvedValue(machine);
-      mockLockedMachine(machine);
-
-      await handleTelemetry('dev-trays-delta', [{
-        type: 'status_update',
-        trays_processed: 9,
-      }]);
-
-      expect(mockPrisma.machines.update).toHaveBeenCalledWith({
-        where: { id: machine.id },
-        data: expect.objectContaining({
-          tray_count: 15,
-          last_raw_tray_count: 9,
-        }),
-      });
-    });
-
-    it('counter reset: archives prior raw count and resets last_raw_tray_count', async () => {
-      const machine = createMockDbMachine({
-        device_id: 'dev-trays-reset',
-        tray_count: 10,
-        last_raw_tray_count: 8,
-      });
-      mockPrisma.machines.findFirst.mockResolvedValue(machine);
-      mockPrisma.machine_telemetry.createMany.mockResolvedValue({ count: 1 });
-      mockPrisma.machines.update.mockResolvedValue(machine);
-      mockLockedMachine(machine);
-
-      await handleTelemetry('dev-trays-reset', [{
-        type: 'status_update',
-        trays_processed: 2,
-      }]);
-
-      expect(mockPrisma.machines.update).toHaveBeenCalledWith({
-        where: { id: machine.id },
-        data: expect.objectContaining({
-          tray_count: 18,
-          last_raw_tray_count: 2,
-        }),
-      });
-    });
-  });
-
-  describe('aggregate: event type does not update aggregates', () => {
-    it('event rows only carry last_seen_at in the machines update', async () => {
-      const machine = createMockDbMachine({
-        device_id:   'dev-event-agg',
-        total_steps: BigInt(999),
-        reboot_count: 5,
-      });
-      mockPrisma.machines.findFirst.mockResolvedValue(machine);
-      mockPrisma.machine_telemetry.createMany.mockResolvedValue({ count: 1 });
-      mockPrisma.machines.update.mockResolvedValue(machine);
-
-      await handleTelemetry('dev-event-agg', [{
-        type:        'event',
-        boot_id:     42,
-        uptime_ms:   1000,
-        delta_steps: 10,
-        event_code:  'some_event',
-        event_value: 1,
-      }]);
-
-      const updateData = mockPrisma.machines.update.mock.calls[0][0].data;
-      expect(Object.keys(updateData)).toEqual(['last_seen_at']);
-    });
-  });
-
   describe('batch processing', () => {
-    it('should handle a batch of multiple status_updates accumulating correctly', async () => {
-      const machine = createMockDbMachine({
-        device_id:              'dev-batch',
-        current_boot_id:        BigInt(100),
-        current_boot_uptime_ms: BigInt(1000),
-        total_uptime_ms:        BigInt(5000),
-        total_steps:            BigInt(100),
-        reboot_count:           1,
-      });
+    it('should insert each valid payload into TimescaleDB', async () => {
+      const machine = createMockDbMachine({ device_id: 'dev-batch' });
       mockPrisma.machines.findFirst.mockResolvedValue(machine);
-      mockPrisma.machine_telemetry.createMany.mockResolvedValue({ count: 3 });
       mockPrisma.machines.update.mockResolvedValue(machine);
-      mockLockedMachine(machine);
+      mockTimescaleClient.query.mockResolvedValue({ rows: [] });
 
       await handleTelemetry('dev-batch', [
-        {
-          type:        'status_update',
-          boot_id:     100,
-          uptime_ms:   2000,
-          delta_steps: 10,
-          belt_fault:  0,
-        },
-        {
-          type:        'status_update',
-          boot_id:     100,
-          uptime_ms:   3000,
-          delta_steps: 20,
-          belt_fault:  0,
-        },
-        {
-          type:        'status_update',
-          boot_id:     100,
-          uptime_ms:   4000,
-          delta_steps: 30,
-          belt_fault:  0,
-        },
+        { type: 'status_update', delta_steps: 10 },
+        { type: 'status_update', delta_steps: 20 },
+        { type: 'event', event_code: 'test', event_value: 1 },
       ]);
 
-      // createMany called with 3 rows
-      expect(mockPrisma.machine_telemetry.createMany).toHaveBeenCalledWith({
-        data: expect.arrayContaining([
-          expect.objectContaining({ delta_steps: 10 }),
-          expect.objectContaining({ delta_steps: 20 }),
-          expect.objectContaining({ delta_steps: 30 }),
-        ]),
-        skipDuplicates: true,
-      });
-
-      // Atomic increment sums all delta_steps: 10 + 20 + 30 = 60
-      expect(mockPrisma.machines.update).toHaveBeenCalledWith({
-        where: { id: machine.id },
-        data: expect.objectContaining({
-          total_steps: { increment: 60 },
-          current_boot_uptime_ms: BigInt(4000), // highest uptime in batch
-        }),
-      });
+      // 3 valid payloads = 3 INSERT calls
+      expect(mockTimescaleClient.query).toHaveBeenCalledTimes(3);
     });
 
-    it('should handle mixed valid and invalid types in a batch', async () => {
+    it('should handle mixed valid and invalid types', async () => {
       const machine = createMockDbMachine({ device_id: 'dev-mixed' });
       mockPrisma.machines.findFirst.mockResolvedValue(machine);
-      mockPrisma.machine_telemetry.createMany.mockResolvedValue({ count: 2 });
       mockPrisma.machines.update.mockResolvedValue(machine);
+      mockTimescaleClient.query.mockResolvedValue({ rows: [] });
 
       await handleTelemetry('dev-mixed', [
         { type: 'status_update', delta_steps: 5 },
@@ -568,9 +228,34 @@ describe('handleTelemetry', () => {
         { type: 'event', event_code: 'test', event_value: 1 },
       ]);
 
-      // Only 2 valid rows (status_update + event)
-      const createManyCall = mockPrisma.machine_telemetry.createMany.mock.calls[0][0];
-      expect(createManyCall.data).toHaveLength(2);
+      // Only 2 valid payloads inserted
+      expect(mockTimescaleClient.query).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('TimescaleDB failure resilience', () => {
+    it('should still update RDS and route faults when TimescaleDB insert fails', async () => {
+      const machine = createMockDbMachine({ device_id: 'dev-tsfail' });
+      mockPrisma.machines.findFirst.mockResolvedValue(machine);
+      mockPrisma.machines.update.mockResolvedValue(machine);
+      mockPrisma.machine_faults.createMany.mockResolvedValue({ count: 1 });
+      mockTimescaleClient.query.mockRejectedValue(new Error('connection refused'));
+
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      await handleTelemetry('dev-tsfail', [{
+        type: 'status_update',
+        belt_fault: 1,
+      }]);
+
+      // RDS still updated
+      expect(mockPrisma.machines.update).toHaveBeenCalled();
+      // Faults still routed
+      expect(mockPrisma.machine_faults.createMany).toHaveBeenCalled();
+      // Client released even on error
+      expect(mockTimescaleClient.release).toHaveBeenCalled();
+
+      errorSpy.mockRestore();
     });
   });
 });

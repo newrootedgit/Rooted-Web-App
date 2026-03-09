@@ -21,16 +21,32 @@ function bufferTelemetry(deviceId: string, payloads: TelemetryPayload[]): void {
   telemetryBuffers.set(deviceId, buffer);
 }
 
-function flushAllTelemetry(): void {
-  for (const [deviceId, batch] of telemetryBuffers) {
-    if (batch.length > 0) {
-      console.log(`[MQTT] Flushing ${batch.length} telemetry events for ${deviceId}`);
-      handleTelemetry(deviceId, batch).catch((err) => {
-        console.error('[MQTT] Error handling telemetry:', err);
-      });
-    }
+let flushing = false;
+
+async function flushAllTelemetry(): Promise<void> {
+  if (flushing) {
+    console.warn('[MQTT] Previous flush still running, skipping this interval');
+    return;
   }
-  telemetryBuffers.clear();
+  flushing = true;
+  try {
+    // Snapshot and clear buffer atomically to avoid re-processing
+    const snapshot = new Map(telemetryBuffers);
+    telemetryBuffers.clear();
+
+    for (const [deviceId, batch] of snapshot) {
+      if (batch.length > 0) {
+        console.log(`[MQTT] Flushing ${batch.length} telemetry events for ${deviceId}`);
+        try {
+          await handleTelemetry(deviceId, batch);
+        } catch (err) {
+          console.error('[MQTT] Error handling telemetry:', err);
+        }
+      }
+    }
+  } finally {
+    flushing = false;
+  }
 }
 
 function startTelemetryFlushInterval(): void {

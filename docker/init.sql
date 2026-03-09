@@ -80,16 +80,7 @@ CREATE TABLE "machines" (
   "aws_iot_thing_name"      VARCHAR(255),
   "status"                  VARCHAR(50) DEFAULT 'offline',
   "last_seen_at"            TIMESTAMP(6),
-  "current_wifi_ssid"       VARCHAR(255),
-  "total_steps"             BIGINT  NOT NULL DEFAULT 0,
-  "total_uptime_ms"         BIGINT  NOT NULL DEFAULT 0,
-  "current_boot_id"         BIGINT,
-  "current_boot_uptime_ms"  BIGINT  NOT NULL DEFAULT 0,
-  "reboot_count"            INTEGER NOT NULL DEFAULT 0,
-  "belt_fault_count"        INTEGER NOT NULL DEFAULT 0,
-  "blade_fault_count"       INTEGER NOT NULL DEFAULT 0,
-  "last_belt_fault"         SMALLINT NOT NULL DEFAULT 0,
-  "last_blade_fault"        SMALLINT NOT NULL DEFAULT 0
+  "current_wifi_ssid"       VARCHAR(255)
 );
 
 CREATE UNIQUE INDEX "machines_aws_iot_thing_name_key" ON "machines"("aws_iot_thing_name");
@@ -98,35 +89,20 @@ CREATE INDEX "idx_machines_farm_id" ON "machines"("farm_id");
 CREATE INDEX "idx_machines_tenant_id" ON "machines"("tenant_id");
 
 -- ============================================
--- Machine Telemetry
+-- Machine Faults (discrete fault events in RDS)
 -- ============================================
 
-CREATE TABLE "machine_telemetry" (
-  "id"             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  "machine_id"     UUID NOT NULL REFERENCES "machines"("id") ON DELETE CASCADE,
-  "session_id"     VARCHAR(36),
-  "received_at"    TIMESTAMP(6) NOT NULL,
-  "type"           VARCHAR(50),
-  "schema_ver"     INTEGER,
-  "boot_id"        BIGINT,
-  "seq"            INTEGER,
-  "uptime_ms"      BIGINT,
-  "uptime_s"       INTEGER,
-  "delta_steps"    INTEGER,
-  "torque_pct"     SMALLINT,
-  "belt_fault"     SMALLINT,
-  "blade_fault"    SMALLINT,
-  "alert_bits"     INTEGER,
-  "kill_switch"    SMALLINT,
-  "cmd_age_ms"     INTEGER,
-  "udp_fail_count" INTEGER,
-  "event_code"     VARCHAR(100),
-  "event_value"    INTEGER
+CREATE TABLE "machine_faults" (
+  "id"          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  "machine_id"  UUID NOT NULL REFERENCES "machines"("id") ON DELETE CASCADE,
+  "fault_type"  VARCHAR(50) NOT NULL,
+  "fault_value" INTEGER NOT NULL,
+  "event_code"  VARCHAR(100),
+  "created_at"  TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX "idx_machine_telemetry_machine_id" ON "machine_telemetry"("machine_id");
-CREATE INDEX "idx_machine_telemetry_session_id" ON "machine_telemetry"("session_id");
-CREATE INDEX "idx_machine_telemetry_received_at" ON "machine_telemetry"("received_at");
+CREATE INDEX "idx_machine_faults_machine_id" ON "machine_faults"("machine_id");
+CREATE INDEX "idx_machine_faults_created_at" ON "machine_faults"("created_at");
 
 -- ============================================
 -- Products & Production

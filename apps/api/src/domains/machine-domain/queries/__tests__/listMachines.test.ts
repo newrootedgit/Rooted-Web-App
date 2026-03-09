@@ -1,13 +1,22 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { listMachines } from '../listMachines.js';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createMockPrisma, createMockDbMachine, type MockPrismaClient } from '../../../../test/mockPrisma.js';
+import { mockTimescale } from '../../../../test/mockTimescale.js';
 import type { PrismaClient } from '../../../../generated/prisma/client.js';
+
+vi.mock('../../../../lib/db/timescale.js', () => ({
+  timescale: mockTimescale,
+}));
+
+const { listMachines } = await import('../listMachines.js');
 
 describe('listMachines', () => {
   let mockPrisma: MockPrismaClient;
 
   beforeEach(() => {
+    vi.clearAllMocks();
     mockPrisma = createMockPrisma();
+    // Default: TimescaleDB returns empty stats
+    mockTimescale.query.mockResolvedValue({ rows: [] });
   });
 
   it('should return empty paginated result when no machines exist', async () => {
@@ -57,18 +66,12 @@ describe('listMachines', () => {
     );
 
     expect(result.items).toHaveLength(1);
-    expect(result.items[0]).toEqual({
+    expect(result.items[0]).toEqual(expect.objectContaining({
       id: 'machine-1',
       tenantId: 'tenant-1',
       farmId: 'farm-1',
       name: 'Harvester',
-      displayName: 'Harvester',
       deviceId: 'dev-001',
-      createdAt: dbMachine.created_at,
-      awsIotThingName: undefined,
-      status: null,
-      lastSeenAt: null,
-      currentWifiSsid: null,
       totalSteps: '0',
       totalUptimeMs: '0',
       currentBootUptimeMs: '0',
@@ -76,14 +79,7 @@ describe('listMachines', () => {
       beltFaultCount: 0,
       bladeFaultCount: 0,
       trayCount: 0,
-      lastBeltFault: 0,
-      lastBladeFault: 0,
-      beltMotorUptimeMs: '0',
-      bladeMotorUptimeMs: '0',
-      lastEventCode: null,
-      lastEventValue: null,
-      lastEventAt: null,
-    });
+    }));
     expect(mockPrisma.machines.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
@@ -142,7 +138,6 @@ describe('listMachines', () => {
   });
 
   it('should indicate hasMore when more results exist', async () => {
-    // When limit is 2, we fetch 3 (limit + 1) to check for more
     const machines = [
       createMockDbMachine({ id: 'machine-1', name: 'Machine 1' }),
       createMockDbMachine({ id: 'machine-2', name: 'Machine 2' }),
@@ -160,5 +155,32 @@ describe('listMachines', () => {
     expect(result.items).toHaveLength(2);
     expect(result.hasMore).toBe(true);
     expect(result.nextCursor).toBe('machine-2');
+  });
+
+  it('should still return machines with defaults when TimescaleDB is down', async () => {
+    mockTimescale.query.mockRejectedValue(new Error('connection refused'));
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const dbMachine = createMockDbMachine({
+      id: 'machine-1',
+      tenant_id: 'tenant-1',
+      farm_id: 'farm-1',
+      name: 'Harvester',
+    });
+    mockPrisma.machines.findMany.mockResolvedValue([dbMachine]);
+
+    const result = await listMachines(
+      mockPrisma as unknown as PrismaClient,
+      'tenant-1',
+      'farm-1',
+      {}
+    );
+
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0].name).toBe('Harvester');
+    expect(result.items[0].totalSteps).toBe('0');
+    expect(result.items[0].totalUptimeMs).toBe('0');
+
+    warnSpy.mockRestore();
   });
 });

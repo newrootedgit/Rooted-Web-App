@@ -32,16 +32,19 @@ jobs:
       - name: Generate Prisma Client (API)
         env:
           DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
+          TIMESCALE_DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
         run: cd apps/api && pnpm exec prisma generate
 
       - name: Type-check Root/Frontend
         env:
           DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
+          TIMESCALE_DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
         run: pnpm exec tsc
 
       - name: Type-check API
         env:
           DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
+          TIMESCALE_DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
         run: cd apps/api && pnpm exec tsc
 
   security:
@@ -88,6 +91,7 @@ jobs:
       - name: Generate Prisma Client
         env:
           DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
+          TIMESCALE_DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
         run: cd apps/api && pnpm exec prisma generate
 
       - name: Run API Tests
@@ -115,14 +119,17 @@ jobs:
       - name: Generate Prisma Client (API)
         env:
           DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
+          TIMESCALE_DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
         run: cd apps/api && pnpm exec prisma generate
 
       - name: Build Frontend
         env:
           DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
+          TIMESCALE_DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
         run: pnpm build
 
       - name: Build API
         env:
           DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
+          TIMESCALE_DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
         run: cd apps/api && pnpm build

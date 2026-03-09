@@ -1,0 +1,144 @@
+import { timescale } from '../../../lib/db/timescale.js';
+import type { Machine } from '../types.js';
+
+interface DbMachineRow {
+  id: string;
+  tenant_id: string | null;
+  farm_id: string | null;
+  name: string;
+  display_name: string | null;
+  device_id: string;
+  created_at: Date | null;
+  aws_iot_thing_name: string | null;
+  status: string | null;
+  last_seen_at: Date | null;
+  current_wifi_ssid: string | null;
+  machine_faults?: Array<{
+    fault_type: string;
+    created_at: Date;
+  }>;
+}
+
+interface TimescaleStatsRow {
+  machine_id: string;
+  total_steps: string;
+  total_uptime_ms: string;
+  current_boot_uptime_ms: string;
+  reboot_count: string;
+  tray_count: string;
+  belt_motor_uptime_ms: string;
+  blade_motor_uptime_ms: string;
+  last_event_code: string | null;
+  last_event_value: number | null;
+  last_event_at: Date | null;
+}
+
+function mapBaseFields(m: DbMachineRow): Machine {
+  return {
+    id: m.id,
+    tenantId: m.tenant_id,
+    farmId: m.farm_id,
+    name: m.name,
+    displayName: m.display_name,
+    deviceId: m.device_id,
+    createdAt: m.created_at,
+    awsIotThingName: m.aws_iot_thing_name,
+    status: m.status as 'online' | 'offline' | undefined,
+    lastSeenAt: m.last_seen_at,
+    currentWifiSsid: m.current_wifi_ssid,
+    // Defaults — overridden by TimescaleDB stats when available
+    totalSteps: '0',
+    totalUptimeMs: '0',
+    currentBootUptimeMs: '0',
+    rebootCount: 0,
+    beltFaultCount: 0,
+    bladeFaultCount: 0,
+    trayCount: 0,
+    lastBeltFault: 0,
+    lastBladeFault: 0,
+    beltMotorUptimeMs: '0',
+    bladeMotorUptimeMs: '0',
+    lastEventCode: null,
+    lastEventValue: null,
+    lastEventAt: null,
+  };
+}
+
+export async function enrichMachinesWithTelemetry(
+  machines: DbMachineRow[]
+): Promise<Machine[]> {
+  if (machines.length === 0) return [];
+
+  const machineIds = machines.map((m) => m.id);
+
+  // Count faults from RDS
+  const faultCounts = new Map<string, { belt: number; blade: number; lastBelt: number; lastBlade: number }>();
+  for (const m of machines) {
+    const faults = m.machine_faults ?? [];
+    const beltFaults = faults.filter((f) => f.fault_type === 'belt_fault');
+    const bladeFaults = faults.filter((f) => f.fault_type === 'blade_fault');
+    faultCounts.set(m.id, {
+      belt: beltFaults.length,
+      blade: bladeFaults.length,
+      lastBelt: beltFaults.length > 0 ? 1 : 0,
+      lastBlade: bladeFaults.length > 0 ? 1 : 0,
+    });
+  }
+
+  // Query TimescaleDB for aggregate stats
+  let statsMap = new Map<string, TimescaleStatsRow>();
+  if (timescale) {
+    try {
+      const result = await timescale.query<TimescaleStatsRow>(
+        `SELECT
+           machine_id,
+           COALESCE(total_steps, 0)::text              AS total_steps,
+           COALESCE(total_uptime_ms, 0)::text           AS total_uptime_ms,
+           COALESCE(current_boot_uptime_ms, 0)::text    AS current_boot_uptime_ms,
+           COALESCE(reboot_count, 0)::text               AS reboot_count,
+           COALESCE(tray_count, 0)::text                 AS tray_count,
+           COALESCE(belt_motor_uptime_ms, 0)::text       AS belt_motor_uptime_ms,
+           COALESCE(blade_motor_uptime_ms, 0)::text      AS blade_motor_uptime_ms,
+           last_event_code,
+           last_event_value,
+           last_event_at
+         FROM machine_stats
+         WHERE machine_id = ANY($1::uuid[])`,
+        [machineIds]
+      );
+      for (const row of result.rows) {
+        statsMap.set(row.machine_id, row);
+      }
+    } catch (err) {
+      console.warn('[TimescaleDB] Failed to fetch stats, returning defaults:', err);
+    }
+  }
+
+  return machines.map((m) => {
+    const base = mapBaseFields(m);
+    const stats = statsMap.get(m.id);
+    const faults = faultCounts.get(m.id);
+
+    if (stats) {
+      base.totalSteps = stats.total_steps;
+      base.totalUptimeMs = stats.total_uptime_ms;
+      base.currentBootUptimeMs = stats.current_boot_uptime_ms;
+      base.rebootCount = parseInt(stats.reboot_count, 10);
+      base.trayCount = parseInt(stats.tray_count, 10);
+      base.beltMotorUptimeMs = stats.belt_motor_uptime_ms;
+      base.bladeMotorUptimeMs = stats.blade_motor_uptime_ms;
+      base.lastEventCode = stats.last_event_code;
+      base.lastEventValue = stats.last_event_value;
+      base.lastEventAt = stats.last_event_at;
+    }
+
+    if (faults) {
+      base.beltFaultCount = faults.belt;
+      base.bladeFaultCount = faults.blade;
+      base.lastBeltFault = faults.lastBelt;
+      base.lastBladeFault = faults.lastBlade;
+    }
+
+    return base;
+  });
+}
