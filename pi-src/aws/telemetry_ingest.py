@@ -48,8 +48,14 @@ EVENT_FIELDS = [
     "alert_bits", "kill_switch", "cmd_age_ms", "udp_fail",
 ]
 
+FAULT_FIELDS = [
+    "boot_id", "seq", "uptime_ms",
+    "motor", "fault_type", "torque_pct",
+    "belt_motor_uptime_ms", "blade_motor_uptime_ms",
+]
+
 # Fields that stay as strings (everything else is parsed as int)
-STRING_FIELDS = {"event_code"}
+STRING_FIELDS = {"event_code", "fault_type", "motor"}
 
 
 # ---------------------------------------------------------------------------
@@ -86,6 +92,8 @@ def parse_csv(raw: str, device_cfg: dict, session_id: str) -> dict | None:
         fields = STATUS_FIELDS
     elif frame_type == "EVENT":
         fields = EVENT_FIELDS
+    elif frame_type == "FAULT":
+        fields = FAULT_FIELDS
     else:
         print(f"[ingest] WARNING: Unknown frame type '{frame_type}', skipping")
         return None
@@ -99,7 +107,7 @@ def parse_csv(raw: str, device_cfg: dict, session_id: str) -> dict | None:
     values = values[:len(fields)]
 
     record: dict = {
-        "type": frame_type.lower(),  # "status_update" or "event"
+        "type": frame_type.lower(),  # "status_update", "event", or "fault"
         "schema_ver": _safe_int(schema_ver),
     }
 

@@ -63,11 +63,10 @@ describe('handleTelemetry', () => {
   });
 
   describe('fault routing', () => {
-    it('should insert belt_fault into machine_faults when belt_fault > 0', async () => {
+    it('should NOT create fault rows from STATUS_UPDATE with belt_fault > 0', async () => {
       const machine = createMockDbMachine({ device_id: 'dev-belt' });
       mockPrisma.machines.findFirst.mockResolvedValue(machine);
       mockPrisma.machines.update.mockResolvedValue(machine);
-      mockPrisma.machine_faults.createMany.mockResolvedValue({ count: 1 });
       mockTimescaleClient.query.mockResolvedValue({ rows: [] });
 
       await handleTelemetry('dev-belt', [{
@@ -76,20 +75,13 @@ describe('handleTelemetry', () => {
         blade_fault: 0,
       }]);
 
-      expect(mockPrisma.machine_faults.createMany).toHaveBeenCalledWith({
-        data: [expect.objectContaining({
-          machine_id: machine.id,
-          fault_type: 'belt_fault',
-          fault_value: 1,
-        })],
-      });
+      expect(mockPrisma.machine_faults.createMany).not.toHaveBeenCalled();
     });
 
-    it('should insert blade_fault into machine_faults when blade_fault > 0', async () => {
+    it('should NOT create fault rows from STATUS_UPDATE with blade_fault > 0', async () => {
       const machine = createMockDbMachine({ device_id: 'dev-blade' });
       mockPrisma.machines.findFirst.mockResolvedValue(machine);
       mockPrisma.machines.update.mockResolvedValue(machine);
-      mockPrisma.machine_faults.createMany.mockResolvedValue({ count: 1 });
       mockTimescaleClient.query.mockResolvedValue({ rows: [] });
 
       await handleTelemetry('dev-blade', [{
@@ -98,13 +90,7 @@ describe('handleTelemetry', () => {
         blade_fault: 2,
       }]);
 
-      expect(mockPrisma.machine_faults.createMany).toHaveBeenCalledWith({
-        data: [expect.objectContaining({
-          machine_id: machine.id,
-          fault_type: 'blade_fault',
-          fault_value: 2,
-        })],
-      });
+      expect(mockPrisma.machine_faults.createMany).not.toHaveBeenCalled();
     });
 
     it('should not insert faults when both are 0', async () => {
@@ -117,6 +103,90 @@ describe('handleTelemetry', () => {
         type: 'status_update',
         belt_fault: 0,
         blade_fault: 0,
+      }]);
+
+      expect(mockPrisma.machine_faults.createMany).not.toHaveBeenCalled();
+    });
+
+    it('should create fault row from FAULT_BELT_RAISED event', async () => {
+      const machine = createMockDbMachine({ device_id: 'dev-belt-event' });
+      mockPrisma.machines.findFirst.mockResolvedValue(machine);
+      mockPrisma.machines.update.mockResolvedValue(machine);
+      mockPrisma.machine_faults.createMany.mockResolvedValue({ count: 1 });
+      mockTimescaleClient.query.mockResolvedValue({ rows: [] });
+
+      await handleTelemetry('dev-belt-event', [{
+        type: 'event',
+        event_code: 'FAULT_BELT_RAISED',
+        event_value: 1,
+        boot_id: 1,
+        seq: 1,
+        uptime_ms: 5000,
+      }]);
+
+      expect(mockPrisma.machine_faults.createMany).toHaveBeenCalledWith({
+        data: [expect.objectContaining({
+          machine_id: machine.id,
+          fault_type: 'FAULT_BELT_RAISED',
+          fault_value: 1,
+          motor: 'belt',
+          event_code: 'FAULT_BELT_RAISED',
+        })],
+      });
+    });
+
+    it('should create fault row from FAULT_BLADE_RAISED event', async () => {
+      const machine = createMockDbMachine({ device_id: 'dev-blade-event' });
+      mockPrisma.machines.findFirst.mockResolvedValue(machine);
+      mockPrisma.machines.update.mockResolvedValue(machine);
+      mockPrisma.machine_faults.createMany.mockResolvedValue({ count: 1 });
+      mockTimescaleClient.query.mockResolvedValue({ rows: [] });
+
+      await handleTelemetry('dev-blade-event', [{
+        type: 'event',
+        event_code: 'FAULT_BLADE_RAISED',
+        event_value: 2,
+        boot_id: 1,
+        seq: 1,
+        uptime_ms: 5000,
+      }]);
+
+      expect(mockPrisma.machine_faults.createMany).toHaveBeenCalledWith({
+        data: [expect.objectContaining({
+          machine_id: machine.id,
+          fault_type: 'FAULT_BLADE_RAISED',
+          fault_value: 2,
+          motor: 'blade',
+          event_code: 'FAULT_BLADE_RAISED',
+        })],
+      });
+    });
+
+    it('should NOT create fault rows from non-fault events', async () => {
+      const machine = createMockDbMachine({ device_id: 'dev-other-event' });
+      mockPrisma.machines.findFirst.mockResolvedValue(machine);
+      mockPrisma.machines.update.mockResolvedValue(machine);
+      mockTimescaleClient.query.mockResolvedValue({ rows: [] });
+
+      await handleTelemetry('dev-other-event', [{
+        type: 'event',
+        event_code: 'BELT_AT_TARGET_VELOCITY',
+        event_value: 0,
+      }]);
+
+      expect(mockPrisma.machine_faults.createMany).not.toHaveBeenCalled();
+    });
+
+    it('should NOT create fault rows from FAULT_BELT_CLEARED events', async () => {
+      const machine = createMockDbMachine({ device_id: 'dev-cleared' });
+      mockPrisma.machines.findFirst.mockResolvedValue(machine);
+      mockPrisma.machines.update.mockResolvedValue(machine);
+      mockTimescaleClient.query.mockResolvedValue({ rows: [] });
+
+      await handleTelemetry('dev-cleared', [{
+        type: 'event',
+        event_code: 'FAULT_BELT_CLEARED',
+        event_value: 1,
       }]);
 
       expect(mockPrisma.machine_faults.createMany).not.toHaveBeenCalled();
@@ -244,8 +314,9 @@ describe('handleTelemetry', () => {
       const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
       await handleTelemetry('dev-tsfail', [{
-        type: 'status_update',
-        belt_fault: 1,
+        type: 'event',
+        event_code: 'FAULT_BELT_RAISED',
+        event_value: 1,
       }]);
 
       // RDS still updated

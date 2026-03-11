@@ -13,6 +13,10 @@ export const deleteMachineInput = z.object({
   machineId: z.string().uuid(),
 });
 
+export const getMachineFaultsInput = z.object({
+  machineId: z.string().uuid(),
+});
+
 export const deleteFarmInput = z.object({
   farmId: z.string().uuid(),
 });
@@ -60,6 +64,7 @@ export const farmSchema = z.object({
 export type GetTenantMachinesInput = z.infer<typeof getTenantMachinesInput>;
 export type GetTenantFarmsInput = z.infer<typeof getTenantFarmsInput>;
 export type DeleteMachineInput = z.infer<typeof deleteMachineInput>;
+export type GetMachineFaultsInput = z.infer<typeof getMachineFaultsInput>;
 export type DeleteFarmInput = z.infer<typeof deleteFarmInput>;
 export type Tenant = z.infer<typeof tenantSchema>;
 export type Machine = z.infer<typeof machineSchema>;

@@ -1,19 +1,37 @@
-import { useState } from 'react';
-import { ChevronDown, ChevronUp, Trash2, Settings, Calendar, Cpu, Wifi, Power, PowerOff, RotateCcw, AlertTriangle, Timer, Layers } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
+import { ChevronDown, ChevronUp, Trash2, Settings, Calendar, Cpu, Wifi, Power, PowerOff, RotateCcw, AlertTriangle, Timer, Layers, ClipboardList } from 'lucide-react';
 import type { Machine } from '../../../../shared';
 import { getMachineImage } from '../../utils/machine-images';
 import ChangeWifiModal from '../../wifi-provisioning/components/ChangeWifiModal';
+import FaultHistoryModal from './FaultHistoryModal';
 
 interface MachineCardProps {
   machine: Machine;
-  onDelete: (id: string) => void;
+  onDelete?: (machine: Machine) => void;
+  collapsible?: boolean;
+  defaultExpanded?: boolean;
+  showConfigureAction?: boolean;
+  showFaultHistoryAction?: boolean;
+  faultQueryScope?: 'tenant' | 'admin';
+  headerMeta?: ReactNode;
 }
 
-export default function MachineCard({ machine, onDelete }: MachineCardProps) {
+export default function MachineCard({
+  machine,
+  onDelete,
+  collapsible = true,
+  defaultExpanded = false,
+  showConfigureAction = true,
+  showFaultHistoryAction = true,
+  faultQueryScope = 'tenant',
+  headerMeta,
+}: MachineCardProps) {
   const machineImage = getMachineImage(machine.name);
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(defaultExpanded);
   const [showChangeWifi, setShowChangeWifi] = useState(false);
+  const [showFaultHistory, setShowFaultHistory] = useState(false);
   const isOnline = machine.status === 'online';
+  const isCardExpanded = collapsible ? isExpanded : true;
 
   const formatDate = (date: string | Date | null) => {
     if (!date) return 'Unknown';
@@ -71,12 +89,7 @@ export default function MachineCard({ machine, onDelete }: MachineCardProps) {
     return `${totalSeconds.toString()}s`;
   };
 
-  const totalUptimeMs = (() => {
-    const historical = parseIntegerValue(machine.totalUptimeMs);
-    const currentBoot = parseIntegerValue(machine.currentBootUptimeMs);
-    if (historical === null && currentBoot === null) return null;
-    return (historical ?? 0n) + (currentBoot ?? 0n);
-  })();
+  const totalUptimeMs = parseIntegerValue(machine.totalUptimeMs);
   const bladeFaultCountValue = parseIntegerValue(machine.bladeFaultCount) ?? 0n;
   const showBladeFaultCount = bladeFaultCountValue > 0n;
 
@@ -88,8 +101,9 @@ export default function MachineCard({ machine, onDelete }: MachineCardProps) {
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!onDelete) return;
     if (confirm(`Are you sure you want to delete "${machine.displayName || machine.name}"?`)) {
-      onDelete(machine.deviceId);
+      onDelete(machine);
     }
   };
 
@@ -100,10 +114,12 @@ export default function MachineCard({ machine, onDelete }: MachineCardProps) {
 
   return (
     <div
-      className={`bg-card border rounded-lg cursor-pointer transition-all overflow-hidden ${
-        isExpanded ? 'border-primary shadow-lg' : 'border-border hover:border-border/80 hover:shadow-md'
+      className={`bg-card border rounded-lg transition-all overflow-hidden ${
+        collapsible ? 'cursor-pointer' : ''
+      } ${
+        isCardExpanded ? 'border-primary shadow-lg' : 'border-border hover:border-border/80 hover:shadow-md'
       }`}
-      onClick={() => setIsExpanded(!isExpanded)}
+      onClick={collapsible ? () => setIsExpanded(!isExpanded) : undefined}
     >
       <div className="flex items-center justify-between p-4">
         <div className="flex flex-col gap-0.5">
@@ -112,15 +128,18 @@ export default function MachineCard({ machine, onDelete }: MachineCardProps) {
             <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500' : 'bg-gray-400'}`} />
           </div>
           <span className="text-sm text-muted-foreground font-mono">{machine.deviceId}</span>
+          {headerMeta}
         </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center w-8 h-8 rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors">
-            {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+        {collapsible && (
+          <div className="flex items-center gap-3">
+            <div className="flex items-center justify-center w-8 h-8 rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors">
+              {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
-      {isExpanded && (
+      {isCardExpanded && (
         <div className="px-4 pb-4 border-t border-border animate-in slide-in-from-top-2 duration-200">
           <div className={`flex gap-6 py-4 ${machineImage ? 'flex-row' : 'flex-col'}`}>
             {machineImage && (
@@ -203,7 +222,7 @@ export default function MachineCard({ machine, onDelete }: MachineCardProps) {
                 <div className="flex items-start gap-2">
                   <Layers size={16} className="text-muted-foreground mt-0.5 flex-shrink-0" />
                   <div className="flex flex-col gap-0.5">
-                    <span className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Tray Count</span>
+                    <span className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Total Tray Count</span>
                     <span className="text-sm text-foreground">{formatInteger(machine.trayCount)}</span>
                   </div>
                 </div>
@@ -211,8 +230,8 @@ export default function MachineCard({ machine, onDelete }: MachineCardProps) {
               <div className="flex items-start gap-2">
                 <Timer size={16} className="text-muted-foreground mt-0.5 flex-shrink-0" />
                 <div className="flex flex-col gap-0.5">
-                  <span className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Current Boot Uptime</span>
-                  <span className="text-sm text-foreground">{formatDurationMs(machine.currentBootUptimeMs)}</span>
+                  <span className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Total Uptime</span>
+                  <span className="text-sm text-foreground">{formatDurationMs(totalUptimeMs)}</span>
                 </div>
               </div>
               {(machine.beltMotorUptimeMs != null || machine.bladeMotorUptimeMs != null) && (
@@ -230,29 +249,53 @@ export default function MachineCard({ machine, onDelete }: MachineCardProps) {
             </div>
           </div>
 
-          <div className="flex gap-2 pt-3 border-t border-border">
-            <button
-              className="inline-flex items-center gap-1.5 px-3 py-2 bg-secondary border border-border rounded-md text-sm font-medium text-foreground hover:bg-primary hover:text-primary-foreground hover:border-primary transition-colors"
-              onClick={handleUpdate}
-            >
-              <Settings size={16} />
-              Configure
-            </button>
-            <button
-              className="inline-flex items-center gap-1.5 px-3 py-2 bg-transparent border border-destructive rounded-md text-sm font-medium text-destructive hover:bg-destructive hover:text-destructive-foreground transition-colors"
-              onClick={handleDelete}
-            >
-              <Trash2 size={16} />
-              Delete
-            </button>
-          </div>
+          {(showConfigureAction || showFaultHistoryAction || onDelete) && (
+            <div className="flex gap-2 pt-3 border-t border-border">
+              {showConfigureAction && (
+                <button
+                  className="inline-flex items-center gap-1.5 px-3 py-2 bg-secondary border border-border rounded-md text-sm font-medium text-foreground hover:bg-primary hover:text-primary-foreground hover:border-primary transition-colors"
+                  onClick={handleUpdate}
+                >
+                  <Settings size={16} />
+                  Configure
+                </button>
+              )}
+              {showFaultHistoryAction && (
+                <button
+                  className="inline-flex items-center gap-1.5 px-3 py-2 bg-secondary border border-border rounded-md text-sm font-medium text-foreground hover:bg-primary hover:text-primary-foreground hover:border-primary transition-colors"
+                  onClick={(e) => { e.stopPropagation(); setShowFaultHistory(true); }}
+                >
+                  <ClipboardList size={16} />
+                  Faults
+                </button>
+              )}
+              {onDelete && (
+                <button
+                  className="inline-flex items-center gap-1.5 px-3 py-2 bg-transparent border border-destructive rounded-md text-sm font-medium text-destructive hover:bg-destructive hover:text-destructive-foreground transition-colors"
+                  onClick={handleDelete}
+                >
+                  <Trash2 size={16} />
+                  Delete
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
 
-      {showChangeWifi && (
+      {showConfigureAction && showChangeWifi && (
         <ChangeWifiModal
           machineName={machine.name}
           onClose={() => setShowChangeWifi(false)}
+        />
+      )}
+
+      {showFaultHistoryAction && showFaultHistory && (
+        <FaultHistoryModal
+          machineId={machine.id}
+          machineName={machine.displayName || machine.name}
+          queryScope={faultQueryScope}
+          onClose={() => setShowFaultHistory(false)}
         />
       )}
     </div>

@@ -27,8 +27,8 @@ export default function MachinesDashboard() {
     setIsOnboardModalOpen(false);
   };
 
-  const handleDelete = (deviceId: string) => {
-    deleteMutation.mutate({ deviceId });
+  const handleDelete = (machine: { deviceId: string }) => {
+    deleteMutation.mutate({ deviceId: machine.deviceId });
   };
 
   return (

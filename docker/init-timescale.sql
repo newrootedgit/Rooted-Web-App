@@ -30,7 +30,9 @@ CREATE TABLE raw_telemetry (
     blade_motor_uptime_ms BIGINT,
     event_code          VARCHAR(100),
     event_value         INTEGER,
-    trays_processed     INTEGER
+    trays_processed     INTEGER,
+    fault_type          VARCHAR(50),
+    motor               VARCHAR(20)
 );
 
 -- Convert to hypertable partitioned by received_at

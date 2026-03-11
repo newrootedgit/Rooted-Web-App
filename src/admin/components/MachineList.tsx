@@ -1,5 +1,6 @@
-import { Circle, MapPin, Clock, Trash2 } from 'lucide-react';
+import { MapPin } from 'lucide-react';
 import { trpc } from '../lib/trpc';
+import MachineCard from '../../machines/dashboard/components/MachineCard';
 
 interface MachineListProps {
   tenantId: string;
@@ -30,61 +31,23 @@ export function MachineList({ tenantId }: MachineListProps) {
   return (
     <div className="space-y-3">
       {machines.map((machine) => (
-        <div
+        <MachineCard
           key={machine.id}
-          className="flex items-center justify-between p-4 bg-secondary/50 border border-border rounded-lg hover:bg-secondary transition-colors"
-        >
-          <div className="flex items-center gap-4">
-            <div className={`
-              flex items-center justify-center w-10 h-10 rounded-full
-              ${machine.status === 'online' ? 'bg-green-100' : 'bg-gray-100'}
-            `}>
-              <Circle
-                size={16}
-                className={machine.status === 'online' ? 'text-green-600 fill-green-600' : 'text-gray-400 fill-gray-400'}
-              />
+          machine={machine}
+          collapsible={false}
+          defaultExpanded
+          showConfigureAction={false}
+          faultQueryScope="admin"
+          headerMeta={(
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-1">
+              <MapPin size={12} />
+              <span>{machine.farms?.name || 'No farm assigned'}</span>
             </div>
-            <div>
-              <p className="font-medium">{machine.name}</p>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
-                <MapPin size={12} />
-                <span>{machine.farms?.name || 'No farm assigned'}</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <div className="text-right">
-              <span className={`
-                inline-flex items-center px-3 py-1 rounded-full text-xs font-medium
-                ${machine.status === 'online' 
-                  ? 'bg-green-100 text-green-800' 
-                  : 'bg-gray-100 text-gray-800'}
-              `}>
-                {machine.status}
-              </span>
-              {machine.last_seen_at && (
-                <div className="flex items-center gap-1 text-xs text-muted-foreground mt-2">
-                  <Clock size={12} />
-                  <span>
-                    {new Date(machine.last_seen_at).toLocaleString()}
-                  </span>
-                </div>
-              )}
-            </div>
-            <button
-              onClick={() => {
-                if (confirm(`Delete machine "${machine.name}"?`)) {
-                  deleteMutation.mutate({ machineId: machine.id });
-                }
-              }}
-              disabled={deleteMutation.isPending}
-              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
-            >
-              <Trash2 size={16} />
-            </button>
-          </div>
-        </div>
+          )}
+          onDelete={(selectedMachine) => {
+            deleteMutation.mutate({ machineId: selectedMachine.id });
+          }}
+        />
       ))}
     </div>
   );

@@ -12,7 +12,7 @@ interface MachinesListProps {
   connectedDevice: MachineGATTClient | null;
   onScanClick: () => void;
   onDisconnect: () => void;
-  onDelete: (id: string) => void;
+  onDelete: (machine: Machine) => void;
 }
 
 export default function MachinesList({

@@ -15,6 +15,7 @@ interface DbMachineRow {
   current_wifi_ssid: string | null;
   machine_faults?: Array<{
     fault_type: string;
+    motor: string | null;
     created_at: Date;
   }>;
 }
@@ -23,7 +24,6 @@ interface TimescaleStatsRow {
   machine_id: string;
   total_steps: string;
   total_uptime_ms: string;
-  current_boot_uptime_ms: string;
   reboot_count: string;
   tray_count: string;
   belt_motor_uptime_ms: string;
@@ -75,8 +75,8 @@ export async function enrichMachinesWithTelemetry(
   const faultCounts = new Map<string, { belt: number; blade: number; lastBelt: number; lastBlade: number }>();
   for (const m of machines) {
     const faults = m.machine_faults ?? [];
-    const beltFaults = faults.filter((f) => f.fault_type === 'belt_fault');
-    const bladeFaults = faults.filter((f) => f.fault_type === 'blade_fault');
+    const beltFaults = faults.filter((f) => f.motor === 'belt');
+    const bladeFaults = faults.filter((f) => f.motor === 'blade');
     faultCounts.set(m.id, {
       belt: beltFaults.length,
       blade: bladeFaults.length,
@@ -90,20 +90,88 @@ export async function enrichMachinesWithTelemetry(
   if (timescale) {
     try {
       const result = await timescale.query<TimescaleStatsRow>(
-        `SELECT
-           machine_id,
-           COALESCE(total_steps, 0)::text              AS total_steps,
-           COALESCE(total_uptime_ms, 0)::text           AS total_uptime_ms,
-           COALESCE(current_boot_uptime_ms, 0)::text    AS current_boot_uptime_ms,
-           COALESCE(reboot_count, 0)::text               AS reboot_count,
-           COALESCE(tray_count, 0)::text                 AS tray_count,
-           COALESCE(belt_motor_uptime_ms, 0)::text       AS belt_motor_uptime_ms,
-           COALESCE(blade_motor_uptime_ms, 0)::text      AS blade_motor_uptime_ms,
-           last_event_code,
-           last_event_value,
-           last_event_at
-         FROM machine_stats
-         WHERE machine_id = ANY($1::uuid[])`,
+        `WITH machine_ids AS (
+           SELECT UNNEST($1::uuid[]) AS machine_id
+         ),
+         filtered AS (
+           SELECT
+             machine_id,
+             type,
+             session_id,
+             boot_id,
+             delta_steps,
+             uptime_ms,
+             trays_processed,
+             belt_motor_uptime_ms,
+             blade_motor_uptime_ms,
+             event_code,
+             event_value,
+             received_at
+           FROM raw_telemetry
+           WHERE machine_id = ANY($1::uuid[])
+         ),
+         session_totals AS (
+           SELECT
+             machine_id,
+             COALESCE(session_id, CONCAT('boot:', boot_id::text)) AS session_key,
+             MAX(uptime_ms)                 AS session_uptime_ms,
+             MAX(trays_processed)           AS session_tray_count,
+             MAX(belt_motor_uptime_ms)      AS session_belt_motor_uptime_ms,
+             MAX(blade_motor_uptime_ms)     AS session_blade_motor_uptime_ms
+           FROM filtered
+           WHERE type = 'status_update'
+             AND (session_id IS NOT NULL OR boot_id IS NOT NULL)
+           GROUP BY machine_id, COALESCE(session_id, CONCAT('boot:', boot_id::text))
+         ),
+         lifetime AS (
+           SELECT
+             machine_id,
+             COALESCE(SUM(session_uptime_ms), 0)::text           AS total_uptime_ms,
+             GREATEST(COUNT(*) - 1, 0)::text                     AS reboot_count,
+             COALESCE(SUM(session_tray_count), 0)::text          AS tray_count,
+             COALESCE(SUM(session_belt_motor_uptime_ms), 0)::text AS belt_motor_uptime_ms,
+             COALESCE(SUM(session_blade_motor_uptime_ms), 0)::text AS blade_motor_uptime_ms
+           FROM session_totals
+           GROUP BY machine_id
+         ),
+         steps AS (
+           SELECT
+             machine_id,
+             COALESCE(SUM(delta_steps), 0)::text AS total_steps
+           FROM filtered
+           WHERE type = 'status_update'
+             AND delta_steps IS NOT NULL
+           GROUP BY machine_id
+         ),
+         latest_event AS (
+           SELECT DISTINCT ON (machine_id)
+             machine_id,
+             event_code AS last_event_code,
+             event_value AS last_event_value,
+             received_at AS last_event_at
+           FROM filtered
+           WHERE type = 'event'
+             AND event_code IS NOT NULL
+           ORDER BY machine_id, received_at DESC
+         )
+         SELECT
+           machine_ids.machine_id,
+           COALESCE(steps.total_steps, '0')               AS total_steps,
+           COALESCE(lifetime.total_uptime_ms, '0')        AS total_uptime_ms,
+           COALESCE(lifetime.reboot_count, '0')           AS reboot_count,
+           COALESCE(lifetime.tray_count, '0')             AS tray_count,
+           COALESCE(lifetime.belt_motor_uptime_ms, '0')   AS belt_motor_uptime_ms,
+           COALESCE(lifetime.blade_motor_uptime_ms, '0')  AS blade_motor_uptime_ms,
+           latest_event.last_event_code,
+           latest_event.last_event_value,
+           latest_event.last_event_at
+         FROM machine_ids
+         LEFT JOIN lifetime
+           ON lifetime.machine_id = machine_ids.machine_id
+         LEFT JOIN steps
+           ON steps.machine_id = machine_ids.machine_id
+         LEFT JOIN latest_event
+           ON latest_event.machine_id = machine_ids.machine_id`,
         [machineIds]
       );
       for (const row of result.rows) {
@@ -122,7 +190,6 @@ export async function enrichMachinesWithTelemetry(
     if (stats) {
       base.totalSteps = stats.total_steps;
       base.totalUptimeMs = stats.total_uptime_ms;
-      base.currentBootUptimeMs = stats.current_boot_uptime_ms;
       base.rebootCount = parseInt(stats.reboot_count, 10);
       base.trayCount = parseInt(stats.tray_count, 10);
       base.beltMotorUptimeMs = stats.belt_motor_uptime_ms;

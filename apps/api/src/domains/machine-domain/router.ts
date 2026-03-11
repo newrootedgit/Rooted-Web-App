@@ -1,7 +1,8 @@
 import { router, authedProcedure, farmProcedure, tenantProcedure } from '../../lib/trpc/trpc.js';
 import { paginationInputSchema } from '../../lib/trpc/pagination/index.js';
+import { z } from 'zod';
 import { addMachineSchema, getMachineParamsSchema, getByDeviceIdSchema, deleteMachineSchema } from './types.js';
-import { listMachines, getMachine, findMachineByDeviceId } from './queries/index.js';
+import { listMachines, getMachine, findMachineByDeviceId, listFaults } from './queries/index.js';
 import { createOrUpdateMachine, deleteMachine } from './commands/index.js';
 import { requestConfigSchema, getConfigResponseSchema, updateConfigSchema } from './types.js';
 import { requestMachineConfig, updateMachineConfig, getConfigResponse } from './mqtt/index.js';
@@ -42,6 +43,11 @@ export const machineRouter = router({
 
   getConfigResponse: farmProcedure.input(getConfigResponseSchema).query(({ ctx, input }) =>
     getConfigResponse(input.requestId)
-  ),  
-  
+  ),
+
+  faults: tenantProcedure
+    .input(z.object({ machineId: z.string().uuid() }))
+    .query(({ ctx, input }) =>
+      listFaults(ctx.prisma, input.machineId, ctx.tenantId)
+    ),
 });

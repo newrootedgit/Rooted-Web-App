@@ -15,6 +15,7 @@ describe('getTenantMachines', () => {
     const dbMachines = [
       {
         ...createMockDbMachine({ id: 'm1', name: 'Machine 1', tenant_id: tenantId }),
+        machine_faults: [],
         farms: { id: 'f1', name: 'Farm 1', slug: 'farm-1' },
       },
     ];
@@ -28,6 +29,7 @@ describe('getTenantMachines', () => {
     expect(mockPrisma.machines.findMany).toHaveBeenCalledWith({
       where: { tenant_id: tenantId },
       include: {
+        machine_faults: true,
         farms: {
           select: {
             id: true,

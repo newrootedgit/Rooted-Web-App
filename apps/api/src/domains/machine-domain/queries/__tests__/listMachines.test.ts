@@ -90,6 +90,57 @@ describe('listMachines', () => {
     );
   });
 
+  it('should hydrate lifetime telemetry totals from raw telemetry summaries', async () => {
+    const dbMachine = createMockDbMachine({
+      id: 'machine-1',
+      tenant_id: 'tenant-1',
+      farm_id: 'farm-1',
+      name: 'Harvester',
+      device_id: 'dev-001',
+    });
+    mockPrisma.machines.findMany.mockResolvedValue([dbMachine]);
+    mockTimescale.query.mockResolvedValue({
+      rows: [{
+        machine_id: 'machine-1',
+        total_steps: '42',
+        total_uptime_ms: '123000',
+        reboot_count: '2',
+        tray_count: '7',
+        belt_motor_uptime_ms: '5000',
+        blade_motor_uptime_ms: '3000',
+        last_event_code: 'blade_fault_cleared',
+        last_event_value: 0,
+        last_event_at: new Date('2026-03-11T17:01:33.970Z'),
+      }],
+    });
+
+    const result = await listMachines(
+      mockPrisma as unknown as PrismaClient,
+      'tenant-1',
+      'farm-1',
+      {}
+    );
+
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]).toEqual(expect.objectContaining({
+      id: 'machine-1',
+      totalSteps: '42',
+      totalUptimeMs: '123000',
+      currentBootUptimeMs: '0',
+      rebootCount: 2,
+      trayCount: 7,
+      beltMotorUptimeMs: '5000',
+      bladeMotorUptimeMs: '3000',
+      lastEventCode: 'blade_fault_cleared',
+      lastEventValue: 0,
+      lastEventAt: new Date('2026-03-11T17:01:33.970Z'),
+    }));
+    expect(mockTimescale.query).toHaveBeenCalledWith(
+      expect.stringContaining("COALESCE(session_id, CONCAT('boot:', boot_id::text))"),
+      [['machine-1']]
+    );
+  });
+
   it('should filter by tenant only when farmId is null', async () => {
     const dbMachine = createMockDbMachine({
       id: 'machine-1',
