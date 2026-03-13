@@ -69,7 +69,7 @@ resource "aws_instance" "rooted" {
   # Prevent user_data changes from destroying/recreating the instance.
   # TimescaleDB setup on existing instances is done via setup-ec2.sh.
   lifecycle {
-    ignore_changes = [user_data]
+    ignore_changes = [user_data, ami]
   }
 
   tags = {
