@@ -43,6 +43,12 @@ output "ec2_instance_id" {
   value       = aws_instance.rooted.id
 }
 
+output "timescale_database_url" {
+  description = "TimescaleDB connection URL (local Docker on EC2)"
+  value       = "postgresql://rooted:${var.db_password}@localhost:5434/rooted_telemetry"
+  sensitive   = true
+}
+
 data "aws_iot_endpoint" "data" {
   endpoint_type = "iot:Data-ATS"
 }

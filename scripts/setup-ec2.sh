@@ -32,6 +32,33 @@ docker ps | grep rooted-redis || docker run -d \
   -p 127.0.0.1:6379:6379 \
   redis:7-alpine
 
+# Start TimescaleDB
+echo "🐳 Starting TimescaleDB..."
+docker ps | grep rooted-timescaledb || docker run -d \
+  --name rooted-timescaledb \
+  --restart unless-stopped \
+  -p 127.0.0.1:5434:5432 \
+  -v timescale_data:/var/lib/postgresql/data \
+  -e POSTGRES_USER=rooted \
+  -e POSTGRES_PASSWORD=${DB_PASSWORD} \
+  -e POSTGRES_DB=rooted_telemetry \
+  timescale/timescaledb:latest-pg16
+
+# Wait for TimescaleDB to be ready
+echo "⏳ Waiting for TimescaleDB..."
+for i in $(seq 1 30); do
+  docker exec rooted-timescaledb pg_isready -U rooted -d rooted_telemetry && break
+  echo "  Attempt $i/30..."
+  sleep 2
+done
+
+# Apply TimescaleDB schema
+echo "🗄️  Applying TimescaleDB schema..."
+mkdir -p $APP_DIR/docker
+cp "$(dirname "$0")/../docker/init-timescale.sql" $APP_DIR/docker/
+docker cp $APP_DIR/docker/init-timescale.sql rooted-timescaledb:/tmp/init-timescale.sql
+docker exec rooted-timescaledb psql -U rooted -d rooted_telemetry -f /tmp/init-timescale.sql
+
 # Install API dependencies
 echo "📦 Installing API dependencies..."
 cd $APP_DIR/apps/api
@@ -46,6 +73,7 @@ REDIS_URL=redis://localhost:6379
 CLERK_PUBLISHABLE_KEY=${CLERK_PUBLISHABLE_KEY}
 CLERK_SECRET_KEY=${CLERK_SECRET_KEY}
 LAMBDA_SECRET_TOKEN=${LAMBDA_SECRET}
+TIMESCALE_DATABASE_URL=postgresql://rooted:${DB_PASSWORD}@localhost:5434/rooted_telemetry
 AWS_REGION=us-west-2
 LOG_LEVEL=info
 PORT=8000

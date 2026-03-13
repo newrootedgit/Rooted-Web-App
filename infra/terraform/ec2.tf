@@ -17,7 +17,7 @@ data "aws_ami" "ubuntu" {
 # EC2 instance
 resource "aws_instance" "rooted" {
   ami           = data.aws_ami.ubuntu.id
-  instance_type = "t3.small"
+  instance_type = "t3.medium"
   
   vpc_security_group_ids = [aws_security_group.ec2.id]
   key_name               = var.ec2_key_name
@@ -50,7 +50,14 @@ resource "aws_instance" "rooted" {
               curl -fsSL https://get.docker.com -o get-docker.sh
               sh get-docker.sh
               usermod -aG docker ubuntu
-              
+
+              # Start TimescaleDB container
+              docker pull timescale/timescaledb:latest-pg16
+              docker run -d --name rooted-timescaledb --restart unless-stopped \
+                -p 127.0.0.1:5434:5432 -v timescale_data:/var/lib/postgresql/data \
+                -e POSTGRES_USER=rooted -e POSTGRES_PASSWORD=${var.db_password} \
+                -e POSTGRES_DB=rooted_telemetry timescale/timescaledb:latest-pg16
+
               # Install PM2
               npm install -g pm2
               
@@ -58,6 +65,12 @@ resource "aws_instance" "rooted" {
               mkdir -p /var/www/rooted
               chown ubuntu:ubuntu /var/www/rooted
               EOF
+
+  # Prevent user_data changes from destroying/recreating the instance.
+  # TimescaleDB setup on existing instances is done via setup-ec2.sh.
+  lifecycle {
+    ignore_changes = [user_data]
+  }
 
   tags = {
     Name        = "${var.project_name}-${var.environment}-web"
