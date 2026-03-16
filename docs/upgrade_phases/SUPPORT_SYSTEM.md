@@ -451,3 +451,13 @@ import { SupportWidget } from '../../../src/support/SupportWidget';
 4. Submit → AirTable "Tickets" table shows the new record with attachment URL
 5. S3 bucket shows the uploaded file at `support/{userId}/...`
 6. Error path: bad AirTable credentials → user sees red error box, no crash
+
+---
+
+## Future Hardening
+
+These are not blockers for the initial release but should be addressed before heavy usage:
+
+1. **File size & type validation on backend** — `getUploadUrl` should enforce a max file size (e.g. 10 MB) and allowlist content types (`image/*`, `application/pdf`, `text/plain`) so users can't request presigned URLs for arbitrarily large or dangerous files.
+2. **S3 key prefix verification** — `submitTicket` should verify that all `attachmentKeys` / `attachmentUrls` match the `support/{userId}/` prefix so a user can't reference another user's uploads.
+3. **Rate limiting** — Add per-user rate limits on both `getUploadUrl` and `submitTicket` to prevent spam (e.g. 10 tickets/hour, 20 upload URLs/hour).
