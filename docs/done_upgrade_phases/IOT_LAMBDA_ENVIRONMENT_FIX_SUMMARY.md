@@ -163,7 +163,7 @@ terraform apply -var-file="terraform.tfvars"
 
 ## Next Steps
 
-1. Review updated `docs/upgrade_phases/IOT_LAMBDA_ENVIRONMENT_FIX.md`
+1. Review updated `docs/done_upgrade_phases/IOT_LAMBDA_ENVIRONMENT_FIX.md`
 2. Implement Phase 1 (mock system)
 3. Test locally with frontend
 4. Proceed to Phase 2 when ready

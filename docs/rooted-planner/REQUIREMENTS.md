@@ -1,5 +1,13 @@
 # Business Requirements - Rooted Planner
 
+## Implementation Status
+
+Current implementation coverage:
+
+- implemented: product catalog, categories, blends, customers, orders, tasks, production views, farm layout
+- partially implemented: rack assignment flows inside production/farm layout work
+- not implemented yet: recurring orders, employees, supplies/inventory, reporting automation
+
 ## Introduction
 
 Rooted Planner is a microgreen farm management application that enables farm operators to manage their complete production workflow from order creation to harvest completion. This document defines the business requirements and user interactions for the system.

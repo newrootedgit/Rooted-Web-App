@@ -1,5 +1,7 @@
 # Fault Count Fix: Event-Based Fault Routing
 
+**Status:** Completed
+
 ## Problem Statement
 
 `belt_fault` and `blade_fault` are sent as persistent flags (0/1) in every `STATUS_UPDATE` frame (~1/sec). The backend was creating a `machine_faults` row for every payload where these flags were >0, causing massive count inflation. A 5-minute fault = ~300 rows instead of 1.

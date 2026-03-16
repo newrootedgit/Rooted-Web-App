@@ -1,5 +1,12 @@
 # Business Requirements - Machine IoT
 
+## Implementation Status
+
+Current implementation coverage:
+
+- implemented: BLE onboarding, WiFi provisioning, machine dashboard, AWS IoT registration, telemetry-backed machine status, fault history, preset/config sync
+- not implemented: encrypted WiFi credential transport, machine documentation feature
+
 ## Introduction
 
 Machine IoT is a web-based device provisioning platform that enables users to discover, connect, and configure IoT devices (Raspberry Pi-based machines) via Bluetooth Low Energy. The platform simplifies the WiFi onboarding process by allowing users to provision devices directly from their web browser without requiring native mobile applications.
@@ -66,7 +73,7 @@ Machine IoT is a web-based device provisioning platform that enables users to di
 
 7. Users SHOULD receive visual feedback during the connection process
 
-8. The system MUST store device information (name, ID) locally for reconnection
+8. The system MUST store machine identity in the backend registry so users can return to the same machine dashboard without re-onboarding the record
 
 ---
 
@@ -147,7 +154,7 @@ Machine IoT is a web-based device provisioning platform that enables users to di
 
 4. Users SHOULD be able to remove machines from their dashboard
 
-5. The system MUST persist dashboard data locally (localStorage/IndexedDB)
+5. The system MUST persist the machine registry centrally in PostgreSQL; browser state may be transient
 
 6. Users CAN reconnect to previously paired devices from the dashboard
 

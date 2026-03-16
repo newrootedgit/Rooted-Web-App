@@ -1,6 +1,6 @@
 # TimescaleDB Infrastructure Automation
 
-**Status:** Planned
+**Status:** Completed
 **Depends on:** `TIMESCALEDB_SPLIT_ARCHITECTURE.md` (Phase 1)
 **Goal:** Automate TimescaleDB provisioning, deployment, and schema management through Terraform, deploy scripts, and CI/CD — so it's not a manual VM setup.
 

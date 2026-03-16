@@ -1,6 +1,6 @@
 # Telemetry Split Architecture: RDS + TimescaleDB
 
-**Status:** Planned
+**Status:** Completed
 **Priority:** Critical
 **Supersedes:** `VECTOR_TIMESCALEDB_UPGRADE.md` Phase 1 (which assumed TimescaleDB as an extension on the same Postgres instance)
 
