@@ -1,6 +1,7 @@
 import { ReactNode } from 'react';
 import { AppHeader, AppType } from '../AppHeader';
 import { Sidebar, NavItem } from '../Sidebar';
+import { SupportWidget } from '../../../../src/support/SupportWidget';
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -28,6 +29,7 @@ export function AppLayout({
         <Sidebar items={sidebarItems} activeItem={activeSidebarItem} onItemClick={onSidebarItemClick} />
         <main className="flex-1 p-6 overflow-auto">{children}</main>
       </div>
+      <SupportWidget />
     </div>
   );
 }
