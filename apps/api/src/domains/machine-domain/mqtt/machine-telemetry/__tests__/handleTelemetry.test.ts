@@ -108,7 +108,7 @@ describe('handleTelemetry', () => {
       expect(mockPrisma.machine_faults.createMany).not.toHaveBeenCalled();
     });
 
-    it('should create fault row from FAULT_BELT_RAISED event', async () => {
+    it('should create fault row from any FAULT_ event code', async () => {
       const machine = createMockDbMachine({ device_id: 'dev-belt-event' });
       mockPrisma.machines.findFirst.mockResolvedValue(machine);
       mockPrisma.machines.update.mockResolvedValue(machine);
@@ -117,7 +117,7 @@ describe('handleTelemetry', () => {
 
       await handleTelemetry('dev-belt-event', [{
         type: 'event',
-        event_code: 'FAULT_BELT_RAISED',
+        event_code: 'FAULT_BELT_MOTOR_FAULTED',
         event_value: 1,
         boot_id: 1,
         seq: 1,
@@ -127,25 +127,45 @@ describe('handleTelemetry', () => {
       expect(mockPrisma.machine_faults.createMany).toHaveBeenCalledWith({
         data: [expect.objectContaining({
           machine_id: machine.id,
-          fault_type: 'FAULT_BELT_RAISED',
+          fault_type: 'FAULT_BELT_MOTOR_FAULTED',
           fault_value: 1,
-          motor: 'belt',
-          event_code: 'FAULT_BELT_RAISED',
+          event_code: 'FAULT_BELT_MOTOR_FAULTED',
         })],
       });
     });
 
-    it('should create fault row from FAULT_BLADE_RAISED event', async () => {
-      const machine = createMockDbMachine({ device_id: 'dev-blade-event' });
+    it('should create fault row from FAULT_BELT_CLEARED event', async () => {
+      const machine = createMockDbMachine({ device_id: 'dev-cleared' });
       mockPrisma.machines.findFirst.mockResolvedValue(machine);
       mockPrisma.machines.update.mockResolvedValue(machine);
       mockPrisma.machine_faults.createMany.mockResolvedValue({ count: 1 });
       mockTimescaleClient.query.mockResolvedValue({ rows: [] });
 
-      await handleTelemetry('dev-blade-event', [{
+      await handleTelemetry('dev-cleared', [{
+        type: 'event',
+        event_code: 'FAULT_BELT_CLEARED',
+        event_value: 1,
+      }]);
+
+      expect(mockPrisma.machine_faults.createMany).toHaveBeenCalledWith({
+        data: [expect.objectContaining({
+          fault_type: 'FAULT_BELT_CLEARED',
+        })],
+      });
+    });
+
+    it('should pass through motor from payload when present', async () => {
+      const machine = createMockDbMachine({ device_id: 'dev-motor' });
+      mockPrisma.machines.findFirst.mockResolvedValue(machine);
+      mockPrisma.machines.update.mockResolvedValue(machine);
+      mockPrisma.machine_faults.createMany.mockResolvedValue({ count: 1 });
+      mockTimescaleClient.query.mockResolvedValue({ rows: [] });
+
+      await handleTelemetry('dev-motor', [{
         type: 'event',
         event_code: 'FAULT_BLADE_RAISED',
         event_value: 2,
+        motor: 'blade',
         boot_id: 1,
         seq: 1,
         uptime_ms: 5000,
@@ -153,11 +173,7 @@ describe('handleTelemetry', () => {
 
       expect(mockPrisma.machine_faults.createMany).toHaveBeenCalledWith({
         data: [expect.objectContaining({
-          machine_id: machine.id,
-          fault_type: 'FAULT_BLADE_RAISED',
-          fault_value: 2,
           motor: 'blade',
-          event_code: 'FAULT_BLADE_RAISED',
         })],
       });
     });
@@ -172,21 +188,6 @@ describe('handleTelemetry', () => {
         type: 'event',
         event_code: 'BELT_AT_TARGET_VELOCITY',
         event_value: 0,
-      }]);
-
-      expect(mockPrisma.machine_faults.createMany).not.toHaveBeenCalled();
-    });
-
-    it('should NOT create fault rows from FAULT_BELT_CLEARED events', async () => {
-      const machine = createMockDbMachine({ device_id: 'dev-cleared' });
-      mockPrisma.machines.findFirst.mockResolvedValue(machine);
-      mockPrisma.machines.update.mockResolvedValue(machine);
-      mockTimescaleClient.query.mockResolvedValue({ rows: [] });
-
-      await handleTelemetry('dev-cleared', [{
-        type: 'event',
-        event_code: 'FAULT_BELT_CLEARED',
-        event_value: 1,
       }]);
 
       expect(mockPrisma.machine_faults.createMany).not.toHaveBeenCalled();

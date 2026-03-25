@@ -77,6 +77,14 @@ TIMESCALE_DATABASE_URL=postgresql://rooted:${DB_PASSWORD}@localhost:5434/rooted_
 AWS_REGION=us-west-2
 LOG_LEVEL=info
 PORT=8000
+# Support system (optional - support widget won't work without these)
+AIRTABLE_PERSONAL_ACCESS_TOKEN=
+AIRTABLE_BASE_ID=
+AIRTABLE_TABLE_NAME=Tickets
+SUPPORT_S3_BUCKET=rooted-support-uploads
+SUPPORT_S3_REGION=us-west-2
+SUPPORT_S3_ACCESS_KEY_ID=
+SUPPORT_S3_SECRET_ACCESS_KEY=
 EOF
 
 # Run migrations

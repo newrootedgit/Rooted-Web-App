@@ -59,6 +59,39 @@ resource "aws_iam_role" "iot_rule" {
   })
 }
 
+# IAM User for Support S3 Uploads
+resource "aws_iam_user" "support_s3" {
+  name = "${var.project_name}-support-s3-${var.environment}"
+
+  tags = {
+    Name        = "${var.project_name}-support-s3"
+    Environment = var.environment
+  }
+}
+
+resource "aws_iam_user_policy" "support_s3" {
+  name = "${var.project_name}-support-s3-${var.environment}"
+  user = aws_iam_user.support_s3.name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:GetObject"
+        ]
+        Resource = "${aws_s3_bucket.support_uploads.arn}/support/*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_access_key" "support_s3" {
+  user = aws_iam_user.support_s3.name
+}
+
 # IoT Rule CloudWatch Logs Policy
 resource "aws_iam_role_policy" "iot_cloudwatch" {
   name = "${var.project_name}-iot-cloudwatch-${var.environment}"

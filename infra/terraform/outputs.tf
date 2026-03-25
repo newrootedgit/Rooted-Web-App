@@ -52,3 +52,21 @@ output "timescale_database_url" {
 data "aws_iot_endpoint" "data" {
   endpoint_type = "iot:Data-ATS"
 }
+
+# Support S3 Outputs
+output "support_s3_bucket_name" {
+  description = "S3 bucket for support ticket attachments"
+  value       = aws_s3_bucket.support_uploads.bucket
+}
+
+output "support_s3_access_key_id" {
+  description = "Access key ID for the support S3 IAM user"
+  value       = aws_iam_access_key.support_s3.id
+  sensitive   = true
+}
+
+output "support_s3_secret_access_key" {
+  description = "Secret access key for the support S3 IAM user"
+  value       = aws_iam_access_key.support_s3.secret
+  sensitive   = true
+}

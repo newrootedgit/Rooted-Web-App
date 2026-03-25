@@ -101,22 +101,16 @@ export async function handleTelemetry(deviceId: string, payloads: TelemetryPaylo
     });
 
     // 3. Route fault events to machine_faults in RDS
-    // Create fault rows from ClearCore EVENT frames with edge-detected fault codes
-    // (FAULT_BELT_RAISED / FAULT_BLADE_RAISED are sent once per fault occurrence)
-    const FAULT_EVENT_MAP: Record<string, string> = {
-        'FAULT_BELT_RAISED': 'belt',
-        'FAULT_BLADE_RAISED': 'blade',
-    };
-
+    // Any EVENT frame with an event_code starting with "FAULT_" creates a fault row
     const faultRows: Array<{ machine_id: string; fault_type: string; fault_value: number; event_code: string | null; motor: string | null; torque_pct: number | null }> = [];
     for (const p of valid) {
-        if (p.type === 'event' && p.event_code && p.event_code in FAULT_EVENT_MAP) {
+        if (p.type === 'event' && p.event_code && p.event_code.startsWith('FAULT_')) {
             faultRows.push({
                 machine_id: machine.id,
                 fault_type: p.event_code,
                 fault_value: p.event_value ?? 1,
                 event_code: p.event_code,
-                motor: FAULT_EVENT_MAP[p.event_code],
+                motor: p.motor ?? null,
                 torque_pct: p.torque_pct ?? null,
             });
         }

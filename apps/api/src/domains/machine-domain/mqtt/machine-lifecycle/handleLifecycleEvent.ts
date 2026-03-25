@@ -17,8 +17,14 @@ interface LifecyclePayload {
     wifiSsid?: string;
 }
 
+const IGNORED_CLIENT_IDS = ['rooted-api-subscriber'];
+
 export async function handleLifecycleEvent(payload: LifecyclePayload): Promise<void> {
     const { clientId, timestamp, eventType, sessionIdentifier, wifiSsid } = payload;
+
+    if (IGNORED_CLIENT_IDS.includes(clientId)) {
+        return;
+    }
 
     const machine = await prisma.machines.findFirst({
         where: { device_id: clientId },
