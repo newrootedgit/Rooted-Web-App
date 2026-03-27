@@ -4,6 +4,8 @@ import { publishToDevice } from '../../../../lib/aws/iot-client.js';
 import { randomUUID } from 'crypto';
 import { isProd } from '../../../../lib/env.js';
 import type { VarietyPreset } from '../../types.js';
+import { getVariableRanges } from '../../../../lib/aws/variable-ranges-cache.js';
+import { validatePresetValues } from './validatePresets.js';
 
 interface UpdatePayload {
   presets?: Record<string, VarietyPreset>;
@@ -27,6 +29,18 @@ export async function updateMachineConfig(
 
     if (isProd() && machine.status !== 'online') {
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'Machine is not online' });
+    }
+
+    // Validate preset values against cached variable ranges
+    if (payload.presets && Object.keys(payload.presets).length > 0) {
+        const ranges = getVariableRanges(machine.device_id);
+        if (!ranges) {
+            throw new TRPCError({
+                code: 'PRECONDITION_FAILED',
+                message: 'Variable ranges not loaded. Fetch machine config first.',
+            });
+        }
+        validatePresetValues(payload.presets, ranges);
     }
 
     const requestId = randomUUID();

@@ -8,6 +8,7 @@ interface GenerateTasksInput {
   orderItemId: string;
   orderNumber: string;
   productName: string;
+  blendIngredientId?: string | null;
   soakDate: Date;
   seedDate: Date;
   moveToLightDate: Date;
@@ -33,6 +34,7 @@ export async function generateTasksForOrderItem(
       data: {
         farm_id: input.farmId,
         order_item_id: input.orderItemId,
+        blend_ingredient_id: input.blendIngredientId ?? null,
         title: def.title,
         type: def.type,
         due_date: def.dueDate,

@@ -124,7 +124,10 @@ export async function startMqttSubscriber(): Promise<void> {
         return;
       }
 
-      handleConfigResponse({ requestId, action, config, success, error });
+      // Extract deviceId from topic: rooted/machines/<deviceId>/pong
+      const deviceId = topic.split('/')[2];
+
+      handleConfigResponse({ requestId, action, config, success, error, deviceId });
     } catch (err) {
       console.error('[MQTT] Error processing pong message:', err);
     }

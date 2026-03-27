@@ -29,6 +29,35 @@ export interface Product {
   createdAt: Date | null;
 }
 
+export interface PackageType {
+  id: string;
+  farmId: string | null;
+  name: string;
+  code: string | null;
+  createdAt: Date | null;
+}
+
+export interface Sku {
+  id: string;
+  farmId: string | null;
+  productId: string | null;
+  blendId: string | null;
+  code: string;
+  name: string;
+  weightOz: number;
+  price: number | null;
+  packageTypeId: string | null;
+  salesChannel: 'WHOLESALE' | 'RETAIL' | 'BOTH';
+  isAvailable: boolean | null;
+  isPublic: boolean | null;
+  stockQuantity: number | null;
+  lowStockThreshold: number | null;
+  createdAt: Date | null;
+  product?: Product;
+  blend?: Blend;
+  packageType?: PackageType | null;
+}
+
 export interface BlendIngredient {
   id: string;
   blendId: string | null;
@@ -114,6 +143,75 @@ export const updateCategorySchema = z.object({
 });
 
 export type UpdateCategoryInput = z.infer<typeof updateCategorySchema>;
+
+// SKUs
+
+export const skuSalesChannelSchema = z.enum(['WHOLESALE', 'RETAIL', 'BOTH']);
+
+const createSkuBaseSchema = z.object({
+  productId: z.string().uuid().optional(),
+  blendId: z.string().uuid().optional(),
+  code: z.string().min(1).max(100),
+  name: z.string().min(1).max(255),
+  weightOz: z.number().positive(),
+  price: z.number().min(0).optional(),
+  packageTypeId: z.string().uuid().optional(),
+  salesChannel: skuSalesChannelSchema.default('BOTH'),
+  isAvailable: z.boolean().optional(),
+  isPublic: z.boolean().optional(),
+  stockQuantity: z.number().int().min(0).optional(),
+  lowStockThreshold: z.number().int().min(0).optional(),
+});
+
+export const createSkuSchema = createSkuBaseSchema.refine(
+  (data) => (data.productId && !data.blendId) || (!data.productId && data.blendId),
+  { message: 'Exactly one of productId or blendId must be provided' }
+);
+
+export type CreateSkuInput = z.infer<typeof createSkuSchema>;
+
+export const updateSkuSchema = createSkuBaseSchema.partial().extend({
+  id: z.string().uuid(),
+  productId: z.string().uuid().nullable().optional(),
+  blendId: z.string().uuid().nullable().optional(),
+  packageTypeId: z.string().uuid().nullable().optional(),
+}).refine(
+  (data: { productId?: string | null; blendId?: string | null }) => {
+    const hasProduct = data.productId !== undefined && data.productId !== null && data.productId !== '';
+    const hasBlend = data.blendId !== undefined && data.blendId !== null && data.blendId !== '';
+    return !(hasProduct && hasBlend);
+  },
+  { message: 'A SKU cannot reference both a product and blend' }
+);
+
+export type UpdateSkuInput = z.infer<typeof updateSkuSchema>;
+
+export const listSkusInputSchema = paginationInputSchema.extend({
+  productId: z.string().uuid().optional(),
+  blendId: z.string().uuid().optional(),
+  salesChannel: skuSalesChannelSchema.optional(),
+  isAvailable: z.boolean().optional(),
+  search: z.string().optional(),
+});
+
+export type ListSkusInput = z.infer<typeof listSkusInputSchema>;
+
+// Package Types
+
+export const createPackageTypeSchema = z.object({
+  name: z.string().min(1).max(255),
+  code: z.string().max(50).optional(),
+});
+
+export type CreatePackageTypeInput = z.infer<typeof createPackageTypeSchema>;
+
+export const updatePackageTypeSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1).max(255).optional(),
+  code: z.string().max(50).nullable().optional(),
+});
+
+export type UpdatePackageTypeInput = z.infer<typeof updatePackageTypeSchema>;
 
 // Blends
 

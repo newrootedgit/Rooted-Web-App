@@ -10,6 +10,7 @@ export function mapDbTask(db: any): Task {
     id: db.id,
     farmId: db.farm_id,
     orderItemId: db.order_item_id,
+    blendIngredientId: db.blend_ingredient_id ?? null,
     title: db.title,
     type: db.type,
     dueDate: db.due_date,
@@ -17,11 +18,14 @@ export function mapDbTask(db: any): Task {
     priority: db.priority,
     completedAt: db.completed_at,
     completedBy: db.completed_by,
+    completedByEmployeeId: db.completed_by_employee_id ?? null,
     completionNotes: db.completion_notes,
     actualTrays: db.actual_trays,
+    actualYieldOz: db.actual_yield_oz ? Number(db.actual_yield_oz) : null,
     seedLot: db.seed_lot,
     createdAt: db.created_at,
     orderItem: db.order_items ?? undefined,
+    rackAssignments: db.rack_assignments ?? undefined,
   };
 }
 
@@ -36,11 +40,18 @@ export async function getTaskById(
   const task = await prisma.tasks.findFirst({
     where: { id, farm_id: farmId },
     include: {
+      employees: true,
+      rack_assignments: true,
       order_items: {
         include: {
           orders: true,
           products: true,
           blends: true,
+          skus: {
+            include: {
+              package_types: true,
+            },
+          },
         },
       },
     },

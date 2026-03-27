@@ -11,6 +11,8 @@ export function mapDbOrderItem(db: any): OrderItem {
     orderId: db.order_id,
     productId: db.product_id,
     blendId: db.blend_id,
+    skuId: db.sku_id ?? null,
+    quantityUnits: db.quantity_units ?? null,
     quantityOz: db.quantity_oz ? Number(db.quantity_oz) : 0,
     harvestDate: db.harvest_date,
     overagePercent: db.overage_percent ? Number(db.overage_percent) : null,
@@ -21,6 +23,7 @@ export function mapDbOrderItem(db: any): OrderItem {
     createdAt: db.created_at,
     product: db.products ?? undefined,
     blend: db.blends ?? undefined,
+    sku: db.skus ?? undefined,
     tasks: db.tasks ?? undefined,
   };
 }
@@ -30,6 +33,8 @@ export function mapDbOrder(db: any): Order {
     id: db.id,
     farmId: db.farm_id,
     customerId: db.customer_id,
+    recurringScheduleId: db.recurring_schedule_id ?? null,
+    recurringGenerationDate: db.recurring_generation_date ?? null,
     orderNumber: db.order_number,
     status: db.status,
     notes: db.notes,
@@ -60,6 +65,13 @@ export async function getOrderById(
               blend_ingredients: {
                 include: { products: true },
               },
+            },
+          },
+          skus: {
+            include: {
+              package_types: true,
+              products: true,
+              blends: true,
             },
           },
           tasks: true,

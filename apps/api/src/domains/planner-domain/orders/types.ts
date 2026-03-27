@@ -7,6 +7,8 @@ export interface Order {
   id: string;
   farmId: string | null;
   customerId: string | null;
+  recurringScheduleId: string | null;
+  recurringGenerationDate: Date | null;
   orderNumber: string;
   status: string;
   notes: string | null;
@@ -21,6 +23,8 @@ export interface OrderItem {
   orderId: string | null;
   productId: string | null;
   blendId: string | null;
+  skuId: string | null;
+  quantityUnits: number | null;
   quantityOz: number;
   harvestDate: Date;
   overagePercent: number | null;
@@ -31,6 +35,7 @@ export interface OrderItem {
   createdAt: Date | null;
   product?: any;
   blend?: any;
+  sku?: any;
   tasks?: any[];
 }
 
@@ -47,13 +52,29 @@ export type GetByIdInput = z.infer<typeof getByIdSchema>;
 const createOrderItemSchema = z.object({
   productId: z.string().uuid().optional(),
   blendId: z.string().uuid().optional(),
-  quantityOz: z.number().min(0.01),
+  skuId: z.string().uuid().optional(),
+  quantityUnits: z.number().int().min(1).optional(),
+  quantityOz: z.number().min(0.01).optional(),
   harvestDate: z.string().or(z.date()),
   overagePercent: z.number().min(0).max(100).optional(),
-}).refine(
-  (data) => (data.productId && !data.blendId) || (!data.productId && data.blendId),
-  { message: 'Exactly one of productId or blendId must be provided' }
-);
+}).superRefine((data, ctx) => {
+  const hasSelection = (data.productId && !data.blendId) || (!data.productId && data.blendId);
+  if (!hasSelection) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Exactly one of productId or blendId must be provided',
+    });
+  }
+
+  const hasSkuQuantity = !!data.skuId && !!data.quantityUnits;
+  const hasOzQuantity = data.quantityOz !== undefined;
+  if (!hasSkuQuantity && !hasOzQuantity) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Provide either skuId + quantityUnits or quantityOz',
+    });
+  }
+});
 
 export const createOrderSchema = z.object({
   customerId: z.string().uuid().optional(),
@@ -77,6 +98,13 @@ export const updateOrderSchema = z.object({
 });
 
 export type UpdateOrderInput = z.infer<typeof updateOrderSchema>;
+
+export const cloneOrderSchema = z.object({
+  orderId: z.string().uuid(),
+  dayOffset: z.number().int(),
+});
+
+export type CloneOrderInput = z.infer<typeof cloneOrderSchema>;
 
 export const listOrdersInputSchema = paginationInputSchema.extend({
   status: z.string().optional(),

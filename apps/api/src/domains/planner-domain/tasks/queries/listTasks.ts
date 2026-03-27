@@ -109,11 +109,18 @@ export async function listTasks(
     take,
     orderBy: [{ due_date: 'asc' }, { id: 'asc' }],
     include: {
+      employees: true,
+      rack_assignments: true,
       order_items: {
         include: {
           orders: true,
           products: true,
           blends: true,
+          skus: {
+            include: {
+              package_types: true,
+            },
+          },
         },
       },
     },

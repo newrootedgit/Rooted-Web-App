@@ -49,6 +49,11 @@ export async function listOrders(
         include: {
           products: true,
           blends: true,
+          skus: {
+            include: {
+              package_types: true,
+            },
+          },
         },
       },
     },

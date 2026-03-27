@@ -5,9 +5,10 @@ import {
   createOrderSchema,
   updateOrderStatusSchema,
   updateOrderSchema,
+  cloneOrderSchema,
 } from './types.js';
 import { listOrders, getOrderById } from './queries/index.js';
-import { createOrder, updateOrderStatus, updateOrder } from './commands/index.js';
+import { createOrder, updateOrderStatus, updateOrder, cloneOrder } from './commands/index.js';
 
 export const orderRouter = router({
   list: farmProcedure
@@ -21,6 +22,10 @@ export const orderRouter = router({
   create: farmProcedure
     .input(createOrderSchema)
     .mutation(({ ctx, input }) => createOrder(ctx.prisma, ctx.farmId, input)),
+
+  clone: farmProcedure
+    .input(cloneOrderSchema)
+    .mutation(({ ctx, input }) => cloneOrder(ctx.prisma, ctx.farmId, input)),
 
   updateStatus: farmProcedure
     .input(updateOrderStatusSchema)

@@ -1,16 +1,18 @@
 import { useState } from 'react';
 import { CalendarView } from './calendar/CalendarView';
+import { LogsView } from './LogsView';
 import { SeedingView } from './seeding/SeedingView';
 import { TransplantView } from './transplant/TransplantView';
 import { HarvestView } from './harvest/HarvestView';
 
-type ProductionTab = 'calendar' | 'seeding' | 'transplant' | 'harvest';
+type ProductionTab = 'calendar' | 'seeding' | 'transplant' | 'harvest' | 'logs';
 
 const TABS: { id: ProductionTab; label: string }[] = [
   { id: 'calendar', label: 'Calendar' },
   { id: 'seeding', label: 'Seeding' },
   { id: 'transplant', label: 'Transplant' },
   { id: 'harvest', label: 'Harvest' },
+  { id: 'logs', label: 'Logs' },
 ];
 
 export function ProductionPage() {
@@ -42,6 +44,7 @@ export function ProductionPage() {
       {tab === 'seeding' && <SeedingView />}
       {tab === 'transplant' && <TransplantView />}
       {tab === 'harvest' && <HarvestView />}
+      {tab === 'logs' && <LogsView />}
     </div>
   );
 }

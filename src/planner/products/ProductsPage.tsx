@@ -6,8 +6,9 @@ import { ProductForm } from './components/ProductForm';
 import { CategoryManager } from './components/CategoryManager';
 import { BlendList } from './components/BlendList';
 import { BlendForm } from './components/BlendForm';
+import { SkuList } from './components/SkuList';
 
-type Tab = 'products' | 'blends';
+type Tab = 'products' | 'blends' | 'skus';
 
 export function ProductsPage() {
   const [tab, setTab] = useState<Tab>('products');
@@ -106,6 +107,16 @@ export function ProductsPage() {
         >
           Blends
         </button>
+        <button
+          onClick={() => setTab('skus')}
+          className={`pb-2 px-1 text-sm font-medium border-b-2 transition-colors ${
+            tab === 'skus'
+              ? 'border-primary text-foreground'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          SKUs
+        </button>
       </div>
 
       {tab === 'products' && (
@@ -153,6 +164,8 @@ export function ProductsPage() {
           onArchive={(id) => archiveBlendMutation.mutate({ id })}
         />
       )}
+
+      {tab === 'skus' && <SkuList />}
 
       <ProductForm
         isOpen={showProductForm}

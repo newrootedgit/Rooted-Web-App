@@ -6,8 +6,20 @@ vi.mock('../../../../lib/aws/iot-client.js', () => ({
   publishToDevice: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock('../../../../lib/aws/variable-ranges-cache.js', () => ({
+  getVariableRanges: vi.fn().mockReturnValue(null),
+}));
+
 const { publishToDevice } = await import('../../../../lib/aws/iot-client.js');
+const { getVariableRanges } = await import('../../../../lib/aws/variable-ranges-cache.js');
 const { updateMachineConfig } = await import('../machine-presets/updateMachineConfig.js');
+
+const mockGetVariableRanges = getVariableRanges as ReturnType<typeof vi.fn>;
+
+const SAMPLE_RANGES = {
+  speed: { min: 0, max: 500 },
+  blade_height: { min: 1, max: 100 },
+};
 
 describe('updateMachineConfig', () => {
   let mockPrisma: MockPrismaClient;
@@ -17,9 +29,10 @@ describe('updateMachineConfig', () => {
     vi.clearAllMocks();
   });
 
-  it('should publish update_presets with presets payload', async () => {
+  it('should publish update_presets with presets payload when ranges are cached', async () => {
     const machine = createMockDbMachine({ id: 'machine-1', tenant_id: 'tenant-1', device_id: 'dev-1', status: 'online' });
     mockPrisma.machines.findFirst.mockResolvedValue(machine);
+    mockGetVariableRanges.mockReturnValue(SAMPLE_RANGES);
 
     const presets = { '1': { speed: 100 } };
     const result = await updateMachineConfig(
@@ -84,5 +97,67 @@ describe('updateMachineConfig', () => {
     await expect(
       updateMachineConfig(mockPrisma as unknown as PrismaClient, 'machine-1', 'tenant-1', {})
     ).resolves.toHaveProperty('requestId');
+  });
+
+  // --- Range validation tests ---
+
+  it('should throw PRECONDITION_FAILED when ranges cache is cold and presets are provided', async () => {
+    const machine = createMockDbMachine({ id: 'machine-1', tenant_id: 'tenant-1', device_id: 'dev-1', status: 'online' });
+    mockPrisma.machines.findFirst.mockResolvedValue(machine);
+    mockGetVariableRanges.mockReturnValue(null);
+
+    await expect(
+      updateMachineConfig(mockPrisma as unknown as PrismaClient, 'machine-1', 'tenant-1', {
+        presets: { '1': { speed: 100 } },
+      })
+    ).rejects.toThrow('Variable ranges not loaded');
+
+    expect(publishToDevice).not.toHaveBeenCalled();
+  });
+
+  it('should reject preset values outside allowed range', async () => {
+    const machine = createMockDbMachine({ id: 'machine-1', tenant_id: 'tenant-1', device_id: 'dev-1', status: 'online' });
+    mockPrisma.machines.findFirst.mockResolvedValue(machine);
+    mockGetVariableRanges.mockReturnValue(SAMPLE_RANGES);
+
+    await expect(
+      updateMachineConfig(mockPrisma as unknown as PrismaClient, 'machine-1', 'tenant-1', {
+        presets: { '1': { speed: 9999 } },
+      })
+    ).rejects.toThrow('out of range');
+
+    expect(publishToDevice).not.toHaveBeenCalled();
+  });
+
+  it('should allow variety_names-only updates without range check', async () => {
+    const machine = createMockDbMachine({ id: 'machine-1', tenant_id: 'tenant-1', device_id: 'dev-1', status: 'online' });
+    mockPrisma.machines.findFirst.mockResolvedValue(machine);
+    mockGetVariableRanges.mockReturnValue(null); // no cached ranges
+
+    const result = await updateMachineConfig(
+      mockPrisma as unknown as PrismaClient,
+      'machine-1',
+      'tenant-1',
+      { variety_names: { '1': 'Basil' } }
+    );
+
+    expect(result.requestId).toBeDefined();
+    expect(publishToDevice).toHaveBeenCalled();
+  });
+
+  it('should accept preset values within allowed range', async () => {
+    const machine = createMockDbMachine({ id: 'machine-1', tenant_id: 'tenant-1', device_id: 'dev-1', status: 'online' });
+    mockPrisma.machines.findFirst.mockResolvedValue(machine);
+    mockGetVariableRanges.mockReturnValue(SAMPLE_RANGES);
+
+    const result = await updateMachineConfig(
+      mockPrisma as unknown as PrismaClient,
+      'machine-1',
+      'tenant-1',
+      { presets: { '1': { speed: 250, blade_height: 50 } } }
+    );
+
+    expect(result.requestId).toBeDefined();
+    expect(publishToDevice).toHaveBeenCalled();
   });
 });

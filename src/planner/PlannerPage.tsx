@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, Sprout, Users, ClipboardList, CheckSquare, LayoutDashboard } from 'lucide-react';
+import { Calendar, Sprout, Users, ClipboardList, CheckSquare, LayoutDashboard, Repeat, BadgeCheck } from 'lucide-react';
 import { AppLayout, NavItem } from '@shared/ui/components/AppLayout';
 import { AppType } from '@shared/ui/components/AppHeader';
 import { ProductsPage } from './products/ProductsPage';
@@ -9,6 +9,8 @@ import { OrdersPage } from './orders/OrdersPage';
 import { TasksPage } from './tasks/TasksPage';
 import { ProductionPage } from './production/ProductionPage';
 import { FarmLayoutPage } from './farm-layout/FarmLayoutPage';
+import { RecurringSchedulesPage } from './recurring-schedules/RecurringSchedulesPage';
+import { EmployeesPage } from './employees/EmployeesPage';
 
 const sidebarItems: NavItem[] = [
   { id: 'products', label: 'Varieties', icon: <Sprout size={20} /> },
@@ -17,6 +19,8 @@ const sidebarItems: NavItem[] = [
   { id: 'tasks', label: 'Tasks', icon: <CheckSquare size={20} /> },
   { id: 'production', label: 'Production', icon: <Calendar size={20} /> },
   { id: 'farm-layout', label: 'Farm Layout', icon: <LayoutDashboard size={20} /> },
+  { id: 'recurring', label: 'Recurring', icon: <Repeat size={20} /> },
+  { id: 'team', label: 'Team', icon: <BadgeCheck size={20} /> },
 ];
 
 export function PlannerPage() {
@@ -43,6 +47,8 @@ export function PlannerPage() {
       {activeItem === 'tasks' && <TasksPage />}
       {activeItem === 'production' && <ProductionPage />}
       {activeItem === 'farm-layout' && <FarmLayoutPage />}
+      {activeItem === 'recurring' && <RecurringSchedulesPage />}
+      {activeItem === 'team' && <EmployeesPage />}
     </AppLayout>
   );
 }

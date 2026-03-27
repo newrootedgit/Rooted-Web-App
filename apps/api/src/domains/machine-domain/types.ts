@@ -53,7 +53,10 @@ export interface Machine {
 
 // Presets ----------------------------------
 
-export const varietyPresetSchema = z.record(z.string(), z.number());
+export const varietyPresetSchema = z.record(
+  z.string().min(1).max(100),
+  z.number().finite()
+);
 
 export const variableRangeSchema = z.object({
   min: z.number(),
@@ -81,7 +84,10 @@ export const updateConfigSchema = z.object({
     z.string().regex(/^([1-9]|1[0-9]|20)$/),
     varietyPresetSchema
   ).optional(),
-  variety_names: z.record(z.string(), z.string()).optional(),
+  variety_names: z.record(
+    z.string().regex(/^([1-9]|1[0-9]|20)$/),
+    z.string().min(1).max(15)
+  ).optional(),
 });
 
 export const requestConfigSchema = z.object({

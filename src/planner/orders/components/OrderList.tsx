@@ -6,6 +6,8 @@ interface OrderItem {
   id: string;
   productId: string | null;
   blendId: string | null;
+  skuId?: string | null;
+  quantityUnits?: number | null;
   quantityOz: number;
   harvestDate: string | Date;
   traysNeeded: number | null;
@@ -14,6 +16,7 @@ interface OrderItem {
   moveToLightDate: string | Date | null;
   product?: { name: string } | null;
   blend?: { name: string } | null;
+  sku?: { name: string } | null;
   tasks?: any[];
 }
 
@@ -33,6 +36,7 @@ interface OrderListProps {
   isLoading: boolean;
   onViewDetail: (order: Order) => void;
   onUpdateStatus: (id: string, status: string) => void;
+  onClone: (order: Order) => void;
 }
 
 function formatDate(d: string | Date | null): string {
@@ -49,10 +53,11 @@ function getNextStatuses(current: string): string[] {
   return map[current] ?? [];
 }
 
-function OrderCard({ order, onViewDetail, onUpdateStatus }: {
+function OrderCard({ order, onViewDetail, onUpdateStatus, onClone }: {
   order: Order;
   onViewDetail: (order: Order) => void;
   onUpdateStatus: (id: string, status: string) => void;
+  onClone: (order: Order) => void;
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const nextStatuses = getNextStatuses(order.status);
@@ -87,6 +92,15 @@ function OrderCard({ order, onViewDetail, onUpdateStatus }: {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onClone(order);
+            }}
+            className="px-2 py-1 text-xs border border-border rounded hover:bg-secondary transition-colors"
+          >
+            Clone
+          </button>
           {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
         </div>
       </div>
@@ -99,6 +113,8 @@ function OrderCard({ order, onViewDetail, onUpdateStatus }: {
                 <thead>
                   <tr className="text-muted-foreground text-left">
                     <th className="pb-2 font-medium">Variety / Blend</th>
+                    <th className="pb-2 font-medium">SKU</th>
+                    <th className="pb-2 font-medium">Units</th>
                     <th className="pb-2 font-medium">Qty (oz)</th>
                     <th className="pb-2 font-medium">Trays</th>
                     <th className="pb-2 font-medium">Harvest</th>
@@ -111,6 +127,8 @@ function OrderCard({ order, onViewDetail, onUpdateStatus }: {
                       <td className="py-2 text-foreground">
                         {item.product?.name ?? item.blend?.name ?? 'Unknown'}
                       </td>
+                      <td className="py-2 text-foreground">{item.sku?.name ?? '—'}</td>
+                      <td className="py-2 text-foreground">{item.quantityUnits ?? '—'}</td>
                       <td className="py-2 text-foreground">{item.quantityOz}</td>
                       <td className="py-2 text-foreground">{item.traysNeeded ?? '-'}</td>
                       <td className="py-2 text-foreground">{formatDate(item.harvestDate)}</td>
@@ -147,7 +165,7 @@ function OrderCard({ order, onViewDetail, onUpdateStatus }: {
   );
 }
 
-export function OrderList({ orders, isLoading, onViewDetail, onUpdateStatus }: OrderListProps) {
+export function OrderList({ orders, isLoading, onViewDetail, onUpdateStatus, onClone }: OrderListProps) {
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center py-8 text-muted-foreground gap-4">
@@ -173,6 +191,7 @@ export function OrderList({ orders, isLoading, onViewDetail, onUpdateStatus }: O
           order={order}
           onViewDetail={onViewDetail}
           onUpdateStatus={onUpdateStatus}
+          onClone={onClone}
         />
       ))}
     </div>

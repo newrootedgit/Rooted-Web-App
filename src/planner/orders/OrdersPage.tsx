@@ -3,6 +3,7 @@ import { Plus, Search } from 'lucide-react';
 import { trpc } from '../../lib/trpc';
 import { OrderList } from './components/OrderList';
 import { OrderForm } from './components/OrderForm';
+import { CloneOrderModal } from './components/CloneOrderModal';
 
 const ORDER_STATUSES = ['Pending', 'In Progress', 'Ready', 'Delivered', 'Cancelled'];
 
@@ -10,6 +11,7 @@ export function OrdersPage() {
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [statusFilter, setStatusFilter] = useState('');
+  const [cloningOrder, setCloningOrder] = useState<any>(null);
 
   const utils = trpc.useUtils();
 
@@ -21,6 +23,14 @@ export function OrdersPage() {
   const updateStatusMutation = trpc.orders.updateStatus.useMutation({
     onSuccess: () => {
       utils.orders.list.invalidate();
+    },
+  });
+
+  const cloneMutation = trpc.orders.clone.useMutation({
+    onSuccess: () => {
+      utils.orders.list.invalidate();
+      utils.tasks.list.invalidate();
+      setCloningOrder(null);
     },
   });
 
@@ -74,12 +84,20 @@ export function OrdersPage() {
         isLoading={isLoading}
         onViewDetail={() => {}}
         onUpdateStatus={handleUpdateStatus}
+        onClone={setCloningOrder}
       />
 
       <OrderForm
         isOpen={showForm}
         onClose={() => setShowForm(false)}
         onSuccess={handleFormSuccess}
+      />
+
+      <CloneOrderModal
+        isOpen={cloningOrder !== null}
+        order={cloningOrder}
+        onClose={() => setCloningOrder(null)}
+        onSubmit={(dayOffset) => cloningOrder && cloneMutation.mutate({ orderId: cloningOrder.id, dayOffset })}
       />
     </div>
   );

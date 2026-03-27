@@ -27,7 +27,7 @@ function InlineNameEditor({
   }, [isEditing]);
 
   const handleConfirm = () => {
-    const trimmed = draft.trim();
+    const trimmed = draft.trim().slice(0, 15);
     if (trimmed && trimmed !== value) {
       onChange(trimmed);
     }
@@ -60,6 +60,7 @@ function InlineNameEditor({
       <input
         ref={inputRef}
         value={draft}
+        maxLength={15}
         onChange={(e) => setDraft(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === 'Enter') handleConfirm();
