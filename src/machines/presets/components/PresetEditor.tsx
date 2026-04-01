@@ -54,6 +54,7 @@ export default function PresetEditor({ values, onChange, disabled, variableRange
               min={range?.min}
               max={range?.max}
               onChange={(e) => handleChange(key, e.target.value)}
+              onWheel={(e) => e.currentTarget.blur()}
               disabled={disabled}
               className="px-3 py-1.5 bg-secondary border border-border rounded-md text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
             />

@@ -6,15 +6,24 @@ This document catalogs every functional gap between the Rooted-Planner (standalo
 
 Items are ordered by priority: core production workflow first, then business operations, then nice-to-haves.
 
+**Current status note (2026-03-27):**
+- Priority 1 is implemented in the Rooted-Web-App codebase.
+- The remaining operational requirement for Priority 1 is database rollout: the planner parity Prisma migration must be applied in each environment before the new schema-backed features are used.
+
 **Reference projects:**
 - Rooted-Planner: `/Users/VishalVunnam/Desktop/Rooted/Rooted-Planner`
 - Rooted-Web-App: `/Users/VishalVunnam/Desktop/Rooted/Rooted-Web-App`
 
 ---
 
-## Priority 1 — Core Production Workflow Gaps
+## Priority 1 — Core Production Workflow Gaps ✅ Complete
 
-These gaps directly affect daily farm production operations. A user relying on the Rooted-Web-App planner cannot run their farm day-to-day without these.
+These gaps directly affected daily farm production operations. They are now implemented in Rooted-Web-App.
+
+**Completion notes:**
+- Recurring schedules, order cloning, SKU/package-driven ordering, richer task completion logging, and blend ingredient scheduling are implemented in the planner backend and frontend.
+- Team management was added as a supporting surface so task completion can reference employees.
+- Priority 1 is considered complete at the application layer; environments still need the planner parity migration applied for the schema-backed features to operate correctly.
 
 ---
 
@@ -33,10 +42,16 @@ These gaps directly affect daily farm production operations. A user relying on t
 - The system can auto-generate orders based on lead time (e.g., 28 days ahead)
 - Add skip dates for holidays/vacations so no orders are generated on those days
 
-**What the user can do in Rooted-Web-App:**
-- Nothing. The `recurring_order_schedules` table exists in the Prisma schema, but there is no UI, no API router, and no generation logic.
+**What the user can do in Rooted-Web-App now:**
+- Navigate to a dedicated Recurring page in the planner
+- Create, edit, activate/deactivate, and delete recurring schedules
+- Add schedule items and skip dates
+- Manually generate an order from a schedule
+- Use server-side recurring date calculations and startup/interval generation hooks
 
-**Code changes required:**
+**Status:** Complete in application code. Requires the planner parity migration in the target database before production use.
+
+**Implementation notes:**
 
 | Layer | Work |
 |-------|------|
@@ -61,10 +76,14 @@ These gaps directly affect daily farm production operations. A user relying on t
 - A new order is created with identical items but all harvest dates (and calculated soak/seed/light dates) shifted forward by the offset
 - The new order gets its own order number and generates its own tasks
 
-**What the user can do in Rooted-Web-App:**
-- Nothing. There is no clone button, no clone modal, and no clone API endpoint.
+**What the user can do in Rooted-Web-App now:**
+- Clone an order from the order list
+- Shift harvest dates by a day offset in a dedicated modal
+- Generate a fresh order number and a new set of recalculated production tasks
 
-**Code changes required:**
+**Status:** Complete.
+
+**Implementation notes:**
 
 | Layer | Work |
 |-------|------|
@@ -83,16 +102,20 @@ These gaps directly affect daily farm production operations. A user relying on t
 - Manage package types (clamshell, bulk bag, etc.) with a seed-defaults button
 - SKU availability and public visibility toggles are inline-editable
 
-**What the user can do in Rooted-Web-App:**
-- When creating an order, select a variety and enter raw oz directly (e.g., "48")
-- Products have a single optional `sku` text field — it is just a label, not a relational entity
-- There are no package types, no SKU management page, no channel/availability concepts
+**What the user can do in Rooted-Web-App now:**
+- Manage SKU records and package types from the planner products surface
+- Select a SKU/package when creating an order and enter unit quantity instead of raw oz
+- See total oz derived from `quantity × sku.weightOz`
+- Use inline SKU availability/public toggles and package-type assignment
+- Order both products and blends through SKU-backed order items
 
-**Code changes required:**
+**Status:** Complete.
+
+**Implementation notes:**
 
 | Layer | Work |
 |-------|------|
-| **Prisma schema** | Create a `skus` table: `id`, `productId` (FK → products), `code` (unique), `name`, `weightOz`, `price`, `packageTypeId` (FK), `salesChannel` (enum: WHOLESALE, RETAIL, BOTH), `isAvailable`, `isPublic`, `stockQuantity`, `lowStockThreshold`. Create a `package_types` table: `id`, `name`, `farmId`. |
+| **Prisma schema** | Add `skus` and `package_types`. In Rooted-Web-App, SKUs are modeled pragmatically to support both varieties and blends, since blend ordering is already part of the planner workflow. |
 | **Backend** | Add `skus` sub-router under products: `list` (with filters for channel, availability, search), `create`, `update`, `delete`. Add `packageTypes` sub-router: `list`, `create`, `update`, `delete`, `seedDefaults`. |
 | **Frontend — SKU management** | Add a third tab "SKUs" to `ProductsPage.tsx`. Build `SkuList.tsx` (table with sortable columns, inline availability/public toggles, search, channel filter, availability filter) and `SkuForm.tsx` (modal with code, name, product dropdown, weight, price, channel radio, package type dropdown, toggles). |
 | **Frontend — package types** | Add package type management (inline list with add/edit/delete) accessible from the SKU tab or as a sub-section. |
@@ -116,17 +139,14 @@ These gaps directly affect daily farm production operations. A user relying on t
 - View completed task logs in a dedicated "Logs" tab on the Operations page
 - Bulk actions: select multiple tasks, then batch mark-complete, batch assign rack, or batch assign seed lot
 
-**What the user can do in Rooted-Web-App:**
-- When completing a task, fill out a simpler form:
-  - Actual Trays (optional)
-  - Seed Lot (free text, optional)
-  - Notes (optional)
-- No employee selector, no actual yield field, no date/time picker, no rack assignment
-- Rack assignment modal exists but is a non-functional placeholder ("Phase 5")
-- No Logs tab to review past completions
-- Batch completion only exists in the Seeding view (not other views)
+**What the user can do in Rooted-Web-App now:**
+- Complete tasks with employee, trays, yield, timestamp, seed lot, notes, and optional rack assignments
+- Use a functional rack-assignment flow for MOVE_TO_LIGHT work
+- Review completed-task logs from the Production page
 
-**Code changes required:**
+**Status:** Complete at the form/logging layer. Batch actions outside Seeding remain a Priority 3 refinement rather than a blocker for Priority 1 parity.
+
+**Implementation notes:**
 
 | Layer | Work |
 |-------|------|
@@ -149,11 +169,14 @@ These gaps directly affect daily farm production operations. A user relying on t
   - Seed date for that ingredient
 - This lets the user see that a "Spicy Mix" order actually needs 3 trays of radish (seed Monday) and 2 trays of mustard (seed Tuesday) because they have different growth timelines
 
-**What the user can do in Rooted-Web-App:**
-- Blends can be selected in orders, but the form shows only the aggregate values (total oz, total trays, single set of dates)
-- No per-ingredient breakdown is visible during order creation
+**What the user can do in Rooted-Web-App now:**
+- See ingredient-level blend breakdown during order entry
+- View ingredient oz, trays, and individual soak/seed/light dates
+- Generate backend tasks per blend ingredient rather than using only a single aggregate blend schedule
 
-**Code changes required:**
+**Status:** Complete.
+
+**Implementation notes:**
 
 | Layer | Work |
 |-------|------|
@@ -167,6 +190,20 @@ These gaps directly affect daily farm production operations. A user relying on t
 
 These features support running the business side of the farm. Users can operate without them short-term, but they are required for a complete production-to-delivery workflow.
 
+**Pragmatic delivery order for Priority 2:**
+1. Finish `2B. Employee / Team Management` first, because it already exists partially and it removes friction for delivery driver assignment, invoice ownership, and operations auditability.
+2. Deliver `2A. Supplies & Inventory Management` next, because the schema already exists in part and it unlocks farm-cost and replenishment workflows without heavy cross-domain coupling.
+3. Deliver `2D. Delivery Routes` after Team, because drivers should be selected from employees and routes naturally reuse the existing orders/customers stack.
+4. Deliver `2C. Invoicing System` after SKU-backed ordering is stable in production, because invoice line items need to snapshot order/SKU/customer data cleanly.
+5. Deliver `2E. CSA / Subscription Programs` last in this priority bucket, because it is effectively a mini product line with its own planning lifecycle and order generation rules.
+
+**General guidance for Part 2:**
+- Prefer extending the current planner tRPC/domain pattern instead of introducing a second API style.
+- Keep monetary, pricing, and quantity fields as immutable snapshots on downstream records once generated. Orders, deliveries, and invoices should not drift because an upstream product or customer changed later.
+- Use string-backed status fields initially for speed unless a strict enum is required for data integrity. The current schema style in Rooted-Web-App already leans that way.
+- Reuse existing order creation, customer, task, and employee primitives wherever possible. Part 2 should compose with Priority 1 rather than recreate it.
+- Ship internal workflow value before external integrations. For example, invoice CRUD and payment recording should not be blocked on Stripe or outbound email.
+
 ---
 
 ### 2A. Supplies & Inventory Management
@@ -179,14 +216,29 @@ These features support running the business side of the farm. Users can operate 
 - **Categories tab**: create and manage supply categories
 - Supply form includes: name, category, unit, supplier, quantity on hand, reorder point, cost per unit, shelf location, notes, product link (for seeds)
 
-**What the user can do in Rooted-Web-App:**
-- Nothing. The `supplies`, `supply_categories`, `supply_purchases`, and `supply_usage` tables may exist in the schema but there is no UI or API.
+**What the user can do in Rooted-Web-App today:**
+- The schema already contains `supplies`, `supply_categories`, `supply_purchases`, and `supply_usage`
+- There is still no planner UI or API surface for operators
+
+**Pragmatic implementation notes:**
+- Do not recreate the supplies tables from scratch. Extend the existing schema instead of replacing it.
+- Add missing business fields to the existing models rather than introducing a parallel inventory model. The current schema already has the right backbone.
+- Keep stock quantity on `supplies` as the operationally queryable current value, but treat purchases and usage as the source-of-truth ledger for adjustments and auditability.
+- Record `supply_usage.orderId` and `supply_usage.taskId` as optional links. Do not make usage logging depend on having an associated task or order.
+- Start with manual supplier text fields before introducing a full suppliers domain. That keeps this feature useful without adding unnecessary relational overhead.
+- Build the frontend around four operator workflows: stock lookup, receive purchase, record usage, manage categories. Cost analytics can remain out of scope for v1.
+
+**Acceptance checks:**
+- A user can add a supply, receive stock through Purchases, and see `quantityOnHand` increase immediately.
+- A user can record usage from the Usage tab or from an inline stock action and see `quantityOnHand` decrease immediately.
+- Out-of-stock / below-reorder / negative states are visually distinct in the Stock tab.
+- Category grouping works even when a supply has no purchase history.
 
 **Code changes required:**
 
 | Layer | Work |
 |-------|------|
-| **Prisma schema** | Create tables: `supply_categories` (id, name, farmId), `supplies` (id, name, categoryId, unit, supplierId, quantityOnHand, reorderPoint, costPerUnit, shelfLocation, notes, productId, farmId), `supply_purchases` (id, supplyId, date, quantity, unitCost, notes, farmId), `supply_usage` (id, supplyId, date, quantity, purpose, notes, taskId, orderId, farmId). |
+| **Prisma schema** | Extend the existing `supplies`, `supply_categories`, `supply_purchases`, and `supply_usage` models to close the remaining gaps: supplier text, reorder point, cost/unit, shelf location, notes, usage purpose, optional `orderId`, and any missing farm scoping/indexes. Avoid introducing duplicate inventory tables. |
 | **Backend** | Create `apps/api/src/domains/planner-domain/supplies/router.ts` with sub-routers for supplies (CRUD + stock adjustment), purchases (list + create), usage (list + record), categories (CRUD). |
 | **Frontend** | Create `src/planner/supplies/` with: `SuppliesPage.tsx` (4-tab layout), `StockList.tsx` (grouped by category, expandable, status indicators), `SupplyForm.tsx`, `PurchaseList.tsx`, `PurchaseForm.tsx`, `UsageList.tsx`, `UsageForm.tsx`, `CategoryList.tsx`. |
 | **Navigation** | Add "Supplies" to planner sidebar. |
@@ -204,15 +256,33 @@ These features support running the business side of the farm. Users can operate 
 - Resend expired invites
 - Transfer farm ownership via a special modal
 
-**What the user can do in Rooted-Web-App:**
-- Nothing in the planner UI. The `employees` table exists in the schema. Employee data is needed for the task completion "Completed By" dropdown.
+**What the user can do in Rooted-Web-App today:**
+- View a basic Team page
+- Create, edit, and delete employees
+- Use employees in task completion forms
+- Invite and resend-invite actions are still stubbed and there is no ownership-transfer flow yet
+
+**Pragmatic implementation notes:**
+- Treat the current employee router/page as the baseline rather than restarting this area.
+- Split delivery into two passes:
+  - pass 1: finish planner-facing directory quality: filters, badges, invite status, hourly rate visibility
+  - pass 2: implement Clerk-backed invitation flows and ownership transfer
+- Do not block Delivery Routes or task-completion auditing on invite automation. Employee records are already useful without full auth lifecycle wiring.
+- Ownership transfer should be isolated behind an explicit admin-only modal and server command. It should not be mixed into normal employee CRUD.
+- If roles/positions remain string-backed for now, centralize the allowed display values in shared constants before the UI starts styling badges from ad hoc strings.
+
+**Acceptance checks:**
+- A planner user can search/filter employees by status and position.
+- Invite and resend-invite actions produce a deterministic result or a clear failure state.
+- Driver selection in Delivery can reuse the employee list without additional schema changes.
+- Ownership transfer is unavailable to non-admin users and requires explicit confirmation.
 
 **Code changes required:**
 
 | Layer | Work |
 |-------|------|
-| **Backend** | Create `apps/api/src/domains/planner-domain/employees/router.ts` with: `list` (search, position filter, status filter), `byId`, `create`, `update`, `delete`, `sendInvite`, `resendInvite`. Integrate with Clerk for invitation flows. |
-| **Frontend** | Create `src/planner/employees/` with: `EmployeesPage.tsx` (list + search + filters), `EmployeeForm.tsx` (modal), `EmployeeCard.tsx` (position badge, status badge, invite status). |
+| **Backend** | Extend the existing `employees` router to complete the surface: position/status filters, invite-status payload, `sendInvite`, `resendInvite`, and an admin-only ownership transfer procedure. Integrate with Clerk for invitation flows instead of keeping placeholder success responses. |
+| **Frontend** | Extend the existing `src/planner/employees/` surface with real filters, badges, invite status, resend controls, and an ownership transfer modal. Keep the existing form/list as the base implementation. |
 | **Navigation** | Add "Team" to planner sidebar. |
 
 ---
@@ -230,15 +300,28 @@ These features support running the business side of the farm. Users can operate 
 - Send invoices (email)
 - Print invoices
 
-**What the user can do in Rooted-Web-App:**
+**What the user can do in Rooted-Web-App today:**
 - Nothing. No invoicing tables, API, or UI.
+
+**Pragmatic implementation notes:**
+- Invoice records must snapshot customer name/address, line-item descriptions, unit prices, and amounts at the time of invoice creation. Do not depend on live order/customer records for rendered invoice history.
+- Keep v1 invoicing internal-first: draft/create/edit/send status changes, print-ready rendering, and payment recording. Stripe collection and automated email delivery can be layered on later.
+- Use per-farm invoice numbering and reset the sequence by year only if that matches the current business expectation. Otherwise keep a simple monotonically increasing per-farm sequence to avoid avoidable edge cases.
+- Support both order-derived line items and manual lines in the same invoice. That is required for delivery fees, credits, adjustments, and non-order charges.
+- Payment records should be append-only except for explicit correction/deletion actions. Treat them as ledger events, not mutable invoice fields.
+
+**Acceptance checks:**
+- A user can create a draft invoice from one or more orders or from manual line items only.
+- Totals remain stable after the linked order changes.
+- Recording a payment updates invoice status correctly for partial and full payment cases.
+- Print-ready invoice output matches the saved invoice snapshot without extra live joins.
 
 **Code changes required:**
 
 | Layer | Work |
 |-------|------|
 | **Prisma schema** | Create: `invoices` (id, invoiceNumber, customerId, farmId, status, issueDate, dueDate, subtotal, taxRate, taxAmount, total, internalNotes, customerNotes, paymentTerms), `invoice_items` (id, invoiceId, description, quantity, unitPrice, amount, orderId, orderItemId), `invoice_payments` (id, invoiceId, method, amount, date, reference, notes). |
-| **Backend** | Create invoices router with: `list` (search + status filter), `byId`, `create`, `update`, `updateStatus`, `delete`, `recordPayment`, `deletePayment`. Auto-generate invoice numbers (INV-YYYY-NNN). |
+| **Backend** | Create invoices router with: `list` (search + status filter), `byId`, `create`, `update`, `updateStatus`, `delete`, `recordPayment`, `deletePayment`, and optionally `send`. Auto-generate invoice numbers at the backend. Snapshot line-item and customer display data when the invoice is created. |
 | **Frontend** | Create `src/planner/invoices/` with: `InvoicesPage.tsx` (3-tab layout), `InvoiceList.tsx`, `UnpaidList.tsx`, `InvoiceForm.tsx` (with items from orders or manual), `InvoiceDetail.tsx` (print-ready), `RecordPaymentModal.tsx`. |
 | **Navigation** | Add "Invoices" to planner sidebar. |
 
@@ -254,14 +337,27 @@ These features support running the business side of the farm. Users can operate 
 - Start/complete routes
 - View route detail: ordered stops with customer address, items to deliver, per-stop status (Pending/Out for Delivery/Delivered/Failed)
 
-**What the user can do in Rooted-Web-App:**
+**What the user can do in Rooted-Web-App today:**
 - Nothing. No delivery tables, API, or UI.
+
+**Pragmatic implementation notes:**
+- Delivery should reuse `orders`, `customers`, and `employees` rather than inventing a separate delivery-order concept.
+- Add an `assignedRouteId` or equivalent route membership relation only if route exclusivity becomes difficult to enforce from `delivery_stops` alone. Start with stops as the source of truth.
+- Snapshot customer name and delivery address onto each stop when it is created. Drivers should not lose delivery context because the customer record changed later.
+- Restrict route order selection to orders in `Ready` or an explicitly deliverable state. Do not allow cancelled or draft-like records onto routes.
+- Treat per-stop status as more important than route status. Route status can be derived or rolled up from stop progress, even if a top-level route status is still stored for convenience.
+
+**Acceptance checks:**
+- A user can create a route for a date, assign a driver, and add ready orders that are not already assigned elsewhere.
+- Route detail preserves stop order and delivery address snapshot.
+- Updating stop status updates the route view without mutating the original order history incorrectly.
+- Removing an order from a route cleanly frees it for reassignment.
 
 **Code changes required:**
 
 | Layer | Work |
 |-------|------|
-| **Prisma schema** | Create: `delivery_routes` (id, name, driverId, farmId, date, status), `delivery_stops` (id, routeId, orderId, sequence, status, notes, deliveredAt). |
+| **Prisma schema** | Create: `delivery_routes` (id, name, driverId, farmId, date, status), `delivery_stops` (id, routeId, orderId, sequence, status, notes, deliveredAt). Strongly consider snapshot columns for `customerName` and `deliveryAddress` on `delivery_stops` to prevent historical drift. |
 | **Backend** | Create delivery router with: `listByDate`, `byId`, `create`, `update`, `updateStatus`, `addOrders`, `removeOrder`, `updateStopStatus`. |
 | **Frontend** | Create `src/planner/delivery/` with: `DeliveryPage.tsx` (date selector + route cards), `RouteForm.tsx` (create/edit with order picker), `RouteDetail.tsx` (stop list with status actions). |
 | **Navigation** | Add "Delivery" to planner sidebar. |
@@ -277,15 +373,29 @@ These features support running the business side of the farm. Users can operate 
 - **Weeks**: plan weekly allocations via a product × share-type grid (editable matrix of oz values); finalize weeks to lock edits; generate orders from finalized allocations (creates one order per member based on their share type)
 - Manage pickup locations with name, address, day/time, capacity
 
-**What the user can do in Rooted-Web-App:**
+**What the user can do in Rooted-Web-App today:**
 - Nothing.
+
+**Pragmatic implementation notes:**
+- CSA is the largest item in Priority 2 and should be treated as a separate internal product inside the planner, not as a small extension of orders.
+- Reuse the existing order engine for generated CSA orders. Do not create a second order-creation path for weekly fulfillment.
+- Lock finalized weeks. Once a week is finalized and orders are generated, changes should go through explicit regeneration or adjustment flows rather than silent mutation.
+- Start with product-level allocations in oz. Blend support can piggyback on the existing order engine if products/blends are already orderable.
+- Keep pickup locations farm-scoped and reusable across programs. They should not be embedded directly into a member record if they may change seasonally.
+- Payment status should remain lightweight at first. Detailed accounting belongs in invoicing/payments, while CSA only needs enough state to manage enrollment and operational fulfillment.
+
+**Acceptance checks:**
+- A user can define a program, share types, and members without generating any orders yet.
+- A user can define a week, finalize it, and generate one order per active member based on the saved allocation matrix.
+- Re-running generation for the same finalized week does not duplicate orders accidentally.
+- Paused or cancelled members are excluded from weekly order generation.
 
 **Code changes required:**
 
 | Layer | Work |
 |-------|------|
 | **Prisma schema** | Create: `csa_programs` (id, name, farmId, status, startDate, endDate, description), `csa_share_types` (id, programId, name, weeklyAllocationOz, pricePerWeek, maxMembers), `csa_members` (id, programId, customerId, shareTypeId, status, paymentStatus, deliveryPreference, startWeek, autoRenew), `csa_weeks` (id, programId, weekNumber, startDate, endDate, status), `csa_allocations` (id, weekId, shareTypeId, productId, quantityOz), `csa_pickup_locations` (id, farmId, name, address, dayOfWeek, time, capacity), `csa_payments` (id, memberId, method, amount, date, reference). |
-| **Backend** | Create CSA domain router with sub-routers for programs, share types, members, weeks, allocations, pickup locations, and a `generateOrders` procedure that creates one order per active member for a finalized week. |
+| **Backend** | Create CSA domain router with sub-routers for programs, share types, members, weeks, allocations, pickup locations, and a `generateOrders` procedure that creates one order per active member for a finalized week. Reuse the existing planner order-creation flow so generated CSA orders inherit the same SKU/task/production behavior as normal planner orders. |
 | **Frontend** | Create `src/planner/csa/` with: `CSAPage.tsx` (3-tab layout), program CRUD, share type management, member enrollment form, allocation grid (editable matrix component), week management with finalize/generate actions, pickup location management. |
 | **Navigation** | Add "CSA" to planner sidebar. |
 
@@ -556,26 +666,26 @@ These are secondary features that round out the platform but are not blocking da
 
 ## Summary Table
 
-| # | Feature | Priority | Effort | Depends On |
-|---|---------|----------|--------|------------|
-| 1A | Recurring Order Schedules | P1 | Large | — |
-| 1B | Order Cloning | P1 | Small | — |
-| 1C | SKU / Packaging System | P1 | Large | — |
-| 1D | Task Completion — Full Logging | P1 | Medium | 2B (employees) |
-| 1E | Blend Ingredient Breakdown | P1 | Medium | — |
-| 2A | Supplies & Inventory | P2 | Large | — |
-| 2B | Employee / Team Management | P2 | Medium | — |
-| 2C | Invoicing System | P2 | Large | 1C (SKUs for line items) |
-| 2D | Delivery Routes | P2 | Medium | 2B (drivers) |
-| 2E | CSA / Subscription Programs | P2 | X-Large | — |
-| 3A | Dashboard & Priority Panel | P3 | Medium | — |
-| 3B | All Tasks View & Logs Tab | P3 | Medium | 1D (full completion data) |
-| 3C | Rack Assignment — Functional | P3 | Medium | Farm Layout (exists) |
-| 3D | Customer Detail — Stats & Actions | P3 | Small | 1B (clone for reorder) |
-| 4A | Financials / Analytics | P4 | Large | — |
-| 4B | Print & Export | P4 | Medium | 2C (invoice print) |
-| 5A | Store / Marketplace | P5 | X-Large | 1C (SKUs) |
-| 5B | Wiki / SOPs | P5 | Medium | — |
-| 5C | Settings Page | P5 | Medium | — |
-| 6A | Role-Based Access | P6 | Medium | 2B (roles) |
-| 6B | Farm Selector | P6 | Small | — |
+| # | Feature | Priority | Status | Effort | Depends On |
+|---|---------|----------|--------|--------|------------|
+| 1A | Recurring Order Schedules | P1 | Complete | Large | — |
+| 1B | Order Cloning | P1 | Complete | Small | — |
+| 1C | SKU / Packaging System | P1 | Complete | Large | — |
+| 1D | Task Completion — Full Logging | P1 | Complete | Medium | 2B (employees) |
+| 1E | Blend Ingredient Breakdown | P1 | Complete | Medium | — |
+| 2A | Supplies & Inventory | P2 | Pending | Large | — |
+| 2B | Employee / Team Management | P2 | Partial | Medium | — |
+| 2C | Invoicing System | P2 | Pending | Large | 1C (SKUs for line items) |
+| 2D | Delivery Routes | P2 | Pending | Medium | 2B (drivers) |
+| 2E | CSA / Subscription Programs | P2 | Pending | X-Large | — |
+| 3A | Dashboard & Priority Panel | P3 | Pending | Medium | — |
+| 3B | All Tasks View & Logs Tab | P3 | Partial | Medium | 1D (full completion data) |
+| 3C | Rack Assignment — Functional | P3 | Partial | Medium | Farm Layout (exists) |
+| 3D | Customer Detail — Stats & Actions | P3 | Pending | Small | 1B (clone for reorder) |
+| 4A | Financials / Analytics | P4 | Pending | Large | — |
+| 4B | Print & Export | P4 | Pending | Medium | 2C (invoice print) |
+| 5A | Store / Marketplace | P5 | Pending | X-Large | 1C (SKUs) |
+| 5B | Wiki / SOPs | P5 | Pending | Medium | — |
+| 5C | Settings Page | P5 | Pending | Medium | — |
+| 6A | Role-Based Access | P6 | Pending | Medium | 2B (roles) |
+| 6B | Farm Selector | P6 | Pending | Small | — |

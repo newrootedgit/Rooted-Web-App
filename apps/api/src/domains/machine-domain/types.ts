@@ -86,7 +86,7 @@ export const updateConfigSchema = z.object({
   ).optional(),
   variety_names: z.record(
     z.string().regex(/^([1-9]|1[0-9]|20)$/),
-    z.string().min(1).max(15)
+    z.string().min(1).max(12)
   ).optional(),
 });
 
