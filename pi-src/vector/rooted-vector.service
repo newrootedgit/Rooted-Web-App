@@ -6,7 +6,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 EnvironmentFile=/etc/default/vector
-ExecStart=/usr/bin/vector --config /opt/rooted-ble/vector/rooted-telemetry.toml
+ExecStart=/home/rooted/.vector/bin/vector --config /opt/rooted-ble/vector/rooted-telemetry.toml
 Restart=always
 RestartSec=5
 StandardOutput=journal

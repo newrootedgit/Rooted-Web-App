@@ -14,7 +14,7 @@
     "docker:up": "cd docker && docker compose up -d --build",
     "docker:down": "cd docker && docker compose down",
     "docker:logs": "cd docker && docker compose logs -f",
-    "docker:services": "cd docker && docker compose up -d postgres redis"
+    "docker:services": "cd docker && docker compose up -d postgres redis timescaledb"
   },
   "dependencies": {
     "@clerk/clerk-react": "^5.59.4",
