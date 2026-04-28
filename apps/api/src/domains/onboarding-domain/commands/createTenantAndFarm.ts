@@ -1,5 +1,6 @@
 import type { PrismaClient, Prisma } from '../../../generated/prisma/client.js';
 import type { CreateTenantAndFarmInput, CreateTenantAndFarmResult } from '../types.js';
+import { DEFAULT_DEMO_MACHINE_CONFIG } from '../../machine-domain/mqtt/machine-presets/demoConfig.js';
 
 const generateSlug = (name: string): string => {
   return name
@@ -63,7 +64,22 @@ export const createTenantAndFarm = async (
 
     await tx.farm_users.update({
       where: { id: farmUser.id },
-      data: { farm_id: farm.id },
+      data: { tenant_id: tenant.id, farm_id: farm.id },
+    });
+
+    await tx.machines.create({
+      data: {
+        tenant_id: tenant.id,
+        farm_id: farm.id,
+        name: 'HARVESTER',
+        display_name: 'Demo Harvester',
+        device_id: `demo-${farm.id}`,
+        status: 'online',
+        current_wifi_ssid: 'DEMO_NETWORK',
+        is_demo: true,
+        demo_config: DEFAULT_DEMO_MACHINE_CONFIG,
+        last_seen_at: new Date(),
+      },
     });
 
     return {

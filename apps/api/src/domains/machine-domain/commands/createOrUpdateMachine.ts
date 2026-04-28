@@ -47,6 +47,7 @@ export async function createOrUpdateMachine(
     awsIotThingName: machine.aws_iot_thing_name,
     status: machine.status as 'online' | 'offline' | undefined,
     lastSeenAt: machine.last_seen_at,
+    isDemo: machine.is_demo ?? false,
     totalSteps: '0',
     totalUptimeMs: '0',
     currentBootUptimeMs: '0',

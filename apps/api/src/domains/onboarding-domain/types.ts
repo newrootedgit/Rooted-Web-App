@@ -7,6 +7,12 @@ export const createTenantAndFarmSchema = z.object({
 
 export type CreateTenantAndFarmInput = z.infer<typeof createTenantAndFarmSchema>;
 
+export const completeMachineTutorialSchema = z.object({
+  outcome: z.enum(['completed', 'dismissed']),
+});
+
+export type CompleteMachineTutorialInput = z.infer<typeof completeMachineTutorialSchema>;
+
 export interface OnboardingStatus {
   needsOnboarding: boolean;
   status: 'no_farm' | 'has_farm';
@@ -15,6 +21,10 @@ export interface OnboardingStatus {
     name: string;
     slug: string;
     tenantId: string;
+  };
+  tutorial: {
+    machineTutorialCompletedAt: Date | null;
+    machineTutorialDismissedAt: Date | null;
   };
 }
 

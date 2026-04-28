@@ -48,7 +48,19 @@ describe('createTenantAndFarm', () => {
     });
     expect(mockPrisma.farm_users.update).toHaveBeenCalledWith({
       where: { id: 'fu-1' },
-      data: { farm_id: 'farm-1' },
+      data: { tenant_id: 'tenant-1', farm_id: 'farm-1' },
+    });
+    expect(mockPrisma.machines.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        tenant_id: 'tenant-1',
+        farm_id: 'farm-1',
+        name: 'HARVESTER',
+        display_name: 'Demo Harvester',
+        device_id: 'demo-farm-1',
+        status: 'online',
+        current_wifi_ssid: 'DEMO_NETWORK',
+        is_demo: true,
+      }),
     });
   });
 

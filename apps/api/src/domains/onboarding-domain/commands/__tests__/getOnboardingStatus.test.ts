@@ -16,7 +16,14 @@ describe('getOnboardingStatus', () => {
 
     const result = await getOnboardingStatus(mockPrisma as unknown as PrismaClient, 'user-123');
 
-    expect(result).toEqual({ needsOnboarding: true, status: 'no_farm' });
+    expect(result).toEqual({
+      needsOnboarding: true,
+      status: 'no_farm',
+      tutorial: {
+        machineTutorialCompletedAt: null,
+        machineTutorialDismissedAt: null,
+      },
+    });
     expect(mockPrisma.farm_users.create).toHaveBeenCalledWith({
       data: {
         clerk_user_id: 'user-123',
@@ -36,7 +43,14 @@ describe('getOnboardingStatus', () => {
 
     const result = await getOnboardingStatus(mockPrisma as unknown as PrismaClient, 'user-123');
 
-    expect(result).toEqual({ needsOnboarding: true, status: 'no_farm' });
+    expect(result).toEqual({
+      needsOnboarding: true,
+      status: 'no_farm',
+      tutorial: {
+        machineTutorialCompletedAt: null,
+        machineTutorialDismissedAt: null,
+      },
+    });
   });
 
   it('should return needsOnboarding false if user has a farm', async () => {
@@ -57,6 +71,10 @@ describe('getOnboardingStatus', () => {
         name: 'Test Farm',
         slug: 'test-farm',
         tenantId: 'tenant-1',
+      },
+      tutorial: {
+        machineTutorialCompletedAt: null,
+        machineTutorialDismissedAt: null,
       },
     });
   });

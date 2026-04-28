@@ -8,6 +8,7 @@ vi.mock('../../../../lib/aws/iot-client.js', () => ({
 
 // Import after mock is set up
 const { publishToDevice } = await import('../../../../lib/aws/iot-client.js');
+const { getConfigResponse } = await import('../machine-presets/getConfigResponse.js');
 const { requestMachineConfig } = await import('../machine-presets/requestMachineConfig.js');
 
 describe('requestMachineConfig', () => {
@@ -49,5 +50,31 @@ describe('requestMachineConfig', () => {
     await expect(
       requestMachineConfig(mockPrisma as unknown as PrismaClient, 'machine-1', 'tenant-1')
     ).resolves.toHaveProperty('requestId');
+  });
+
+  it('should return demo config without publishing for demo machines', async () => {
+    const demoMachine = createMockDbMachine({
+      id: 'machine-1',
+      tenant_id: 'tenant-1',
+      device_id: 'demo-machine-1',
+      status: 'online',
+      is_demo: true,
+    });
+    mockPrisma.machines.findFirst.mockResolvedValue(demoMachine);
+
+    const result = await requestMachineConfig(mockPrisma as unknown as PrismaClient, 'machine-1', 'tenant-1');
+
+    expect(publishToDevice).not.toHaveBeenCalled();
+    expect(mockPrisma.machines.update).toHaveBeenCalledWith({
+      where: { id: 'machine-1' },
+      data: expect.objectContaining({ demo_config: expect.any(Object) }),
+    });
+    expect(getConfigResponse(result.requestId)).toMatchObject({
+      status: 'received',
+      config: expect.objectContaining({
+        ready_to_run: true,
+        active_variety: 1,
+      }),
+    });
   });
 });

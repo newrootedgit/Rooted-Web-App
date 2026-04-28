@@ -21,6 +21,7 @@ export function Sidebar({ items, activeItem, onItemClick }: SidebarProps) {
           {items.map((item) => (
             <li key={item.id}>
               <button
+                data-tour={`sidebar-${item.id}`}
                 onClick={() => onItemClick(item.id)}
                 className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                   item.id === activeItem

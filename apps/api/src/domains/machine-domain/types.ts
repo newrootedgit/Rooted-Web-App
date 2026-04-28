@@ -34,6 +34,8 @@ export interface Machine {
   status?: 'online' | 'offline';
   lastSeenAt?: Date | null;
   currentWifiSsid?: string | null;
+  isDemo?: boolean;
+  demoConfig?: MachineConfig | null;
   totalSteps?: string | null;
   totalUptimeMs?: string | null;
   currentBootUptimeMs?: string | null;

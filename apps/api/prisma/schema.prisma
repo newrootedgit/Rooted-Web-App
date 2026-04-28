@@ -96,18 +96,20 @@ model farm_layouts {
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model farm_users {
-  id            String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  tenant_id     String?   @db.Uuid
-  farm_id       String?   @db.Uuid
-  clerk_user_id String    @unique @db.VarChar(255)
-  role          String    @db.VarChar(50)
-  first_name    String?   @db.VarChar(100)
-  last_name     String?   @db.VarChar(100)
-  email         String?   @db.VarChar(255)
-  is_active     Boolean?  @default(true)
-  created_at    DateTime? @default(now()) @db.Timestamp(6)
-  farms         farms?    @relation(fields: [farm_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  tenants       tenants?  @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  id                            String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenant_id                     String?   @db.Uuid
+  farm_id                       String?   @db.Uuid
+  clerk_user_id                 String    @unique @db.VarChar(255)
+  role                          String    @db.VarChar(50)
+  first_name                    String?   @db.VarChar(100)
+  last_name                     String?   @db.VarChar(100)
+  email                         String?   @db.VarChar(255)
+  is_active                     Boolean?  @default(true)
+  created_at                    DateTime? @default(now()) @db.Timestamp(6)
+  machine_tutorial_completed_at DateTime? @db.Timestamp(6)
+  machine_tutorial_dismissed_at DateTime? @db.Timestamp(6)
+  farms                         farms?    @relation(fields: [farm_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tenants                       tenants?  @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@index([clerk_user_id], map: "idx_farm_users_clerk_user_id")
   @@index([farm_id], map: "idx_farm_users_farm_id")
@@ -163,12 +165,15 @@ model machines {
   status                  String?           @default("offline") @db.VarChar(50)
   last_seen_at            DateTime?         @db.Timestamp(6)
   current_wifi_ssid       String?           @db.VarChar(255)
+  is_demo                 Boolean           @default(false)
+  demo_config             Json?
   farms                   farms?            @relation(fields: [farm_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   tenants                 tenants?          @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   machine_faults          machine_faults[]
 
   @@index([device_id], map: "idx_machines_device_id")
   @@index([farm_id], map: "idx_machines_farm_id")
+  @@index([is_demo], map: "idx_machines_is_demo")
   @@index([tenant_id], map: "idx_machines_tenant_id")
 }
 

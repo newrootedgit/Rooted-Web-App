@@ -2,7 +2,17 @@ import { Loader2 } from 'lucide-react';
 import { trpc } from '../../lib/trpc';
 import MachinePresetCard from './components/MachinePresetCard';
 import { isProd } from '../../lib/env';
-export default function MachinePresets() {
+import { PresetTutorial } from '../tutorial/PresetTutorial';
+
+interface MachinePresetsProps {
+  runTutorial?: boolean;
+  onTutorialFinish?: () => void;
+}
+
+export default function MachinePresets({
+  runTutorial = false,
+  onTutorialFinish = () => {},
+}: MachinePresetsProps) {
   const { data, isLoading } = trpc.machines.list.useQuery({});
 
   if (isLoading) {
@@ -14,9 +24,14 @@ export default function MachinePresets() {
   }
 
   const machines = data?.items ?? [];
+  const hasDemoMachine = machines.some((machine) => machine.isDemo);
 
   return (
     <div className="space-y-6">
+      <PresetTutorial
+        shouldRun={runTutorial && hasDemoMachine}
+        onFinish={onTutorialFinish}
+      />
       <h1 className="text-2xl font-semibold text-foreground">Machine Presets</h1>
       {!isProd() && (
         <div className="p-4 bg-yellow-50 border border-yellow-200 rounded">
@@ -33,7 +48,11 @@ export default function MachinePresets() {
       ) : (
         <div className="space-y-3">
           {machines.map(machine => (
-            <MachinePresetCard key={machine.id} machine={machine} />
+            <MachinePresetCard
+              key={machine.id}
+              machine={machine}
+              startDemoTutorial={runTutorial && machine.isDemo}
+            />
           ))}
         </div>
       )}

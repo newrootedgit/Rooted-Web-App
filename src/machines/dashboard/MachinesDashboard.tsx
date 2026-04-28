@@ -7,8 +7,17 @@ import BluetoothIndicator from './components/BluetoothIndicator';
 import MachinesList from './components/MachinesList';
 import { OnboardMachine } from '../device-discovery/components/OnboardMachine';
 import { trpc } from '../../lib/trpc';
+import { MachineTutorial } from '../tutorial/MachineTutorial';
 
-export default function MachinesDashboard() {
+interface MachinesDashboardProps {
+  runTutorial?: boolean;
+  onTutorialFinish?: (outcome: 'continueToPresets' | 'dismissed') => void;
+}
+
+export default function MachinesDashboard({
+  runTutorial = false,
+  onTutorialFinish = () => {},
+}: MachinesDashboardProps) {
   const { user } = useUser();
   const isBluetoothSupported = useBluetoothSupport();
   const { state, error, device, scan, disconnect } = useBluetoothScanner();
@@ -33,13 +42,18 @@ export default function MachinesDashboard() {
 
   return (
     <div className="space-y-6">
+      <MachineTutorial
+        shouldRun={runTutorial && !isMachinesLoading && (machinesData?.items ?? []).some((machine) => machine.isDemo)}
+        onFinish={onTutorialFinish}
+      />
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <h1 className="text-2xl font-semibold text-foreground">Machine Management</h1>
+          <h1 data-tour="machines-heading" className="text-2xl font-semibold text-foreground">Machine Management</h1>
           <BluetoothIndicator isSupported={isBluetoothSupported} />
         </div>
         <div className="flex flex-col items-end gap-1">
           <button
+            data-tour="add-machine-button"
             onClick={() => setIsOnboardModalOpen(true)}
             disabled={!isBluetoothSupported}
             className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md font-semibold hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"

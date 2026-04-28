@@ -22,11 +22,25 @@ export async function getOnboardingStatus(
         farm_id: null,
       },
     });
-    return { needsOnboarding: true, status: 'no_farm' };
+    return {
+      needsOnboarding: true,
+      status: 'no_farm',
+      tutorial: {
+        machineTutorialCompletedAt: null,
+        machineTutorialDismissedAt: null,
+      },
+    };
   }
 
   if (!farmUser.farm_id || !farmUser.farms) {
-    return { needsOnboarding: true, status: 'no_farm' };
+    return {
+      needsOnboarding: true,
+      status: 'no_farm',
+      tutorial: {
+        machineTutorialCompletedAt: null,
+        machineTutorialDismissedAt: null,
+      },
+    };
   }
 
   return {
@@ -37,6 +51,10 @@ export async function getOnboardingStatus(
       name: farmUser.farms.name,
       slug: farmUser.farms.slug,
       tenantId: farmUser.farms.tenant_id!,
+    },
+    tutorial: {
+      machineTutorialCompletedAt: farmUser.machine_tutorial_completed_at,
+      machineTutorialDismissedAt: farmUser.machine_tutorial_dismissed_at,
     },
   };
 }

@@ -114,6 +114,7 @@ export default function MachineCard({
 
   return (
     <div
+      data-tour={machine.isDemo ? 'demo-machine-card' : undefined}
       className={`bg-card border rounded-lg transition-all overflow-hidden ${
         collapsible ? 'cursor-pointer' : ''
       } ${
@@ -125,6 +126,11 @@ export default function MachineCard({
         <div className="flex flex-col gap-0.5">
           <div className="flex items-center gap-2">
             <span className="font-semibold text-foreground">{machine.displayName || machine.name}</span>
+            {machine.isDemo && (
+              <span className="rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                Demo
+              </span>
+            )}
             <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500' : 'bg-gray-400'}`} />
           </div>
           <span className="text-sm text-muted-foreground font-mono">{machine.deviceId}</span>
@@ -149,7 +155,7 @@ export default function MachineCard({
               </>
             )}
             <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${machineImage ? 'flex-1 pl-2' : ''}`}>
-              <div className="flex items-start gap-2">
+              <div data-tour={machine.isDemo ? 'machine-status' : undefined} className="flex items-start gap-2">
                 <Cpu size={16} className="text-muted-foreground mt-0.5 flex-shrink-0" />
                 <div className="flex flex-col gap-0.5 min-w-0">
                   <span className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Machine ID</span>

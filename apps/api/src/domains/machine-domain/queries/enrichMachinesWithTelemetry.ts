@@ -13,6 +13,7 @@ interface DbMachineRow {
   status: string | null;
   last_seen_at: Date | null;
   current_wifi_ssid: string | null;
+  is_demo: boolean;
   machine_faults?: Array<{
     fault_type: string;
     motor: string | null;
@@ -46,6 +47,7 @@ function mapBaseFields(m: DbMachineRow): Machine {
     status: m.status as 'online' | 'offline' | undefined,
     lastSeenAt: m.last_seen_at,
     currentWifiSsid: m.current_wifi_ssid,
+    isDemo: m.is_demo ?? false,
     // Defaults — overridden by TimescaleDB stats when available
     totalSteps: '0',
     totalUptimeMs: '0',

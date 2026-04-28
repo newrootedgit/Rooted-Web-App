@@ -8,10 +8,12 @@ vi.mock('../../../../lib/aws/iot-client.js', () => ({
 
 vi.mock('../../../../lib/aws/variable-ranges-cache.js', () => ({
   getVariableRanges: vi.fn().mockReturnValue(null),
+  storeVariableRanges: vi.fn(),
 }));
 
 const { publishToDevice } = await import('../../../../lib/aws/iot-client.js');
 const { getVariableRanges } = await import('../../../../lib/aws/variable-ranges-cache.js');
+const { getConfigResponse } = await import('../machine-presets/getConfigResponse.js');
 const { updateMachineConfig } = await import('../machine-presets/updateMachineConfig.js');
 
 const mockGetVariableRanges = getVariableRanges as ReturnType<typeof vi.fn>;
@@ -159,5 +161,49 @@ describe('updateMachineConfig', () => {
 
     expect(result.requestId).toBeDefined();
     expect(publishToDevice).toHaveBeenCalled();
+  });
+
+  it('should update demo config without publishing for demo machines', async () => {
+    const demoMachine = createMockDbMachine({
+      id: 'machine-1',
+      tenant_id: 'tenant-1',
+      device_id: 'demo-machine-1',
+      status: 'online',
+      is_demo: true,
+      demo_config: {
+        ready_to_run: true,
+        active_variety: 1,
+        variable_ranges: SAMPLE_RANGES,
+        variety_names: { '1': 'Sunflower' },
+        '1': { speed: 100 },
+      },
+    });
+    mockPrisma.machines.findFirst.mockResolvedValue(demoMachine);
+
+    const result = await updateMachineConfig(
+      mockPrisma as unknown as PrismaClient,
+      'machine-1',
+      'tenant-1',
+      {
+        presets: { '1': { speed: 250 } },
+        variety_names: { '1': 'Radish' },
+      }
+    );
+
+    expect(publishToDevice).not.toHaveBeenCalled();
+    expect(mockPrisma.machines.update).toHaveBeenCalledWith({
+      where: { id: 'machine-1' },
+      data: {
+        demo_config: expect.objectContaining({
+          variety_names: { '1': 'Radish' },
+          '1': { speed: 250 },
+        }),
+      },
+    });
+    expect(getConfigResponse(result.requestId)).toEqual({
+      status: 'received',
+      success: true,
+      config: undefined,
+    });
   });
 });

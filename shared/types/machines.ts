@@ -10,6 +10,7 @@ export interface Machine {
   status?: 'online' | 'offline';
   lastSeenAt?: string | Date | null;
   currentWifiSsid?: string | null;
+  isDemo?: boolean;
   totalSteps?: string | number | null;
   totalUptimeMs?: string | number | null;
   currentBootUptimeMs?: string | number | null;

@@ -7,6 +7,7 @@ import { isProd } from '@/lib/env';
 
 interface MachinePresetCardProps {
   machine: Machine;
+  startDemoTutorial?: boolean;
 }
 
 function InlineNameEditor({
@@ -78,7 +79,7 @@ function InlineNameEditor({
   );
 }
 
-export default function MachinePresetCard({ machine }: MachinePresetCardProps) {
+export default function MachinePresetCard({ machine, startDemoTutorial = false }: MachinePresetCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [activePreset, setActivePreset] = useState<string | null>(null);
   const { status, config, error, fetchConfig, updatePresets } = useMachineConfig(machine.id);
@@ -102,6 +103,12 @@ export default function MachinePresetCard({ machine }: MachinePresetCardProps) {
       fetchConfig();
     }
   }, [isExpanded, status, isOnline, fetchConfig]);
+
+  useEffect(() => {
+    if (startDemoTutorial && machine.isDemo) {
+      setIsExpanded(true);
+    }
+  }, [machine.isDemo, startDemoTutorial]);
 
   const variableRanges = config?.variable_ranges as Record<string, { min: number; max: number }> | undefined;
   const varietyNames = config?.variety_names as Record<string, string> | undefined;
@@ -168,6 +175,7 @@ export default function MachinePresetCard({ machine }: MachinePresetCardProps) {
 
   return (
     <div
+      data-tour={machine.isDemo ? 'demo-preset-card' : undefined}
       className={`bg-card border rounded-lg transition-all overflow-hidden ${
         isExpanded ? 'border-primary shadow-lg' : 'border-border hover:border-border/80 hover:shadow-md'
       }`}
@@ -181,6 +189,11 @@ export default function MachinePresetCard({ machine }: MachinePresetCardProps) {
             <span className="font-semibold text-foreground">
               {machine.displayName || machine.name}
             </span>
+            {machine.isDemo && (
+              <span className="rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                Demo
+              </span>
+            )}
             <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500' : 'bg-gray-400'}`} />
           </div>
           <span className="text-sm text-muted-foreground">
@@ -249,6 +262,11 @@ export default function MachinePresetCard({ machine }: MachinePresetCardProps) {
 
           {isOnline && status === 'received' && config && (
             <div className="py-4 space-y-4">
+              {machine.isDemo && (
+                <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                  Demo preset changes are saved to this sandbox only and are never sent to machine hardware.
+                </div>
+              )}
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2 px-3 py-1.5 bg-secondary rounded-md">
                   <span className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Ready</span>
@@ -271,7 +289,7 @@ export default function MachinePresetCard({ machine }: MachinePresetCardProps) {
                 </button>
               </div>
 
-              <div className="space-y-1">
+              <div data-tour={machine.isDemo ? 'demo-preset-list' : undefined} className="space-y-1">
                 {getPresets().map(([num, originalValues]) => {
                   const currentValues = getEditedValues(num, originalValues);
                   const isPresetEdited = !!editedPresets[num];
@@ -320,6 +338,7 @@ export default function MachinePresetCard({ machine }: MachinePresetCardProps) {
               {hasChanges && (
                 <div className="flex gap-2 pt-2 border-t border-border">
                   <button
+                    data-tour={machine.isDemo ? 'demo-preset-save' : undefined}
                     onClick={handleSave}
                     disabled={isBusy}
                     className="inline-flex items-center gap-1.5 px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"

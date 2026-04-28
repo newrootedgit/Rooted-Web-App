@@ -243,6 +243,8 @@ export function createMockDbMachine(overrides: Partial<{
   status: string | null;
   last_seen_at: Date | null;
   current_wifi_ssid: string | null;
+  is_demo: boolean;
+  demo_config: unknown;
   created_at: Date | null;
   aws_iot_thing_name: string | null;
   machine_faults: any[];
@@ -257,6 +259,8 @@ export function createMockDbMachine(overrides: Partial<{
     status: overrides.status ?? null,
     last_seen_at: overrides.last_seen_at ?? null,
     current_wifi_ssid: overrides.current_wifi_ssid ?? null,
+    is_demo: overrides.is_demo ?? false,
+    demo_config: overrides.demo_config ?? null,
     created_at: 'created_at' in overrides ? overrides.created_at : new Date('2024-01-01'),
     aws_iot_thing_name: overrides.aws_iot_thing_name ?? null,
     machine_faults: overrides.machine_faults ?? [],
@@ -522,6 +526,8 @@ export function createMockDbFarmUser(overrides: Partial<{
   clerk_user_id: string;
   role: string;
   is_active: boolean;
+  machine_tutorial_completed_at: Date | null;
+  machine_tutorial_dismissed_at: Date | null;
 }> = {}) {
   return {
     id: overrides.id ?? 'farm-user-uuid-1',
@@ -534,5 +540,7 @@ export function createMockDbFarmUser(overrides: Partial<{
     last_name: 'User',
     email: 'test@user.com',
     created_at: new Date('2024-01-01'),
+    machine_tutorial_completed_at: overrides.machine_tutorial_completed_at ?? null,
+    machine_tutorial_dismissed_at: overrides.machine_tutorial_dismissed_at ?? null,
   };
 }
