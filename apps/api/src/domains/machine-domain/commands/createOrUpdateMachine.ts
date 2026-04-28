@@ -1,6 +1,7 @@
 import type { PrismaClient } from '../../../generated/prisma/client.js';
 import type { AddMachineInput, Machine } from '../types.js';
 import { findMachineByDeviceId } from '../queries/findMachineByDeviceId.js';
+import { subscribeToDevice } from '../mqtt/subscriber.js';
 
 export async function createOrUpdateMachine(
   prisma: PrismaClient,
@@ -33,6 +34,10 @@ export async function createOrUpdateMachine(
         current_wifi_ssid: input.currentWifiSsid ?? null,
       },
     });
+  }
+
+  if (machine.device_id) {
+    await subscribeToDevice(machine.device_id);
   }
 
   return {

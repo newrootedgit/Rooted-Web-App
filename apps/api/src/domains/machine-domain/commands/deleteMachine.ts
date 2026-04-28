@@ -1,6 +1,7 @@
 import { TRPCError } from '@trpc/server';
 import type { PrismaClient } from '../../../generated/prisma/client.js';
 import { findMachineByDeviceId } from '../queries/findMachineByDeviceId.js';
+import { unsubscribeFromDevice } from '../mqtt/subscriber.js';
 
 export async function deleteMachine(
   prisma: PrismaClient,
@@ -18,6 +19,8 @@ export async function deleteMachine(
   await prisma.machines.delete({
     where: { id: machine.id },
   });
+
+  await unsubscribeFromDevice(deviceId);
 
   return { success: true };
 }

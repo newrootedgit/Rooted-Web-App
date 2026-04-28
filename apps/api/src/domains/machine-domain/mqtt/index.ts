@@ -5,4 +5,9 @@ export { handleConfigResponse } from './machine-presets/handleConfigResponse.js'
 export { getConfigResponse } from './machine-presets/getConfigResponse.js';
 export { handleLifecycleEvent } from './machine-lifecycle/handleLifecycleEvent.js';
 export { handleTelemetry } from './machine-telemetry/handleTelemetry.js';
-export { startMqttSubscriber, stopMqttSubscriber } from './subscriber.js';
+export {
+  startMqttSubscriber,
+  stopMqttSubscriber,
+  subscribeToDevice,
+  unsubscribeFromDevice,
+} from './subscriber.js';

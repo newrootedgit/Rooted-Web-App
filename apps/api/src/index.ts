@@ -119,9 +119,18 @@ async function main() {
     await app.listen({ port: PORT, host: HOST });
     logger.info('Server started', { host: HOST, port: PORT });
 
-    if (process.env.MOCK_IOT !== 'true') {
+    const mqttEnabled =
+      process.env.MQTT_ENABLED === 'true' && process.env.MOCK_IOT !== 'true';
+
+    if (mqttEnabled) {
       startMqttSubscriber().catch((err) => {
         logger.error('Failed to start MQTT subscriber', { err });
+      });
+    } else {
+      logger.info('MQTT subscriber disabled', {
+        mockIot: process.env.MOCK_IOT === 'true',
+        mqttEnabled: process.env.MQTT_ENABLED === 'true',
+        appEnv: process.env.APP_ENV,
       });
     }
 

@@ -17,12 +17,12 @@ interface LifecyclePayload {
     wifiSsid?: string;
 }
 
-const IGNORED_CLIENT_IDS = ['rooted-api-subscriber'];
+const IGNORED_CLIENT_ID_PREFIXES = ['rooted-api-'];
 
 export async function handleLifecycleEvent(payload: LifecyclePayload): Promise<void> {
     const { clientId, timestamp, eventType, sessionIdentifier, wifiSsid } = payload;
 
-    if (IGNORED_CLIENT_IDS.includes(clientId)) {
+    if (IGNORED_CLIENT_ID_PREFIXES.some((prefix) => clientId.startsWith(prefix))) {
         return;
     }
 
@@ -31,7 +31,7 @@ export async function handleLifecycleEvent(payload: LifecyclePayload): Promise<v
     });
 
     if (!machine) {
-        console.warn(`Machine not found for device ID: ${clientId}`);
+        console.debug(`[MQTT] Lifecycle event for unknown device, ignoring: ${clientId}`);
         return;
     }
 
