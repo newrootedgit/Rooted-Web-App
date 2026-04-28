@@ -18,6 +18,7 @@ export interface TelemetryPayload {
     cmd_age_ms?: number;
     belt_motor_uptime_ms?: number;
     blade_motor_uptime_ms?: number;
+    roller_motor_uptime_ms?: number;
     udp_fail_count?: number;
     event_code?: string;
     event_value?: number;
@@ -66,22 +67,22 @@ export async function handleTelemetry(deviceId: string, payloads: TelemetryPaylo
                         machine_id, session_id, received_at, type, schema_ver,
                         boot_id, seq, uptime_ms, uptime_s, delta_steps,
                         torque_pct, belt_fault, blade_fault, alert_bits, kill_switch,
-                        cmd_age_ms, udp_fail_count, belt_motor_uptime_ms, blade_motor_uptime_ms,
+                        cmd_age_ms, udp_fail_count, belt_motor_uptime_ms, blade_motor_uptime_ms, roller_motor_uptime_ms,
                         event_code, event_value, trays_processed,
                         fault_type, motor
                     ) VALUES (
                         $1, $2, $3, $4, $5,
                         $6, $7, $8, $9, $10,
                         $11, $12, $13, $14, $15,
-                        $16, $17, $18, $19,
-                        $20, $21, $22,
-                        $23, $24
+                        $16, $17, $18, $19, $20,
+                        $21, $22, $23,
+                        $24, $25
                     ) ON CONFLICT DO NOTHING`,
                     [
                         machine.id, p.session_id ?? null, receivedAt, p.type ?? null, p.schema_ver ?? null,
                         p.boot_id ?? null, p.seq ?? null, p.uptime_ms ?? null, p.uptime_s ?? null, p.delta_steps ?? null,
                         p.torque_pct ?? null, p.belt_fault ?? null, p.blade_fault ?? null, p.alert_bits ?? null, p.kill_switch ?? null,
-                        p.cmd_age_ms ?? null, p.udp_fail_count ?? null, p.belt_motor_uptime_ms ?? null, p.blade_motor_uptime_ms ?? null,
+                        p.cmd_age_ms ?? null, p.udp_fail_count ?? null, p.belt_motor_uptime_ms ?? null, p.blade_motor_uptime_ms ?? null, p.roller_motor_uptime_ms ?? null,
                         p.event_code ?? null, p.event_value ?? null, p.trays_processed ?? null,
                         p.fault_type ?? null, p.motor ?? null,
                     ]

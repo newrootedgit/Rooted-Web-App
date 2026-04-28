@@ -1,4 +1,5 @@
 import type { PrismaClient } from '../../../generated/prisma/client.js';
+import { getDemoMachineFaults } from './demoTelemetry.js';
 
 export interface MachineFault {
   id: string;
@@ -19,10 +20,11 @@ export async function listFaults(
       id: machineId,
       ...(tenantId ? { tenant_id: tenantId } : {}),
     },
-    select: { id: true },
+    select: { id: true, name: true, is_demo: true },
   });
 
   if (!machine) return [];
+  if (machine.is_demo) return getDemoMachineFaults(machine);
 
   const faults = await prisma.machine_faults.findMany({
     where: { machine_id: machineId },

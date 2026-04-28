@@ -234,4 +234,42 @@ describe('listMachines', () => {
 
     warnSpy.mockRestore();
   });
+
+  it('should hydrate demo machines with sales telemetry even without TimescaleDB stats', async () => {
+    const dbMachine = createMockDbMachine({
+      id: 'machine-1',
+      tenant_id: 'tenant-1',
+      farm_id: 'farm-1',
+      name: 'SEEDER',
+      display_name: 'Demo Seeder',
+      device_id: 'demo-seeder-farm-1',
+      is_demo: true,
+      status: 'online',
+    });
+    mockPrisma.machines.findMany.mockResolvedValue([dbMachine]);
+
+    const result = await listMachines(
+      mockPrisma as unknown as PrismaClient,
+      'tenant-1',
+      'farm-1',
+      {}
+    );
+
+    expect(result.items[0]).toEqual(expect.objectContaining({
+      isDemo: true,
+      status: 'online',
+      totalSteps: '74520',
+      totalUptimeMs: String(8 * 24 * 60 * 60 * 1000 + 3 * 60 * 60 * 1000),
+      currentBootUptimeMs: String(2 * 24 * 60 * 60 * 1000 + 5 * 60 * 60 * 1000),
+      rebootCount: 1,
+      beltFaultCount: 1,
+      bladeFaultCount: 0,
+      trayCount: 9100,
+      beltMotorUptimeMs: String(6 * 24 * 60 * 60 * 1000 + 22 * 60 * 60 * 1000),
+      bladeMotorUptimeMs: '0',
+      lastEventCode: 'belt_fault_cleared',
+      lastEventValue: 0,
+    }));
+    expect(result.items[0].lastEventAt).toBeInstanceOf(Date);
+  });
 });

@@ -29,12 +29,16 @@ CREATE TABLE IF NOT EXISTS raw_telemetry (
     udp_fail_count      INTEGER,
     belt_motor_uptime_ms  BIGINT,
     blade_motor_uptime_ms BIGINT,
+    roller_motor_uptime_ms BIGINT,
     event_code          VARCHAR(100),
     event_value         INTEGER,
     trays_processed     INTEGER,
     fault_type          VARCHAR(50),
     motor               VARCHAR(20)
 );
+
+-- Idempotent column adds for existing tables (CREATE TABLE IF NOT EXISTS won't add new columns)
+ALTER TABLE raw_telemetry ADD COLUMN IF NOT EXISTS roller_motor_uptime_ms BIGINT;
 
 -- Convert to hypertable partitioned by received_at
 DO $$

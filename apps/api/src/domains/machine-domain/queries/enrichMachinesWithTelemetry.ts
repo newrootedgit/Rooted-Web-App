@@ -1,5 +1,6 @@
 import { timescale } from '../../../lib/db/timescale.js';
 import type { Machine } from '../types.js';
+import { applyDemoTelemetry } from './demoTelemetry.js';
 
 interface DbMachineRow {
   id: string;
@@ -29,6 +30,7 @@ interface TimescaleStatsRow {
   tray_count: string;
   belt_motor_uptime_ms: string;
   blade_motor_uptime_ms: string;
+  roller_motor_uptime_ms: string;
   last_event_code: string | null;
   last_event_value: number | null;
   last_event_at: Date | null;
@@ -55,11 +57,14 @@ function mapBaseFields(m: DbMachineRow): Machine {
     rebootCount: 0,
     beltFaultCount: 0,
     bladeFaultCount: 0,
+    rollerFaultCount: 0,
     trayCount: 0,
     lastBeltFault: 0,
     lastBladeFault: 0,
+    lastRollerFault: 0,
     beltMotorUptimeMs: '0',
     bladeMotorUptimeMs: '0',
+    rollerMotorUptimeMs: '0',
     lastEventCode: null,
     lastEventValue: null,
     lastEventAt: null,
@@ -74,16 +79,19 @@ export async function enrichMachinesWithTelemetry(
   const machineIds = machines.map((m) => m.id);
 
   // Count faults from RDS
-  const faultCounts = new Map<string, { belt: number; blade: number; lastBelt: number; lastBlade: number }>();
+  const faultCounts = new Map<string, { belt: number; blade: number; roller: number; lastBelt: number; lastBlade: number; lastRoller: number }>();
   for (const m of machines) {
     const faults = m.machine_faults ?? [];
     const beltFaults = faults.filter((f) => f.motor === 'belt');
     const bladeFaults = faults.filter((f) => f.motor === 'blade');
+    const rollerFaults = faults.filter((f) => f.motor === 'roller');
     faultCounts.set(m.id, {
       belt: beltFaults.length,
       blade: bladeFaults.length,
+      roller: rollerFaults.length,
       lastBelt: beltFaults.length > 0 ? 1 : 0,
       lastBlade: bladeFaults.length > 0 ? 1 : 0,
+      lastRoller: rollerFaults.length > 0 ? 1 : 0,
     });
   }
 
@@ -106,6 +114,7 @@ export async function enrichMachinesWithTelemetry(
              trays_processed,
              belt_motor_uptime_ms,
              blade_motor_uptime_ms,
+             roller_motor_uptime_ms,
              event_code,
              event_value,
              received_at
@@ -119,7 +128,8 @@ export async function enrichMachinesWithTelemetry(
              MAX(uptime_ms)                 AS session_uptime_ms,
              MAX(trays_processed)           AS session_tray_count,
              MAX(belt_motor_uptime_ms)      AS session_belt_motor_uptime_ms,
-             MAX(blade_motor_uptime_ms)     AS session_blade_motor_uptime_ms
+             MAX(blade_motor_uptime_ms)     AS session_blade_motor_uptime_ms,
+             MAX(roller_motor_uptime_ms)    AS session_roller_motor_uptime_ms
            FROM filtered
            WHERE type = 'status_update'
              AND (session_id IS NOT NULL OR boot_id IS NOT NULL)
@@ -132,7 +142,8 @@ export async function enrichMachinesWithTelemetry(
              GREATEST(COUNT(*) - 1, 0)::text                     AS reboot_count,
              COALESCE(SUM(session_tray_count), 0)::text          AS tray_count,
              COALESCE(SUM(session_belt_motor_uptime_ms), 0)::text AS belt_motor_uptime_ms,
-             COALESCE(SUM(session_blade_motor_uptime_ms), 0)::text AS blade_motor_uptime_ms
+             COALESCE(SUM(session_blade_motor_uptime_ms), 0)::text AS blade_motor_uptime_ms,
+             COALESCE(SUM(session_roller_motor_uptime_ms), 0)::text AS roller_motor_uptime_ms
            FROM session_totals
            GROUP BY machine_id
          ),
@@ -164,6 +175,7 @@ export async function enrichMachinesWithTelemetry(
            COALESCE(lifetime.tray_count, '0')             AS tray_count,
            COALESCE(lifetime.belt_motor_uptime_ms, '0')   AS belt_motor_uptime_ms,
            COALESCE(lifetime.blade_motor_uptime_ms, '0')  AS blade_motor_uptime_ms,
+           COALESCE(lifetime.roller_motor_uptime_ms, '0') AS roller_motor_uptime_ms,
            latest_event.last_event_code,
            latest_event.last_event_value,
            latest_event.last_event_at
@@ -196,6 +208,7 @@ export async function enrichMachinesWithTelemetry(
       base.trayCount = parseInt(stats.tray_count, 10);
       base.beltMotorUptimeMs = stats.belt_motor_uptime_ms;
       base.bladeMotorUptimeMs = stats.blade_motor_uptime_ms;
+      base.rollerMotorUptimeMs = stats.roller_motor_uptime_ms;
       base.lastEventCode = stats.last_event_code;
       base.lastEventValue = stats.last_event_value;
       base.lastEventAt = stats.last_event_at;
@@ -204,10 +217,12 @@ export async function enrichMachinesWithTelemetry(
     if (faults) {
       base.beltFaultCount = faults.belt;
       base.bladeFaultCount = faults.blade;
+      base.rollerFaultCount = faults.roller;
       base.lastBeltFault = faults.lastBelt;
       base.lastBladeFault = faults.lastBlade;
+      base.lastRollerFault = faults.lastRoller;
     }
 
-    return base;
+    return applyDemoTelemetry(base);
   });
 }

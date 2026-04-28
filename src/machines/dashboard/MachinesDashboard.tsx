@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Loader2, MonitorCog, Plus } from 'lucide-react';
 import { useUser } from '@clerk/clerk-react';
 import { useBluetoothSupport } from './hooks/useBluetoothSupport';
 import { useBluetoothScanner } from './hooks/useBluetoothScanner';
@@ -19,15 +19,30 @@ export default function MachinesDashboard({
   onTutorialFinish = () => {},
 }: MachinesDashboardProps) {
   const { user } = useUser();
+  const isAdmin = user?.publicMetadata?.isAdmin === true;
   const isBluetoothSupported = useBluetoothSupport();
   const { state, error, device, scan, disconnect } = useBluetoothScanner();
   const [isOnboardModalOpen, setIsOnboardModalOpen] = useState(false);
+  const [salesDemoMessage, setSalesDemoMessage] = useState<string | null>(null);
 
   const { data: machinesData, isLoading: isMachinesLoading } = trpc.machines.list.useQuery({});
   const trpcUtils = trpc.useUtils();
   const deleteMutation = trpc.machines.delete.useMutation({
     onSuccess: () => {
       trpcUtils.machines.list.invalidate();
+    },
+  });
+  const ensureSalesDemoMutation = trpc.machines.ensureSalesDemoMachines.useMutation({
+    onSuccess: (result) => {
+      trpcUtils.machines.list.invalidate();
+      setSalesDemoMessage(
+        result.machinesCreated > 0
+          ? 'Sales demo machines added.'
+          : 'Sales demo machines refreshed.'
+      );
+    },
+    onError: (error) => {
+      setSalesDemoMessage(error.message);
     },
   });
 
@@ -52,15 +67,40 @@ export default function MachinesDashboard({
           <BluetoothIndicator isSupported={isBluetoothSupported} />
         </div>
         <div className="flex flex-col items-end gap-1">
-          <button
-            data-tour="add-machine-button"
-            onClick={() => setIsOnboardModalOpen(true)}
-            disabled={!isBluetoothSupported}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md font-semibold hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            <Plus size={18} />
-            Add Machine
-          </button>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSalesDemoMessage(null);
+                  ensureSalesDemoMutation.mutate();
+                }}
+                disabled={ensureSalesDemoMutation.isPending}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-secondary border border-border text-foreground rounded-md font-semibold hover:bg-primary hover:text-primary-foreground hover:border-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {ensureSalesDemoMutation.isPending ? (
+                  <Loader2 size={18} className="animate-spin" />
+                ) : (
+                  <MonitorCog size={18} />
+                )}
+                Setup Sales Demo
+              </button>
+            )}
+            <button
+              data-tour="add-machine-button"
+              onClick={() => setIsOnboardModalOpen(true)}
+              disabled={!isBluetoothSupported}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md font-semibold hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <Plus size={18} />
+              Add Machine
+            </button>
+          </div>
+          {salesDemoMessage && isAdmin && (
+            <p className="text-xs text-muted-foreground">
+              {salesDemoMessage}
+            </p>
+          )}
           {!isBluetoothSupported && (
             <p className="text-xs text-muted-foreground">
               Enable Bluetooth to add machines

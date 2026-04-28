@@ -1,6 +1,6 @@
 import type { MachineConfig, VarietyPreset } from '../../types.js';
 
-export const DEFAULT_DEMO_MACHINE_CONFIG = {
+export const DEMO_HARVESTER_CONFIG = {
   ready_to_run: true,
   active_variety: 1,
   variable_ranges: {
@@ -29,6 +29,38 @@ export const DEFAULT_DEMO_MACHINE_CONFIG = {
     tray_spacing: 7,
   },
 } as unknown as MachineConfig;
+
+export const DEMO_SEEDER_CONFIG = {
+  ready_to_run: true,
+  active_variety: 1,
+  variable_ranges: {
+    belt_speed: { min: 10, max: 100 },
+    seed_rate: { min: 1, max: 50 },
+    tray_spacing: { min: 1, max: 20 },
+  },
+  variety_names: {
+    '1': 'Sunflower',
+    '2': 'Radish',
+    '3': 'Pea Shoots',
+  },
+  '1': {
+    belt_speed: 35,
+    seed_rate: 18,
+    tray_spacing: 6,
+  },
+  '2': {
+    belt_speed: 30,
+    seed_rate: 14,
+    tray_spacing: 5,
+  },
+  '3': {
+    belt_speed: 42,
+    seed_rate: 22,
+    tray_spacing: 7,
+  },
+} as unknown as MachineConfig;
+
+export const DEFAULT_DEMO_MACHINE_CONFIG = DEMO_HARVESTER_CONFIG;
 
 export function normalizeDemoMachineConfig(config: unknown): MachineConfig {
   if (config && typeof config === 'object') {

@@ -42,11 +42,14 @@ export interface Machine {
   rebootCount?: number | null;
   beltFaultCount?: number | null;
   bladeFaultCount?: number | null;
+  rollerFaultCount?: number | null;
   trayCount?: number | null;
   lastBeltFault?: number | null;
   lastBladeFault?: number | null;
+  lastRollerFault?: number | null;
   beltMotorUptimeMs?: string | null;
   bladeMotorUptimeMs?: string | null;
+  rollerMotorUptimeMs?: string | null;
   lastEventCode?: string | null;
   lastEventValue?: number | null;
   lastEventAt?: Date | null;
