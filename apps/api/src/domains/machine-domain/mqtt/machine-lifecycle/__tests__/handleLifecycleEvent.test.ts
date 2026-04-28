@@ -78,9 +78,9 @@ describe('handleLifecycleEvent', () => {
     });
   });
 
-  it('should warn and return when machine is not found', async () => {
+  it('should silently ignore lifecycle events for unknown devices', async () => {
     mockPrisma.machines.findFirst.mockResolvedValue(null);
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const debugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {});
 
     await handleLifecycleEvent({
       clientId: 'nonexistent',
@@ -89,7 +89,7 @@ describe('handleLifecycleEvent', () => {
     });
 
     expect(mockPrisma.machines.update).not.toHaveBeenCalled();
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('nonexistent'));
-    warnSpy.mockRestore();
+    expect(debugSpy).toHaveBeenCalledWith(expect.stringContaining('nonexistent'));
+    debugSpy.mockRestore();
   });
 });
