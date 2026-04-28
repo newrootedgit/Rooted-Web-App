@@ -96,8 +96,14 @@ export default function MachineCard({
   const trayCountValue = parseIntegerValue(machine.trayCount) ?? 0n;
   const showTrayCount = trayCountValue > 0n;
 
+  const beltMotorUptimeValue = parseIntegerValue(machine.beltMotorUptimeMs);
   const bladeMotorUptimeValue = parseIntegerValue(machine.bladeMotorUptimeMs) ?? 0n;
-  const showBladeMotorUptime = bladeMotorUptimeValue > 0n;
+  const rollerMotorUptimeValue = parseIntegerValue(machine.rollerMotorUptimeMs) ?? 0n;
+  const motorUptimeItems = [
+    beltMotorUptimeValue !== null ? `Belt ${formatDurationMs(machine.beltMotorUptimeMs)}` : null,
+    bladeMotorUptimeValue > 0n ? `Blade ${formatDurationMs(machine.bladeMotorUptimeMs)}` : null,
+    rollerMotorUptimeValue > 0n ? `Roller ${formatDurationMs(machine.rollerMotorUptimeMs)}` : null,
+  ].filter((item): item is string => item !== null);
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -240,14 +246,13 @@ export default function MachineCard({
                   <span className="text-sm text-foreground">{formatDurationMs(totalUptimeMs)}</span>
                 </div>
               </div>
-              {(machine.beltMotorUptimeMs != null || machine.bladeMotorUptimeMs != null) && (
+              {motorUptimeItems.length > 0 && (
                 <div className="flex items-start gap-2">
                   <Timer size={16} className="text-muted-foreground mt-0.5 flex-shrink-0" />
                   <div className="flex flex-col gap-0.5">
                     <span className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Motor Uptime</span>
                     <span className="text-sm text-foreground">
-                      Belt {formatDurationMs(machine.beltMotorUptimeMs)}
-                      {showBladeMotorUptime ? ` | Blade ${formatDurationMs(machine.bladeMotorUptimeMs)}` : ''}
+                      {motorUptimeItems.join(' | ')}
                     </span>
                   </div>
                 </div>
