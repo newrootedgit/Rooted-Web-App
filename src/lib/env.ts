@@ -1,6 +1,5 @@
-export const isProd = () => process.env.NODE_ENV === 'production';
+export const isProd = () => import.meta.env.PROD;
 
-export const isDev = () => process.env.NODE_ENV === 'development';
+export const isDev = () => import.meta.env.DEV;
 
-export const isTest = () => process.env.NODE_ENV === 'test';
-
+export const isTest = () => import.meta.env.MODE === 'test';
