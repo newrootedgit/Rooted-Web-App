@@ -1,0 +1,2 @@
+-- No relational schema change.
+-- Apply timescale_migration.sql to the TimescaleDB instance for machine analytics rollups.

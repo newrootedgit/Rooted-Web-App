@@ -1,5 +1,6 @@
 import { router } from './trpc.js';
 import { machineRouter } from '../../domains/machine-domain/router.js';
+import { machinePartsRouter } from '../../domains/machine-parts-domain/router.js';
 import { onboardingRouter } from '../../domains/onboarding-domain/router.js';
 import { adminRouter } from '../../domains/admin-domain/router.js';
 import { productRouter } from '../../domains/planner-domain/products/router.js';
@@ -14,6 +15,7 @@ import { supportRouter } from '../../domains/support-domain/router.js';
 
 export const appRouter = router({
   machines: machineRouter,
+  machineParts: machinePartsRouter,
   onboarding: onboardingRouter,
   admin: adminRouter,
   products: productRouter,

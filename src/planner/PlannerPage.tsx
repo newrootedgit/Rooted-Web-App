@@ -1,8 +1,6 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Calendar, Sprout, Users, ClipboardList, CheckSquare, LayoutDashboard, Repeat, BadgeCheck } from 'lucide-react';
 import { AppLayout, NavItem } from '@shared/ui/components/AppLayout';
-import { AppType } from '@shared/ui/components/AppHeader';
 import { ProductsPage } from './products/ProductsPage';
 import { CustomersPage } from './customers/CustomersPage';
 import { OrdersPage } from './orders/OrdersPage';
@@ -24,19 +22,10 @@ const sidebarItems: NavItem[] = [
 ];
 
 export function PlannerPage() {
-  const navigate = useNavigate();
   const [activeItem, setActiveItem] = useState('products');
-
-  function handleAppChange(app: AppType) {
-    if (app === 'machines') {
-      navigate('/machines');
-    }
-  }
 
   return (
     <AppLayout
-      currentApp="planner"
-      onAppChange={handleAppChange}
       sidebarItems={sidebarItems}
       activeSidebarItem={activeItem}
       onSidebarItemClick={setActiveItem}

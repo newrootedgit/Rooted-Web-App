@@ -1,21 +1,19 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Bot, UserRoundCog } from 'lucide-react';
+import { BarChart3, Bot, UserRoundCog } from 'lucide-react';
 import { AppLayout, NavItem } from '@shared/ui/components/AppLayout';
-import { AppType } from '@shared/ui/components/AppHeader';
 import MachinesDashboard from './dashboard/MachinesDashboard';
 import MachinePresets from './presets/MachinePresets';
+import MachineAnalytics from './analytics/MachineAnalytics';
 import { trpc } from '../lib/trpc';
 
 
 const sidebarItems: NavItem[] = [
   { id: 'dashboard', label: 'Robot Dashboard', icon: <Bot size={20} /> },
-  { id: 'presets', label: 'Presets', icon: <UserRoundCog size={20} /> }
-
+  { id: 'analytics', label: 'Analytics', icon: <BarChart3 size={20} /> },
+  { id: 'presets', label: 'Presets', icon: <UserRoundCog size={20} /> },
 ];
 
 export function MachinesPage() {
-  const navigate = useNavigate();
   const [activeItem, setActiveItem] = useState('dashboard');
   const [presetTutorialRequested, setPresetTutorialRequested] = useState(false);
   const { data: onboardingStatus } = trpc.onboarding.status.useQuery(undefined, {
@@ -32,12 +30,6 @@ export function MachinesPage() {
     && !onboardingStatus.needsOnboarding
     && !onboardingStatus.tutorial.machineTutorialCompletedAt
     && !onboardingStatus.tutorial.machineTutorialDismissedAt;
-
-  function handleAppChange(app: AppType) {
-    if (app === 'planner') {
-      navigate('/planner');
-    }
-  }
 
   function handleDashboardTutorialFinish(outcome: 'continueToPresets' | 'dismissed') {
     if (outcome === 'dismissed') {
@@ -56,8 +48,6 @@ export function MachinesPage() {
 
   return (
     <AppLayout
-      currentApp="machines"
-      onAppChange={handleAppChange}
       sidebarItems={sidebarItems}
       activeSidebarItem={activeItem}
       onSidebarItemClick={setActiveItem}
@@ -74,6 +64,7 @@ export function MachinesPage() {
           onTutorialFinish={handlePresetTutorialFinish}
         />
       )}
+      {activeItem === 'analytics' && <MachineAnalytics />}
     </AppLayout>
   );
 }

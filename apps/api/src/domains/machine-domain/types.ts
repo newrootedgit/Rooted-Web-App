@@ -36,6 +36,7 @@ export interface Machine {
   currentWifiSsid?: string | null;
   isDemo?: boolean;
   demoConfig?: MachineConfig | null;
+  laborMinutesSavedPerHour?: number | null;
   totalSteps?: string | null;
   totalUptimeMs?: string | null;
   currentBootUptimeMs?: string | null;
@@ -98,3 +99,12 @@ export const updateConfigSchema = z.object({
 export const requestConfigSchema = z.object({
   machineId: z.string().uuid(),
 });
+
+export const machineAnalyticsRangeSchema = z.enum(['24h', '7d', '30d', '90d']);
+
+export const machineAnalyticsSchema = z.object({
+  machineId: z.string().uuid(),
+  range: machineAnalyticsRangeSchema.default('7d'),
+});
+
+export type MachineAnalyticsRange = z.infer<typeof machineAnalyticsRangeSchema>;

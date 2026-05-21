@@ -32,6 +32,12 @@ export default function MachinesDashboard({
       trpcUtils.machines.list.invalidate();
     },
   });
+  const updateLaborSavingsMutation = trpc.machines.updateLaborSavings.useMutation({
+    onSuccess: () => {
+      trpcUtils.machines.list.invalidate();
+      trpcUtils.machines.analytics.invalidate();
+    },
+  });
   const ensureSalesDemoMutation = trpc.machines.ensureSalesDemoMachines.useMutation({
     onSuccess: (result) => {
       trpcUtils.machines.list.invalidate();
@@ -53,6 +59,16 @@ export default function MachinesDashboard({
 
   const handleDelete = (machine: { deviceId: string }) => {
     deleteMutation.mutate({ deviceId: machine.deviceId });
+  };
+
+  const handleUpdateLaborSavings = async (
+    machine: { id: string },
+    laborMinutesSavedPerHour: number | null
+  ) => {
+    await updateLaborSavingsMutation.mutateAsync({
+      machineId: machine.id,
+      laborMinutesSavedPerHour,
+    });
   };
 
   return (
@@ -118,6 +134,8 @@ export default function MachinesDashboard({
         onScanClick={scan}
         onDisconnect={disconnect}
         onDelete={handleDelete}
+        onUpdateLaborSavings={handleUpdateLaborSavings}
+        updatingLaborSavingsMachineId={updateLaborSavingsMutation.variables?.machineId ?? null}
       />
       <OnboardMachine
         isOpen={isOnboardModalOpen}

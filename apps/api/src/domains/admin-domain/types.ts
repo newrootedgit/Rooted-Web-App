@@ -21,6 +21,30 @@ export const deleteFarmInput = z.object({
   farmId: z.string().uuid(),
 });
 
+export const PART_METRIC_ENUM = z.enum(['HOURS', 'CYCLES']);
+export const PART_USAGE_SOURCE_ENUM = z.enum([
+  'belt_motor_runtime',
+  'blade_motor_runtime',
+  'roller_motor_runtime',
+  'trays_processed',
+]);
+export const MACHINE_TYPE_ENUM = z.enum(['SEEDER', 'HARVESTER', 'OTHER']);
+
+export const upsertPartTypeInput = z.object({
+  id: z.string().uuid().nullable(),
+  machineType: MACHINE_TYPE_ENUM,
+  name: z.string().min(1).max(255),
+  metric: PART_METRIC_ENUM,
+  usageSource: PART_USAGE_SOURCE_ENUM,
+  defaultLifespan: z.number().int().min(1).max(1_000_000),
+  warningPct: z.number().int().min(1).max(200),
+  criticalPct: z.number().int().min(1).max(500),
+});
+
+export const deletePartTypeInput = z.object({
+  id: z.string().uuid(),
+});
+
 // Response types
 export const tenantSchema = z.object({
   id: z.string(),

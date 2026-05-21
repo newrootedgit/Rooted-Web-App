@@ -5,7 +5,6 @@ export { default as layoutStyles } from './ui/styles/layout.module.css';
 export { Header } from './ui/components/Header';
 export { Logo } from './ui/components/Logo';
 export { AppHeader } from './ui/components/AppHeader';
-export type { AppType } from './ui/components/AppHeader';
 export { Sidebar } from './ui/components/Sidebar';
 export type { NavItem } from './ui/components/Sidebar';
 export { AppLayout } from './ui/components/AppLayout';

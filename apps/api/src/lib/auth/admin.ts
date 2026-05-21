@@ -7,11 +7,16 @@ const clerk = createClerkClient({
 
 export async function requireAdmin(userId: string): Promise<void> {
   const user = await clerk.users.getUser(userId);
-  
+
   if (!user.publicMetadata.isAdmin) {
     throw new TRPCError({
       code: 'FORBIDDEN',
       message: 'Admin access required',
     });
   }
+}
+
+export async function isAdmin(userId: string): Promise<boolean> {
+  const user = await clerk.users.getUser(userId);
+  return user.publicMetadata.isAdmin === true;
 }

@@ -1,5 +1,5 @@
-import { useState, type ReactNode } from 'react';
-import { ChevronDown, ChevronUp, Trash2, Settings, Calendar, Cpu, Wifi, Power, PowerOff, RotateCcw, AlertTriangle, Timer, Layers, ClipboardList } from 'lucide-react';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { ChevronDown, ChevronUp, Trash2, Settings, Calendar, Cpu, Wifi, Power, PowerOff, RotateCcw, AlertTriangle, Timer, Layers, ClipboardList, Save, X } from 'lucide-react';
 import type { Machine } from '../../../../shared';
 import { getMachineImage } from '../../utils/machine-images';
 import ChangeWifiModal from '../../wifi-provisioning/components/ChangeWifiModal';
@@ -14,6 +14,8 @@ interface MachineCardProps {
   showFaultHistoryAction?: boolean;
   faultQueryScope?: 'tenant' | 'admin';
   headerMeta?: ReactNode;
+  onUpdateLaborSavings?: (machine: Machine, laborMinutesSavedPerHour: number | null) => Promise<void> | void;
+  isUpdatingLaborSavings?: boolean;
 }
 
 export default function MachineCard({
@@ -25,13 +27,22 @@ export default function MachineCard({
   showFaultHistoryAction = true,
   faultQueryScope = 'tenant',
   headerMeta,
+  onUpdateLaborSavings,
+  isUpdatingLaborSavings = false,
 }: MachineCardProps) {
   const machineImage = getMachineImage(machine.name);
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
   const [showChangeWifi, setShowChangeWifi] = useState(false);
   const [showFaultHistory, setShowFaultHistory] = useState(false);
+  const [isEditingLabor, setIsEditingLabor] = useState(false);
+  const [laborDraft, setLaborDraft] = useState(machine.laborMinutesSavedPerHour?.toString() ?? '');
+  const [laborError, setLaborError] = useState<string | null>(null);
   const isOnline = machine.status === 'online';
   const isCardExpanded = collapsible ? isExpanded : true;
+
+  useEffect(() => {
+    setLaborDraft(machine.laborMinutesSavedPerHour?.toString() ?? '');
+  }, [machine.laborMinutesSavedPerHour]);
 
   const formatDate = (date: string | Date | null) => {
     if (!date) return 'Unknown';
@@ -116,6 +127,23 @@ export default function MachineCard({
   const handleUpdate = (e: React.MouseEvent) => {
     e.stopPropagation();
     setShowChangeWifi(true);
+  };
+
+  const handleLaborSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!onUpdateLaborSavings) return;
+
+    const trimmed = laborDraft.trim();
+    const nextValue = trimmed === '' ? null : Number(trimmed);
+    if (nextValue !== null && (!Number.isFinite(nextValue) || nextValue < 0)) {
+      setLaborError('Enter zero or a positive number.');
+      return;
+    }
+
+    setLaborError(null);
+    await onUpdateLaborSavings(machine, nextValue === null ? null : Math.round(nextValue));
+    setIsEditingLabor(false);
   };
 
   return (
@@ -254,6 +282,62 @@ export default function MachineCard({
                     <span className="text-sm text-foreground">
                       {motorUptimeItems.join(' | ')}
                     </span>
+                  </div>
+                </div>
+              )}
+              {onUpdateLaborSavings && (
+                <div className="flex items-start gap-2" onClick={(e) => e.stopPropagation()}>
+                  <Timer size={16} className="text-muted-foreground mt-0.5 flex-shrink-0" />
+                  <div className="flex min-w-0 flex-col gap-1">
+                    <span className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Manual Labor Saved</span>
+                    {isEditingLabor ? (
+                      <form className="flex flex-wrap items-center gap-2" onSubmit={handleLaborSubmit}>
+                        <input
+                          type="number"
+                          min={0}
+                          step={1}
+                          value={laborDraft}
+                          onChange={(e) => setLaborDraft(e.target.value)}
+                          placeholder="Unset"
+                          className="w-24 rounded-md border border-border bg-secondary px-2 py-1 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                        />
+                        <span className="text-sm text-muted-foreground">min/hr</span>
+                        <button
+                          type="submit"
+                          disabled={isUpdatingLaborSavings}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-secondary text-foreground hover:bg-primary hover:text-primary-foreground disabled:opacity-50"
+                          aria-label="Save labor savings"
+                        >
+                          <Save size={15} />
+                        </button>
+                        <button
+                          type="button"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-transparent text-muted-foreground hover:bg-secondary hover:text-foreground"
+                          aria-label="Cancel labor savings edit"
+                          onClick={() => {
+                            setLaborDraft(machine.laborMinutesSavedPerHour?.toString() ?? '');
+                            setLaborError(null);
+                            setIsEditingLabor(false);
+                          }}
+                        >
+                          <X size={15} />
+                        </button>
+                      </form>
+                    ) : (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm text-foreground">
+                          {machine.laborMinutesSavedPerHour == null ? 'Not set' : `${machine.laborMinutesSavedPerHour} min/hr`}
+                        </span>
+                        <button
+                          type="button"
+                          className="rounded-md border border-border bg-secondary px-2 py-1 text-xs font-medium text-foreground hover:bg-primary hover:text-primary-foreground"
+                          onClick={() => setIsEditingLabor(true)}
+                        >
+                          Edit
+                        </button>
+                      </div>
+                    )}
+                    {laborError && <span className="text-xs text-destructive">{laborError}</span>}
                   </div>
                 </div>
               )}

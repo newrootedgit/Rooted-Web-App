@@ -13,6 +13,8 @@ interface MachinesListProps {
   onScanClick: () => void;
   onDisconnect: () => void;
   onDelete: (machine: Machine) => void;
+  onUpdateLaborSavings?: (machine: Machine, laborMinutesSavedPerHour: number | null) => Promise<void> | void;
+  updatingLaborSavingsMachineId?: string | null;
 }
 
 export default function MachinesList({
@@ -21,6 +23,8 @@ export default function MachinesList({
   connectedDevice,
   onDisconnect,
   onDelete,
+  onUpdateLaborSavings,
+  updatingLaborSavingsMachineId = null,
 }: MachinesListProps) {
   // const isScanning = scanState === 'scanning' || scanState === 'connecting';
 
@@ -38,7 +42,13 @@ export default function MachinesList({
       ) : machines.length > 0 ? (
         <div className="flex flex-col gap-3 mb-6">
           {machines.map((machine) => (
-            <MachineCard key={machine.id} machine={machine} onDelete={onDelete} />
+            <MachineCard
+              key={machine.id}
+              machine={machine}
+              onDelete={onDelete}
+              onUpdateLaborSavings={onUpdateLaborSavings}
+              isUpdatingLaborSavings={updatingLaborSavingsMachineId === machine.id}
+            />
           ))}
         </div>
       ) : (

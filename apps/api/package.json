@@ -8,7 +8,8 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "test": "vitest",
-    "test:run": "vitest run"
+    "test:run": "vitest run",
+    "seed:machine-analytics": "tsx src/scripts/seed-machine-analytics.ts"
   },
   "dependencies": {
     "@aws-sdk/client-iot-data-plane": "3.1000.0",

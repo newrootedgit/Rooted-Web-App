@@ -15,6 +15,7 @@ interface DbMachineRow {
   last_seen_at: Date | null;
   current_wifi_ssid: string | null;
   is_demo: boolean;
+  labor_minutes_saved_per_hour: number | null;
   machine_faults?: Array<{
     fault_type: string;
     motor: string | null;
@@ -50,6 +51,7 @@ function mapBaseFields(m: DbMachineRow): Machine {
     lastSeenAt: m.last_seen_at,
     currentWifiSsid: m.current_wifi_ssid,
     isDemo: m.is_demo ?? false,
+    laborMinutesSavedPerHour: m.labor_minutes_saved_per_hour,
     // Defaults — overridden by TimescaleDB stats when available
     totalSteps: '0',
     totalUptimeMs: '0',
@@ -114,7 +116,17 @@ export async function enrichMachinesWithTelemetry(
              trays_processed,
              belt_motor_uptime_ms,
              blade_motor_uptime_ms,
-             roller_motor_uptime_ms,
+             CASE
+               WHEN to_regclass('raw_telemetry') IS NOT NULL
+                AND EXISTS (
+                  SELECT 1
+                  FROM information_schema.columns
+                  WHERE table_name = 'raw_telemetry'
+                    AND column_name = 'roller_motor_uptime_ms'
+                )
+               THEN (to_jsonb(raw_telemetry)->>'roller_motor_uptime_ms')::bigint
+               ELSE NULL
+             END AS roller_motor_uptime_ms,
              event_code,
              event_value,
              received_at

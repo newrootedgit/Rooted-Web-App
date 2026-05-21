@@ -11,6 +11,7 @@ export interface Machine {
   lastSeenAt?: string | Date | null;
   currentWifiSsid?: string | null;
   isDemo?: boolean;
+  laborMinutesSavedPerHour?: number | null;
   totalSteps?: string | number | null;
   totalUptimeMs?: string | number | null;
   currentBootUptimeMs?: string | number | null;
