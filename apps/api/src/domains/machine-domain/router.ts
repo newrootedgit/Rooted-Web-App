@@ -23,7 +23,9 @@ export const machineRouter = router({
     if (!ctx.auth?.tenantId) {
       throw new TRPCError({ code: 'FORBIDDEN', message: 'Tenant context required' });
     }
-    return listMachineOptions(ctx.prisma, ctx.auth.tenantId, ctx.auth.farmId || null);
+    // Match the original tenantProcedure behavior: list every machine in the
+    // tenant regardless of the currently-selected farm.
+    return listMachineOptions(ctx.prisma, ctx.auth.tenantId, null);
   }),
 
   byId: farmProcedure.input(getMachineParamsSchema).query(({ ctx, input }) =>
