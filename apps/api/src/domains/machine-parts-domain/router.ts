@@ -10,19 +10,19 @@ export const machinePartsRouter = router({
     if (await isAdmin(ctx.userId)) {
       return listMachineParts(ctx.prisma, input.machineId, null, null);
     }
-    if (!ctx.auth?.tenantId || !ctx.auth?.farmId) {
-      throw new TRPCError({ code: 'FORBIDDEN', message: 'Farm context required' });
+    if (!ctx.auth?.tenantId) {
+      throw new TRPCError({ code: 'FORBIDDEN', message: 'Tenant context required' });
     }
-    return listMachineParts(ctx.prisma, input.machineId, ctx.auth.tenantId, ctx.auth.farmId);
+    return listMachineParts(ctx.prisma, input.machineId, ctx.auth.tenantId, null);
   }),
 
   replace: authedProcedure.input(replacePartSchema).mutation(async ({ ctx, input }) => {
     if (await isAdmin(ctx.userId)) {
       return replacePart(ctx.prisma, input.machinePartId, null, null, input.notes);
     }
-    if (!ctx.auth?.tenantId || !ctx.auth?.farmId) {
-      throw new TRPCError({ code: 'FORBIDDEN', message: 'Farm context required' });
+    if (!ctx.auth?.tenantId) {
+      throw new TRPCError({ code: 'FORBIDDEN', message: 'Tenant context required' });
     }
-    return replacePart(ctx.prisma, input.machinePartId, ctx.auth.tenantId, ctx.auth.farmId, input.notes);
+    return replacePart(ctx.prisma, input.machinePartId, ctx.auth.tenantId, null, input.notes);
   }),
 });

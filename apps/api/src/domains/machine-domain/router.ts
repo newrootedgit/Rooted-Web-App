@@ -73,10 +73,10 @@ export const machineRouter = router({
     if (await isAdmin(ctx.userId)) {
       return getMachineAnalytics(ctx.prisma, input.machineId, null, null, input.range);
     }
-    if (!ctx.auth?.tenantId || !ctx.auth?.farmId) {
-      throw new TRPCError({ code: 'FORBIDDEN', message: 'Farm context required' });
+    if (!ctx.auth?.tenantId) {
+      throw new TRPCError({ code: 'FORBIDDEN', message: 'Tenant context required' });
     }
-    return getMachineAnalytics(ctx.prisma, input.machineId, ctx.auth.tenantId, ctx.auth.farmId, input.range);
+    return getMachineAnalytics(ctx.prisma, input.machineId, ctx.auth.tenantId, null, input.range);
   }),
 
   varietyOutput: farmProcedure.input(machineAnalyticsSchema).query(({ ctx, input }) =>
