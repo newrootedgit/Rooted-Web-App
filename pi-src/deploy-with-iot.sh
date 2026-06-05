@@ -55,6 +55,12 @@ sshpass -p "$SSH_PASSWORD" scp \
   "$SCRIPT_DIR/aws/"*.py \
   "${PI_USER}@${PI_HOST}:/opt/rooted-ble/aws/"
 
+# Copy telemetry ingest to the path rooted-ingest.service's ExecStart expects
+sshpass -p "$SSH_PASSWORD" ssh "${PI_USER}@${PI_HOST}" "mkdir -p /home/rooted/te-cli"
+sshpass -p "$SSH_PASSWORD" scp \
+  "$SCRIPT_DIR/aws/telemetry_ingest.py" \
+  "${PI_USER}@${PI_HOST}:/home/rooted/te-cli/"
+
 echo -e "${GREEN}[2/5] Copying systemd service files...${NC}"
 
 sshpass -p "$SSH_PASSWORD" scp \

@@ -124,7 +124,7 @@ BEGIN
     ) THEN
         EXECUTE '
             CREATE MATERIALIZED VIEW machine_analytics_5m
-            WITH (timescaledb.continuous) AS
+            WITH (timescaledb.continuous, timescaledb.materialized_only = false) AS
             SELECT
                 machine_id,
                 time_bucket(''5 minutes'', received_at) AS bucket,

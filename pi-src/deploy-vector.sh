@@ -67,12 +67,12 @@ echo ""
 echo -e "${GREEN}[1/5] Copying ingest script + Vector config...${NC}"
 
 # Ensure directories exist
-run_ssh "mkdir -p ${REMOTE_DIR}/aws ${REMOTE_DIR}/vector"
+run_ssh "mkdir -p ${REMOTE_DIR}/aws ${REMOTE_DIR}/vector /home/rooted/te-cli"
 
-# Copy telemetry ingest script
+# Copy telemetry ingest script (must match ExecStart path in rooted-ingest.service)
 sshpass -p "$SSH_PASSWORD" scp -o StrictHostKeyChecking=no \
     "${SCRIPT_DIR}/aws/telemetry_ingest.py" \
-    "${PI_USER}@${PI_HOST}:${REMOTE_DIR}/aws/"
+    "${PI_USER}@${PI_HOST}:/home/rooted/te-cli/"
 
 # Copy Vector config + service files
 sshpass -p "$SSH_PASSWORD" scp -o StrictHostKeyChecking=no \

@@ -12,11 +12,15 @@ export interface MachineVariety {
 export async function listMachineVarieties(
   prisma: PrismaClient,
   machineId: string,
-  tenantId: string,
-  farmId: string
+  tenantId: string | null,
+  farmId: string | null
 ): Promise<MachineVariety[]> {
   const machine = await prisma.machines.findFirst({
-    where: { id: machineId, tenant_id: tenantId, farm_id: farmId },
+    where: {
+      id: machineId,
+      ...(tenantId ? { tenant_id: tenantId } : {}),
+      ...(farmId ? { farm_id: farmId } : {}),
+    },
     select: { id: true },
   });
 

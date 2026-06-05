@@ -227,6 +227,13 @@ sshpass -p "${SSH_PASSWORD}" ssh -o StrictHostKeyChecking=no "${PI_USER}@${PI_HO
 sshpass -p "${SSH_PASSWORD}" scp -o StrictHostKeyChecking=no \
     "${SCRIPT_DIR}/aws/"*.py "${PI_USER}@${PI_HOST}:${REMOTE_DIR}/aws/"
 
+# Copy telemetry ingest to the path rooted-ingest.service's ExecStart expects
+echo "  Copying telemetry ingest to /home/rooted/te-cli/..."
+sshpass -p "${SSH_PASSWORD}" ssh -o StrictHostKeyChecking=no "${PI_USER}@${PI_HOST}" \
+    "mkdir -p /home/rooted/te-cli"
+sshpass -p "${SSH_PASSWORD}" scp -o StrictHostKeyChecking=no \
+    "${SCRIPT_DIR}/aws/telemetry_ingest.py" "${PI_USER}@${PI_HOST}:/home/rooted/te-cli/"
+
 # Copy IoT certificates if provisioning was done
 if [[ "$PROVISION_IOT" =~ ^[Yy]$ ]] && [ -d "${IOT_TEMP_DIR}" ]; then
     echo "  Creating certs directory..."

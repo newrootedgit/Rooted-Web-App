@@ -9,6 +9,26 @@ import { createOrUpdateMachine, deleteMachine, ensureSalesDemoMachines, updateMa
 import { requestConfigSchema, getConfigResponseSchema, updateConfigSchema } from './types.js';
 import { requestMachineConfig, updateMachineConfig, getConfigResponse } from './mqtt/index.js';
 
+/**
+ * Resolves tenant scoping for endpoints that take a machineId selected from the
+ * tenant-wide machine picker (machines.options), which is NOT farm-scoped.
+ * Admins see every machine (tenantId = null); other users are scoped to their
+ * tenant. Farm scoping is intentionally dropped so a machine that isn't in the
+ * currently-active farm still resolves. Mirrors the machines.analytics endpoint.
+ */
+async function resolveMachineTenantScope(ctx: {
+  userId: string;
+  auth?: { tenantId?: string | null } | null;
+}): Promise<{ tenantId: string | null }> {
+  if (await isAdmin(ctx.userId)) {
+    return { tenantId: null };
+  }
+  if (!ctx.auth?.tenantId) {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'Tenant context required' });
+  }
+  return { tenantId: ctx.auth.tenantId };
+}
+
 export const machineRouter = router({
   list: tenantProcedure
     .input(paginationInputSchema)
@@ -70,50 +90,49 @@ export const machineRouter = router({
     ),
 
   analytics: authedProcedure.input(machineAnalyticsSchema).query(async ({ ctx, input }) => {
-    if (await isAdmin(ctx.userId)) {
-      return getMachineAnalytics(ctx.prisma, input.machineId, null, null, input.range);
-    }
-    if (!ctx.auth?.tenantId) {
-      throw new TRPCError({ code: 'FORBIDDEN', message: 'Tenant context required' });
-    }
-    return getMachineAnalytics(ctx.prisma, input.machineId, ctx.auth.tenantId, null, input.range);
+    const { tenantId } = await resolveMachineTenantScope(ctx);
+    return getMachineAnalytics(ctx.prisma, input.machineId, tenantId, null, input.range);
   }),
 
-  varietyOutput: farmProcedure.input(machineAnalyticsSchema).query(({ ctx, input }) =>
-    getMachineVarietyOutput(ctx.prisma, input.machineId, ctx.tenantId, ctx.farmId, input.range)
-  ),
+  varietyOutput: authedProcedure.input(machineAnalyticsSchema).query(async ({ ctx, input }) => {
+    const { tenantId } = await resolveMachineTenantScope(ctx);
+    return getMachineVarietyOutput(ctx.prisma, input.machineId, tenantId, null, input.range);
+  }),
 
-  listVarieties: farmProcedure
+  listVarieties: authedProcedure
     .input(z.object({ machineId: z.string().uuid() }))
-    .query(({ ctx, input }) =>
-      listMachineVarieties(ctx.prisma, input.machineId, ctx.tenantId, ctx.farmId)
-    ),
+    .query(async ({ ctx, input }) => {
+      const { tenantId } = await resolveMachineTenantScope(ctx);
+      return listMachineVarieties(ctx.prisma, input.machineId, tenantId, null);
+    }),
 
-  updateVarietyGramsPerTray: farmProcedure
+  updateVarietyGramsPerTray: authedProcedure
     .input(
       z.object({
         historyId: z.string().uuid(),
         gramsPerTray: z.number().int().min(0).max(10000).nullable(),
       })
     )
-    .mutation(({ ctx, input }) =>
-      updateVarietyGramsPerTray(ctx.prisma, input.historyId, ctx.tenantId, ctx.farmId, input.gramsPerTray)
-    ),
+    .mutation(async ({ ctx, input }) => {
+      const { tenantId } = await resolveMachineTenantScope(ctx);
+      return updateVarietyGramsPerTray(ctx.prisma, input.historyId, tenantId, null, input.gramsPerTray);
+    }),
 
-  updateLaborSavings: farmProcedure
+  updateLaborSavings: authedProcedure
     .input(
       z.object({
         machineId: z.string().uuid(),
         laborMinutesSavedPerHour: z.number().int().min(0).max(600).nullable(),
       })
     )
-    .mutation(({ ctx, input }) =>
-      updateMachineLaborSavings(
+    .mutation(async ({ ctx, input }) => {
+      const { tenantId } = await resolveMachineTenantScope(ctx);
+      return updateMachineLaborSavings(
         ctx.prisma,
         input.machineId,
-        ctx.tenantId,
-        ctx.farmId,
+        tenantId,
+        null,
         input.laborMinutesSavedPerHour
-      )
-    ),
+      );
+    }),
 });

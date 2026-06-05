@@ -4,8 +4,8 @@ import type { PrismaClient } from '../../../generated/prisma/client.js';
 export async function updateVarietyGramsPerTray(
   prisma: PrismaClient,
   historyId: string,
-  tenantId: string,
-  farmId: string,
+  tenantId: string | null,
+  farmId: string | null,
   gramsPerTray: number | null
 ) {
   const row = await prisma.machine_variety_history.findUnique({
@@ -16,7 +16,11 @@ export async function updateVarietyGramsPerTray(
     },
   });
 
-  if (!row || row.machines?.tenant_id !== tenantId || row.machines?.farm_id !== farmId) {
+  if (
+    !row ||
+    (tenantId && row.machines?.tenant_id !== tenantId) ||
+    (farmId && row.machines?.farm_id !== farmId)
+  ) {
     throw new TRPCError({ code: 'NOT_FOUND', message: 'Variety record not found' });
   }
 
