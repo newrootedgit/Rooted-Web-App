@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Rooted Robotics | Wi-Fi Setup</title>
+  <link rel="stylesheet" href="../static/style.css">
+</head>
+<body>
+  <div class="container">
+    <div class="logo">
+      <img src="../static/img/rooted.avif" alt="logo" />
+    </div>
+    <p class="description">
+      Connect your Rooted Robotics device to your Wi-Fi network to begin setup.
+    </p>
+
+    <form action="/connect" method="POST" class="wifi-form" id="wifi-form">
+      <div class="ssid-wrapper">
+        <select name="ssid" id="ssid-select" required>
+          <option value="" disabled selected>Loading networks...</option>
+        </select>
+        <button type="button" class="refresh-button" onclick="loadWifiNetworks()" aria-label="Refresh networks">
+          ↻
+        </button>
+      </div>
+      <input type="text" name="ssid-manual" id="ssid-manual" placeholder="Enter Wi-Fi name" style="display: none;">
+
+      <div class="password-wrapper">
+        <input type="password" name="password" placeholder="Wi-Fi Password" required id="password">
+        <button type="button" class="toggle-password" onclick="togglePassword()" aria-pressed="false" aria-label="Toggle password visibility">
+          <img id="toggle-img" src="../static/img/closed-eyes.png" alt="Show password" class="look-button">
+        </button>
+      </div>
+
+      <button type="submit" class="connect-button">CONNECT</button>
+    </form>
+
+    <div id="status-message" class="status-message" style="display: none;">
+      <h3>Your machine is connecting to the internet.</h3>
+      <p>If the hotspot reappears, connection failed. Please try again with corrected username and password. 
+      If you continue to have issues, please contact support at <a href="mailto:support@rootedrobotics.com">support@rootedrobotics.com</a>.</p>
+    </div>
+
+    <script>
+      function togglePassword() {
+        const passwordInput = document.getElementById('password');
+        const toggleButton = document.querySelector('.toggle-password');
+        const toggleImg = document.getElementById('toggle-img');
+        const isPressed = toggleButton.getAttribute('aria-pressed') === 'true';
+
+        if (isPressed) {
+          passwordInput.type = 'password';
+          toggleButton.setAttribute('aria-pressed', 'false');
+          toggleImg.src = '../static/img/closed-eyes.png';
+          toggleImg.alt = 'Show password';
+        } else {
+          passwordInput.type = 'text';
+          toggleButton.setAttribute('aria-pressed', 'true');
+          toggleImg.src = '../static/img/eyeball-icon-png-eye-icon-1.png';
+          toggleImg.alt = 'Hide password';
+        }
+      }
+
+      document.getElementById('wifi-form').addEventListener('submit', function() {
+        document.getElementById('status-message').style.display = 'block';
+        document.querySelector('.wifi-form').style.display = 'none';
+        document.querySelector('.description').style.display = 'none';
+      });
+
+      function loadWifiNetworks() {
+        const select = document.getElementById('ssid-select');
+        const manualInput = document.getElementById('ssid-manual');
+        select.innerHTML = '<option value="" disabled selected>Scanning...</option>';
+        select.disabled = true;
+        manualInput.style.display = 'none';
+        manualInput.required = false;
+
+        fetch('/get-wifis')
+          .then(response => response.json())
+          .then(data => {
+            select.innerHTML = '<option value="" disabled selected>Select a network</option>';
+            if (data.wifis && data.wifis.length > 0) {
+              data.wifis.forEach(wifi => {
+                const option = document.createElement('option');
+                option.value = wifi;
+                option.textContent = wifi;
+                select.appendChild(option);
+              });
+            }
+            // Always add "Other" option
+            const otherOption = document.createElement('option');
+            otherOption.value = '__other__';
+            otherOption.textContent = 'Other (enter manually)';
+            select.appendChild(otherOption);
+            select.disabled = false;
+          })
+          .catch(err => {
+            select.innerHTML = '<option value="" disabled selected>Error loading networks</option>';
+            const otherOption = document.createElement('option');
+            otherOption.value = '__other__';
+            otherOption.textContent = 'Other (enter manually)';
+            select.appendChild(otherOption);
+            select.disabled = false;
+          });
+      }
+
+      document.getElementById('ssid-select').addEventListener('change', function() {
+        const manualInput = document.getElementById('ssid-manual');
+        if (this.value === '__other__') {
+          manualInput.style.display = 'block';
+          manualInput.required = true;
+          manualInput.focus();
+        } else {
+          manualInput.style.display = 'none';
+          manualInput.required = false;
+          manualInput.value = '';
+        }
+      });
+
+      document.getElementById('wifi-form').addEventListener('submit', function(e) {
+        const select = document.getElementById('ssid-select');
+        const manualInput = document.getElementById('ssid-manual');
+        if (select.value === '__other__' && manualInput.value) {
+          select.innerHTML = '<option value="' + manualInput.value + '" selected>' + manualInput.value + '</option>';
+        }
+      });
+
+      // Load networks on page load
+      loadWifiNetworks();
+    </script>
+  </div>
+</body>
+</html>
