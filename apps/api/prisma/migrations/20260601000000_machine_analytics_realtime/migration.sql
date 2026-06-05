@@ -1,0 +1,3 @@
+-- No relational schema change.
+-- Apply timescale_migration.sql to the TimescaleDB instance to enable real-time
+-- aggregation on the machine_analytics_5m continuous aggregate.
