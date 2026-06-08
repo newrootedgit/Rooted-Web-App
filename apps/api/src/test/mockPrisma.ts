@@ -31,6 +31,13 @@ export type MockPrismaClient = {
     create: ReturnType<typeof vi.fn>;
     update: ReturnType<typeof vi.fn>;
   };
+  farm_documents: {
+    findMany: ReturnType<typeof vi.fn>;
+    findFirst: ReturnType<typeof vi.fn>;
+    findUnique: ReturnType<typeof vi.fn>;
+    create: ReturnType<typeof vi.fn>;
+    delete: ReturnType<typeof vi.fn>;
+  };
   products: {
     findMany: ReturnType<typeof vi.fn>;
     findFirst: ReturnType<typeof vi.fn>;
@@ -165,6 +172,13 @@ export function createMockPrisma(): MockPrismaClient {
       findUnique: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
+    },
+    farm_documents: {
+      findMany: vi.fn().mockResolvedValue([]),
+      findFirst: vi.fn().mockResolvedValue(null),
+      findUnique: vi.fn().mockResolvedValue(null),
+      create: vi.fn(),
+      delete: vi.fn(),
     },
     products: {
       findMany: vi.fn(),
@@ -557,6 +571,36 @@ export function createMockDbFarmLayout(overrides: Partial<{
     name: overrides.name ?? 'Main Layout',
     canvas_data: overrides.canvas_data ?? { elements: [] },
     is_active: overrides.is_active ?? true,
+    created_at: overrides.created_at ?? new Date('2024-01-01'),
+  };
+}
+
+export function createMockDbFarmDocument(overrides: Partial<{
+  id: string;
+  farm_id: string;
+  tenant_id: string | null;
+  title: string;
+  category: string | null;
+  description: string | null;
+  s3_key: string;
+  file_name: string;
+  content_type: string | null;
+  file_size: number | null;
+  uploaded_by: string | null;
+  created_at: Date | null;
+}> = {}) {
+  return {
+    id: overrides.id ?? 'doc-uuid-1',
+    farm_id: overrides.farm_id ?? 'farm-uuid-1',
+    tenant_id: 'tenant_id' in overrides ? overrides.tenant_id : 'tenant-uuid-1',
+    title: overrides.title ?? 'Harvester Manual',
+    category: 'category' in overrides ? overrides.category : 'Manuals',
+    description: overrides.description ?? null,
+    s3_key: overrides.s3_key ?? 'farm-docs/farm-uuid-1/abc-manual.pdf',
+    file_name: overrides.file_name ?? 'manual.pdf',
+    content_type: overrides.content_type ?? 'application/pdf',
+    file_size: overrides.file_size ?? 1024,
+    uploaded_by: overrides.uploaded_by ?? 'admin-user-1',
     created_at: overrides.created_at ?? new Date('2024-01-01'),
   };
 }

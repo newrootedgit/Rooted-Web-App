@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { BarChart3, Bot, UserRoundCog } from 'lucide-react';
+import { BarChart3, Bot, FileText, UserRoundCog } from 'lucide-react';
 import { AppLayout, NavItem } from '@shared/ui/components/AppLayout';
 import MachinesDashboard from './dashboard/MachinesDashboard';
 import MachinePresets from './presets/MachinePresets';
 import MachineAnalytics from './analytics/MachineAnalytics';
+import MachineDocumentation from './documentation/MachineDocumentation';
 import { trpc } from '../lib/trpc';
 
 
@@ -11,6 +12,7 @@ const sidebarItems: NavItem[] = [
   { id: 'dashboard', label: 'Robot Dashboard', icon: <Bot size={20} /> },
   { id: 'analytics', label: 'Analytics', icon: <BarChart3 size={20} /> },
   { id: 'presets', label: 'Presets', icon: <UserRoundCog size={20} /> },
+  { id: 'documentation', label: 'Documentation', icon: <FileText size={20} /> },
 ];
 
 export function MachinesPage() {
@@ -65,6 +67,7 @@ export function MachinesPage() {
         />
       )}
       {activeItem === 'analytics' && <MachineAnalytics />}
+      {activeItem === 'documentation' && <MachineDocumentation />}
     </AppLayout>
   );
 }

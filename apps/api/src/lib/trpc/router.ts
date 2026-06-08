@@ -12,6 +12,7 @@ import { recurringSchedulesRouter } from '../../domains/planner-domain/recurring
 import { employeeRouter } from '../../domains/planner-domain/employees/router.js';
 import { userRouter } from '../../domains/user-domain/router.js';
 import { supportRouter } from '../../domains/support-domain/router.js';
+import { documentationRouter } from '../../domains/documentation-domain/router.js';
 
 export const appRouter = router({
   machines: machineRouter,
@@ -27,6 +28,7 @@ export const appRouter = router({
   employees: employeeRouter,
   user: userRouter,
   support: supportRouter,
+  documentation: documentationRouter,
 });
 
 export type AppRouter = typeof appRouter;

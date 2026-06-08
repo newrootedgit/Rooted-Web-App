@@ -125,7 +125,13 @@ echo "✓ iptables configured"
 echo ""
 
 echo "Step 5: Making iptables persistent..."
-DEBIAN_FRONTEND=noninteractive apt-get install -y iptables-persistent
+# iptables-persistent is installed by deploy-to-pi-one.sh (while the Pi still
+# has internet). This script runs offline, so only verify it's present.
+if ! dpkg -s iptables-persistent >/dev/null 2>&1; then
+    echo "⚠ ERROR: iptables-persistent is not installed and the Pi is offline."
+    echo "  Run deploy-to-pi-one.sh first (it installs all apt packages)."
+    exit 1
+fi
 iptables-save > /etc/iptables/rules.v4
 echo "✓ iptables rules saved"
 echo ""

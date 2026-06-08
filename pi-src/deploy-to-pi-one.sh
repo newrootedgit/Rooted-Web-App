@@ -1,8 +1,33 @@
 #!/bin/bash
-# Deploy to Pi One - Initial setup over existing network connection
-# This script copies files to the Pi and configures static ethernet
+# Deploy to Pi One - Initial setup over existing network connection (WiFi)
+# Step 1 of 2: Everything that needs the Pi's INTERNET happens here:
+#   - apt packages (captive portal + BLE/IoT dependencies)
+#   - all file copies (wifi-setup, captive-portal, BLE provisioner, aws, vector)
+#   - Python venv + pip dependencies
+#   - Vector telemetry binary install
+# It finishes by configuring static ethernet on eth0 (does NOT touch wlan0,
+# so the Pi keeps its WiFi internet connection).
+#
+# deploy-to-pi-two.sh runs over the ethernet cable and is fully OFFLINE on
+# the Pi side - do not add any downloads there.
 
 set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Color codes
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+echo -e "${GREEN}============================================${NC}"
+echo -e "${GREEN}  Rooted Robotics - Pi Setup (Step 1 of 2)  ${NC}"
+echo -e "${GREEN}============================================${NC}"
+echo ""
+
+# Fix line endings for Windows compatibility
+find "${SCRIPT_DIR}" -name "*.sh" -exec sed -i.bak 's/\r$//' {} \; -exec rm -f {}.bak \;
 
 # Ask user for Raspberry Pi hostname/IP and login username
 read -p "Enter the Raspberry Pi hostname or IP (default: rootedpi): " PI_HOST
@@ -11,58 +36,169 @@ PI_HOST=${PI_HOST:-rootedpi}
 # Test connectivity first
 echo "Testing connectivity to ${PI_HOST}..."
 if ! ping -c 2 "$PI_HOST" > /dev/null 2>&1; then
-    echo "Unable to reach ${PI_HOST}. Please check the connection and try again."
+    echo -e "${RED}Unable to reach ${PI_HOST}. Please check the connection and try again.${NC}"
     exit 1
 fi
-echo "✓ Connection successful"
+echo -e "${GREEN}✓ Connection successful${NC}"
 
-read -p "Enter the Raspberry Pi login username (default: ubuntu): " PI_LOGIN_USERNAME
-PI_LOGIN_USERNAME=${PI_LOGIN_USERNAME:-ubuntu}
+read -p "Enter the Raspberry Pi login username (default: ubuntu): " PI_USER
+PI_USER=${PI_USER:-ubuntu}
 
 # Get SSH password for sudo operations
-read -s -p "Enter the SSH password for ${PI_LOGIN_USERNAME}@${PI_HOST}: " SSH_PASSWORD
+read -s -p "Enter the SSH password for ${PI_USER}@${PI_HOST}: " SSH_PASSWORD
 echo ""
 
-# Create the target directory on the Pi
-echo "Creating /opt/rootedpi/ directory on the Pi..."
-sshpass -p "$SSH_PASSWORD" ssh -o StrictHostKeyChecking=no "${PI_LOGIN_USERNAME}@${PI_HOST}" "echo '$SSH_PASSWORD' | sudo -S mkdir -p /opt/rootedpi && echo '$SSH_PASSWORD' | sudo -S chown \$USER:\$USER /opt/rootedpi"
+# Check if sshpass is installed
+if ! command -v sshpass &> /dev/null; then
+    echo -e "${RED}Error: sshpass is not installed${NC}"
+    echo "Install with: brew install hudochenkov/sshpass/sshpass"
+    exit 1
+fi
 
-# SCP scripts and captive portal to Raspberry Pi
-echo "Copying wifi-setup files..."
-sshpass -p "$SSH_PASSWORD" scp -o StrictHostKeyChecking=no -r wifi-setup "${PI_LOGIN_USERNAME}@${PI_HOST}":/opt/rootedpi/
+# =============================================================================
+# [1/5] Install apt packages (NEEDS INTERNET - Pi is still on WiFi)
+# =============================================================================
+echo ""
+echo -e "${GREEN}[1/5] Installing packages on Pi...${NC}"
 
-echo "Copying captive-portal files..."
-sshpass -p "$SSH_PASSWORD" scp -o StrictHostKeyChecking=no -r captive-portal "${PI_LOGIN_USERNAME}@${PI_HOST}":/opt/rootedpi/
+sshpass -p "$SSH_PASSWORD" ssh -o StrictHostKeyChecking=no "${PI_USER}@${PI_HOST}" << ENDSSH
+echo 'Updating package lists...'
+echo '$SSH_PASSWORD' | sudo -S apt update
+echo 'Upgrading packages...'
+echo '$SSH_PASSWORD' | sudo -S DEBIAN_FRONTEND=noninteractive apt upgrade -y
+echo 'Installing required packages...'
+echo '$SSH_PASSWORD' | sudo -S DEBIAN_FRONTEND=noninteractive apt install -y \
+    network-manager dnsmasq dnsmasq-base iptables iptables-persistent \
+    rfkill wireless-tools \
+    bluez bluetooth \
+    python3 python3-pip python3-flask python3.12-venv python3-dev \
+    pkg-config libcairo2-dev libgirepository1.0-dev libglib2.0-dev libdbus-1-dev \
+    libhidapi-hidraw0 libhidapi-libusb0 libusb-1.0-0 libusb-1.0-0-dev \
+    git curl
+ENDSSH
 
-# Install dependencies on the Pi
-echo "Installing dependencies on the Pi..."
-sshpass -p "$SSH_PASSWORD" ssh -o StrictHostKeyChecking=no "${PI_LOGIN_USERNAME}@${PI_HOST}" "
-    echo 'Updating package lists...'
-    echo '$SSH_PASSWORD' | sudo -S apt update
-    echo 'Upgrading packages...'
-    echo '$SSH_PASSWORD' | sudo -S apt upgrade -y
-    echo 'Installing required packages...'
-    echo '$SSH_PASSWORD' | sudo -S DEBIAN_FRONTEND=noninteractive apt install -y \
-      network-manager dnsmasq dnsmasq-base iptables iptables-persistent \
-      rfkill wireless-tools \
-      python3 python3-pip python3-flask python3.12-venv \
-      libhidapi-hidraw0 libhidapi-libusb0 libusb-1.0-0 libusb-1.0-0-dev \
-      git curl
-"
+# =============================================================================
+# [2/5] Copy all files to the Pi
+# =============================================================================
+echo ""
+echo -e "${GREEN}[2/5] Copying files to Pi...${NC}"
 
-# Execute Ethernet setup script on Raspberry Pi
-echo "Running ethernet setup on the Pi..."
-sshpass -p "$SSH_PASSWORD" ssh -o StrictHostKeyChecking=no "${PI_LOGIN_USERNAME}@${PI_HOST}" "echo '$SSH_PASSWORD' | sudo -S bash /opt/rootedpi/wifi-setup/setup-ethernet.sh"
+# Create directories
+sshpass -p "$SSH_PASSWORD" ssh -o StrictHostKeyChecking=no "${PI_USER}@${PI_HOST}" \
+    "echo '$SSH_PASSWORD' | sudo -S mkdir -p /opt/rootedpi /opt/rooted-ble/setup-scripts /opt/rooted-ble/aws /opt/rooted-ble/vector /home/rooted/te-cli && \
+     echo '$SSH_PASSWORD' | sudo -S chown -R ${PI_USER}:${PI_USER} /opt/rootedpi /opt/rooted-ble /home/rooted/te-cli"
+
+# Captive portal flow files -> /opt/rootedpi
+echo "  Copying wifi-setup files..."
+sshpass -p "$SSH_PASSWORD" scp -o StrictHostKeyChecking=no -r \
+    "${SCRIPT_DIR}/wifi-setup" "${PI_USER}@${PI_HOST}:/opt/rootedpi/"
+
+echo "  Copying captive-portal files..."
+sshpass -p "$SSH_PASSWORD" scp -o StrictHostKeyChecking=no -r \
+    "${SCRIPT_DIR}/captive-portal" "${PI_USER}@${PI_HOST}:/opt/rootedpi/"
+
+# Setup scripts -> /opt/rooted-ble/setup-scripts
+echo "  Copying setup scripts..."
+sshpass -p "$SSH_PASSWORD" scp -o StrictHostKeyChecking=no \
+    "${SCRIPT_DIR}/setup-scripts/setup-ethernet.sh" \
+    "${SCRIPT_DIR}/setup-scripts/setup-nm.sh" \
+    "${PI_USER}@${PI_HOST}:/opt/rooted-ble/setup-scripts/"
+
+# BLE provisioner / IoT / telemetry files -> /opt/rooted-ble
+echo "  Copying BLE provisioner files..."
+FILES_TO_COPY=(
+    "provisioner.py"
+    "requirements.txt"
+    "rooted-ble.service"
+    "rooted-iot.service"
+    "rooted-ingest.service"
+    "rooted-ble.timer"
+    "ble-wrapper.sh"
+)
+for file in "${FILES_TO_COPY[@]}"; do
+    if [ -f "${SCRIPT_DIR}/${file}" ]; then
+        echo "    ${file}"
+        sshpass -p "$SSH_PASSWORD" scp -o StrictHostKeyChecking=no \
+            "${SCRIPT_DIR}/${file}" "${PI_USER}@${PI_HOST}:/opt/rooted-ble/"
+    else
+        echo -e "${YELLOW}    Warning: ${file} not found, skipping...${NC}"
+    fi
+done
+
+echo "  Copying aws/ Python modules..."
+sshpass -p "$SSH_PASSWORD" scp -o StrictHostKeyChecking=no \
+    "${SCRIPT_DIR}/aws/"*.py "${PI_USER}@${PI_HOST}:/opt/rooted-ble/aws/"
+
+# Copy telemetry ingest to the path rooted-ingest.service's ExecStart expects
+echo "  Copying telemetry ingest to /home/rooted/te-cli/..."
+sshpass -p "$SSH_PASSWORD" scp -o StrictHostKeyChecking=no \
+    "${SCRIPT_DIR}/aws/telemetry_ingest.py" "${PI_USER}@${PI_HOST}:/home/rooted/te-cli/"
+
+echo "  Copying Vector telemetry config..."
+sshpass -p "$SSH_PASSWORD" scp -o StrictHostKeyChecking=no \
+    "${SCRIPT_DIR}/vector/rooted-telemetry.toml" \
+    "${SCRIPT_DIR}/vector/rooted-vector.service" \
+    "${PI_USER}@${PI_HOST}:/opt/rooted-ble/vector/"
+
+# =============================================================================
+# [3/5] Python venv + pip dependencies (NEEDS INTERNET)
+# =============================================================================
+echo ""
+echo -e "${GREEN}[3/5] Creating Python venv and installing dependencies...${NC}"
+
+sshpass -p "$SSH_PASSWORD" ssh -o StrictHostKeyChecking=no "${PI_USER}@${PI_HOST}" << ENDSSH
+set -e
+chmod +x /opt/rooted-ble/setup-scripts/*.sh /opt/rooted-ble/ble-wrapper.sh
+
+if [ ! -d /opt/rooted-ble/.venv ]; then
+    python3 -m venv /opt/rooted-ble/.venv
+fi
+echo '  Installing Python dependencies (this may take a minute)...'
+/opt/rooted-ble/.venv/bin/pip install --upgrade pip --quiet
+/opt/rooted-ble/.venv/bin/pip install -r /opt/rooted-ble/requirements.txt --quiet
+ENDSSH
+
+# =============================================================================
+# [4/5] Install Vector binary (NEEDS INTERNET)
+# =============================================================================
+echo ""
+echo -e "${GREEN}[4/5] Installing Vector telemetry binary...${NC}"
+
+sshpass -p "$SSH_PASSWORD" ssh -o StrictHostKeyChecking=no "${PI_USER}@${PI_HOST}" << ENDSSH
+set -e
+if [ ! -x /home/rooted/.vector/bin/vector ]; then
+    if ! command -v vector &> /dev/null; then
+        echo '  Downloading Vector...'
+        curl --proto '=https' --tlsv1.2 -sSfL https://sh.vector.dev | bash -s -- -y
+    fi
+    # rooted-vector.service expects /home/rooted/.vector/bin/vector - make sure
+    # the binary exists there regardless of which user ran the installer
+    echo '$SSH_PASSWORD' | sudo -S mkdir -p /home/rooted/.vector/bin
+    echo '$SSH_PASSWORD' | sudo -S cp "\$HOME/.vector/bin/vector" /home/rooted/.vector/bin/vector
+else
+    echo '  Vector already installed'
+fi
+ENDSSH
+
+# =============================================================================
+# [5/5] Configure static ethernet (does NOT touch wlan0/WiFi)
+# =============================================================================
+echo ""
+echo -e "${GREEN}[5/5] Configuring static ethernet...${NC}"
+
+sshpass -p "$SSH_PASSWORD" ssh -o StrictHostKeyChecking=no "${PI_USER}@${PI_HOST}" \
+    "echo '$SSH_PASSWORD' | sudo -S bash /opt/rooted-ble/setup-scripts/setup-ethernet.sh"
 
 echo ""
-echo "======================================"
-echo "  Deploy to Raspberry Pi One Complete!"
-echo "======================================"
+echo -e "${GREEN}======================================${NC}"
+echo -e "${GREEN}  Step 1 Complete!                    ${NC}"
+echo -e "${GREEN}======================================${NC}"
 echo ""
+echo "Everything that needs the Pi's internet is done."
 echo "Ethernet configured on eth0 with IP: 192.168.10.1"
 echo ""
-echo "Next Steps:"
-echo "-----------"
+echo -e "${YELLOW}Next Steps:${NC}"
+echo "─────────────"
 echo "1. Connect your computer directly to the Pi via ethernet cable"
 echo ""
 echo "2. Set a static IP on your computer in the 192.168.10.x subnet:"
@@ -84,9 +220,4 @@ echo ""
 echo "4. Run the second deployment script:"
 echo "     ./deploy-to-pi-two.sh"
 echo ""
-echo "======================================"
-
-
-
-
-
+echo -e "${GREEN}======================================${NC}"
