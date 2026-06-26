@@ -73,10 +73,22 @@ echo ""
 # =============================================================================
 
 echo ""
+echo "Verifying SSH access..."
+# First confirm we can actually log in. Distinguish an auth failure from a
+# missing-files failure so we don't hand out misleading "rerun step 1" advice.
+if ! sshpass -p "${SSH_PASSWORD}" ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+    -o NumberOfPasswordPrompts=1 "${PI_USER}@${PI_HOST}" "true" 2>/dev/null; then
+    echo -e "${RED}SSH login to ${PI_USER}@${PI_HOST} failed (wrong username or password).${NC}"
+    echo "Use the SAME account/password you ran deploy-to-pi-one.sh with."
+    echo "Test it by hand:  ssh ${PI_USER}@${PI_HOST}"
+    exit 1
+fi
+echo -e "${GREEN}SSH login OK${NC}"
+
 echo "Verifying deploy-to-pi-one.sh was run..."
 if ! sshpass -p "${SSH_PASSWORD}" ssh -o StrictHostKeyChecking=no "${PI_USER}@${PI_HOST}" \
     "[ -d ${REMOTE_DIR}/.venv ] && [ -x /home/rooted/.vector/bin/vector ] && [ -f ${REMOTE_DIR}/setup-scripts/setup-nm.sh ] && [ -d /opt/rootedpi/captive-portal ]"; then
-    echo -e "${RED}The Pi is missing files from step 1 (venv, Vector, setup scripts, or captive portal).${NC}"
+    echo -e "${RED}SSH works, but the Pi is missing files from step 1 (venv, Vector, setup scripts, or captive portal).${NC}"
     echo "The Pi has no internet over ethernet, so they cannot be installed now."
     echo "Reconnect the Pi to WiFi and run deploy-to-pi-one.sh first."
     exit 1

@@ -85,8 +85,8 @@ echo -e "${GREEN}[2/5] Copying files to Pi...${NC}"
 
 # Create directories
 sshpass -p "$SSH_PASSWORD" ssh -o StrictHostKeyChecking=no "${PI_USER}@${PI_HOST}" \
-    "echo '$SSH_PASSWORD' | sudo -S mkdir -p /opt/rootedpi /opt/rooted-ble/setup-scripts /opt/rooted-ble/aws /opt/rooted-ble/vector /home/rooted/te-cli && \
-     echo '$SSH_PASSWORD' | sudo -S chown -R ${PI_USER}:${PI_USER} /opt/rootedpi /opt/rooted-ble /home/rooted/te-cli"
+    "echo '$SSH_PASSWORD' | sudo -S mkdir -p /opt/rootedpi /opt/rooted-ble/setup-scripts /opt/rooted-ble/aws /opt/rooted-ble/vector && \
+     echo '$SSH_PASSWORD' | sudo -S chown -R ${PI_USER}:${PI_USER} /opt/rootedpi /opt/rooted-ble"
 
 # Captive portal flow files -> /opt/rootedpi
 echo "  Copying wifi-setup files..."
@@ -126,13 +126,10 @@ for file in "${FILES_TO_COPY[@]}"; do
 done
 
 echo "  Copying aws/ Python modules..."
+# This glob includes telemetry_ingest.py, which rooted-ingest.service runs
+# directly from /opt/rooted-ble/aws/ (no longer staged under te-cli).
 sshpass -p "$SSH_PASSWORD" scp -o StrictHostKeyChecking=no \
     "${SCRIPT_DIR}/aws/"*.py "${PI_USER}@${PI_HOST}:/opt/rooted-ble/aws/"
-
-# Copy telemetry ingest to the path rooted-ingest.service's ExecStart expects
-echo "  Copying telemetry ingest to /home/rooted/te-cli/..."
-sshpass -p "$SSH_PASSWORD" scp -o StrictHostKeyChecking=no \
-    "${SCRIPT_DIR}/aws/telemetry_ingest.py" "${PI_USER}@${PI_HOST}:/home/rooted/te-cli/"
 
 echo "  Copying Vector telemetry config..."
 sshpass -p "$SSH_PASSWORD" scp -o StrictHostKeyChecking=no \
@@ -166,17 +163,35 @@ echo -e "${GREEN}[4/5] Installing Vector telemetry binary...${NC}"
 
 sshpass -p "$SSH_PASSWORD" ssh -o StrictHostKeyChecking=no "${PI_USER}@${PI_HOST}" << ENDSSH
 set -e
-if [ ! -x /home/rooted/.vector/bin/vector ]; then
-    if ! command -v vector &> /dev/null; then
+# rooted-vector.service runs the binary from this fixed path:
+TARGET=/home/rooted/.vector/bin/vector
+
+if [ -x "\$TARGET" ]; then
+    echo '  Vector already installed'
+else
+    # Install Vector if it isn't anywhere yet
+    if [ ! -x "\$HOME/.vector/bin/vector" ] && ! command -v vector &> /dev/null; then
         echo '  Downloading Vector...'
         curl --proto '=https' --tlsv1.2 -sSfL https://sh.vector.dev | bash -s -- -y
     fi
-    # rooted-vector.service expects /home/rooted/.vector/bin/vector - make sure
-    # the binary exists there regardless of which user ran the installer
-    echo '$SSH_PASSWORD' | sudo -S mkdir -p /home/rooted/.vector/bin
-    echo '$SSH_PASSWORD' | sudo -S cp "\$HOME/.vector/bin/vector" /home/rooted/.vector/bin/vector
-else
-    echo '  Vector already installed'
+
+    # Find wherever the installer actually put it
+    if [ -x "\$HOME/.vector/bin/vector" ]; then
+        SRC="\$HOME/.vector/bin/vector"
+    else
+        SRC="\$(command -v vector)"
+    fi
+
+    # Stage it at the service's expected path - but skip if it's already there.
+    # When the SSH user IS rooted, \$HOME/.vector == /home/rooted/.vector, so
+    # copying would be a file-onto-itself error that aborts the whole deploy.
+    if [ "\$SRC" != "\$TARGET" ]; then
+        echo "  Staging vector binary at \$TARGET..."
+        echo '$SSH_PASSWORD' | sudo -S mkdir -p /home/rooted/.vector/bin
+        echo '$SSH_PASSWORD' | sudo -S cp "\$SRC" "\$TARGET"
+    else
+        echo '  Vector binary already at expected path'
+    fi
 fi
 ENDSSH
 
