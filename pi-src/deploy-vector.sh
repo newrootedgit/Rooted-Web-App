@@ -84,6 +84,7 @@ echo -e "${GREEN}[2/5] Copying systemd service files...${NC}"
 
 sshpass -p "$SSH_PASSWORD" scp -o StrictHostKeyChecking=no \
     "${SCRIPT_DIR}/rooted-ingest.service" \
+    "${SCRIPT_DIR}/vector/rooted-telemetry.logrotate" \
     "${PI_USER}@${PI_HOST}:/tmp/"
 
 echo -e "${GREEN}[3/5] Installing Vector (if needed)...${NC}"
@@ -115,6 +116,21 @@ run_ssh "sed 's|/usr/bin/vector|${VECTOR_BIN}|g' ${REMOTE_DIR}/vector/rooted-vec
 # Install service files
 run_ssh "echo '${SSH_PASSWORD}' | sudo -S mv /tmp/rooted-ingest.service /etc/systemd/system/"
 run_ssh "echo '${SSH_PASSWORD}' | sudo -S mv /tmp/rooted-vector.service /etc/systemd/system/"
+
+# Bound the telemetry spool. rooted-ingest appends ~38 MB/day to
+# telemetry_log.jsonl and nothing truncates it, which fills a 16 GB card in
+# about eight months. logrotate refuses configs that are group/world writable,
+# so install with explicit root ownership and mode rather than a plain mv.
+run_ssh "echo '${SSH_PASSWORD}' | sudo -S install -o root -g root -m 644 /tmp/rooted-telemetry.logrotate /etc/logrotate.d/rooted-telemetry"
+
+# Cap the journal too, for the same reason: journald defaults to 10% of the
+# filesystem (~1.6 GB on a 16 GB card) and grows silently until it gets there.
+# Staged through /tmp because `sudo -S` takes the password on stdin, so it
+# cannot also be the target of a pipe carrying the file contents.
+run_ssh "printf '[Journal]\nSystemMaxUse=200M\n' > /tmp/journald-size.conf"
+run_ssh "echo '${SSH_PASSWORD}' | sudo -S mkdir -p /etc/systemd/journald.conf.d"
+run_ssh "echo '${SSH_PASSWORD}' | sudo -S install -o root -g root -m 644 /tmp/journald-size.conf /etc/systemd/journald.conf.d/size.conf"
+run_ssh "echo '${SSH_PASSWORD}' | sudo -S systemctl restart systemd-journald"
 
 # Reload, enable, start
 run_ssh "echo '${SSH_PASSWORD}' | sudo -S systemctl daemon-reload"
