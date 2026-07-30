@@ -1,0 +1,49 @@
+# Bound the ClearCore telemetry spool.
+#
+# Install to /etc/logrotate.d/rooted-telemetry (root:root, mode 644 — logrotate
+# silently skips config files that are group/world writable).
+#
+# WHY THIS EXISTS
+# telemetry_ingest.py appends one JSON record per STATUS_UPDATE frame, and the
+# ClearCore emits one per second (STATUS_INTERVAL_MS = 1000). At ~435 bytes per
+# record that is ~37.6 MB/day, ~13.7 GB/year, and nothing truncates it. On a
+# 16 GB card with the OS already resident that fills the disk in roughly eight
+# months, at which point writes start failing and the machine misbehaves in
+# confusing ways. Flash WEAR is not the concern here — that works out to
+# centuries on this workload — the concern is purely running out of space.
+#
+# The file is not an archive. It exists only as a handoff between
+# telemetry_ingest.py and Vector, both running on this Pi; once Vector has read
+# a record and shipped it to AWS IoT, the bytes on disk have no further purpose.
+# Rotating aggressively costs nothing.
+#
+# copytruncate is REQUIRED, not a style choice: Vector tails this file with
+#   fingerprint.strategy = "device_and_inode"
+# (see rooted-telemetry.toml). Renaming the file out from under Vector changes
+# the inode and makes it re-read a "new" file from the beginning, duplicating
+# events. copytruncate keeps the same inode and resets the length, which Vector
+# handles by resetting its read offset.
+#
+# The tradeoff copytruncate carries: records appended between the copy and the
+# truncate are lost. For a telemetry spool Vector has almost certainly already
+# read, losing a few records at the rotation boundary is acceptable. Do not
+# reuse this pattern for a file whose contents must not be lost.
+
+/home/rooted/telemetry_log.jsonl {
+    # Rotate on size, not on a calendar. Telemetry volume tracks machine
+    # uptime rather than the date, so a daily rule would swing wildly.
+    size 50M
+
+    # Two generations is plenty — anything of value is already in AWS. These
+    # exist only to debug a shipping failure that happened in the last day or
+    # two, so they are kept compressed.
+    rotate 2
+    compress
+
+    copytruncate
+
+    # Don't fail the logrotate run if the machine hasn't produced telemetry yet
+    # (fresh install, ClearCore unplugged, ingest service stopped).
+    missingok
+    notifempty
+}
