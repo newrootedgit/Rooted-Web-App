@@ -59,6 +59,11 @@ pi-src/certs/
 pi-src/device_config.json
 pi-src/onboard_state.json
 
+# Pi disk images / backups (large binaries)
+*.img
+*.img.gz
+pi-src/rpi5-nvme-backup.img.gz
+
 # Terraform
 infra/terraform/.terraform/
 infra/terraform/.terraform.lock.hcl
