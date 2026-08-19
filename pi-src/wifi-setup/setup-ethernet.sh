@@ -30,25 +30,37 @@ echo ""
 
 echo "Step 1: Creating netplan configuration for eth0..."
 
+# Use a high-numbered filename so this overrides cloud-init's config.
+# Netplan merges files in lexical order and later files win, so the static
+# config MUST sort after 50-cloud-init.yaml (which sets eth0 dhcp4: true).
+# With a lower number (e.g. 01-) cloud-init's dhcp4 would override us and
+# eth0 would hang waiting for a DHCP server that doesn't exist on the cable.
+NETPLAN_FILE="/etc/netplan/99-eth0-static.yaml"
+
 # Backup existing netplan config
 mkdir -p /etc/netplan/backup
-if [ -f /etc/netplan/01-eth0-static.yaml ]; then
-    cp /etc/netplan/01-eth0-static.yaml /etc/netplan/backup/01-eth0-static.yaml.bak-$(date +%s)
+if [ -f "${NETPLAN_FILE}" ]; then
+    cp "${NETPLAN_FILE}" "/etc/netplan/backup/99-eth0-static.yaml.bak-$(date +%s)"
 fi
+# Remove any stale config from the old (broken) 01- naming scheme
+rm -f /etc/netplan/01-eth0-static.yaml
 
-# Create eth0 static IP config
-cat > /etc/netplan/01-eth0-static.yaml <<EOF
+# Create eth0 static IP config. dhcp4/dhcp6 explicitly disabled so this fully
+# overrides cloud-init's dhcp settings for eth0.
+cat > "${NETPLAN_FILE}" <<EOF
 network:
   version: 2
   renderer: networkd
   ethernets:
     eth0:
       dhcp4: no
+      dhcp6: no
+      optional: true
       addresses:
         - ${ETH_IP}/${ETH_NETMASK}
 EOF
 
-chmod 600 /etc/netplan/01-eth0-static.yaml
+chmod 600 "${NETPLAN_FILE}"
 
 echo "✓ Netplan configuration created"
 echo ""
