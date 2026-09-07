@@ -1,6 +1,15 @@
 # Vector configuration for Rooted telemetry pipeline
 # Tails the JSONL telemetry log and publishes batches to AWS IoT Core via MQTT
 
+# ---------- Global settings ----------
+# data_dir holds the file source's read checkpoints and the disk buffer used by
+# the mqtt sink below. Vector does NOT create this path on its own - if it is
+# missing it exits immediately with a config error (status 78/CONFIG). The
+# deploy scripts create it (mkdir -p /var/lib/vector) before starting the
+# service, so the very first start succeeds instead of crash-looping until the
+# directory happens to exist.
+data_dir = "/var/lib/vector"
+
 # ---------- Source: tail the JSONL log ----------
 [sources.telemetry_log]
 type = "file"
@@ -25,12 +34,20 @@ includes(["status_update", "event"], .type)
 '''
 
 # ---------- Sink: MQTT to AWS IoT Core ----------
+# NOTE: @@AWS_IOT_ENDPOINT@@ and @@ROOTED_DEVICE_ID@@ are placeholders that the
+# deploy scripts substitute with real values at deploy time (sed). We do NOT use
+# Vector's ${ENV_VAR} interpolation here: the Vector build we ship (musl static,
+# installed via sh.vector.dev) does not interpolate environment variables, so a
+# ${VAR} reference is sent to DNS literally and the MQTT connection times out.
 [sinks.mqtt_iot]
 type = "mqtt"
 inputs = ["filter_valid"]
-host = "${AWS_IOT_ENDPOINT}"
+host = "@@AWS_IOT_ENDPOINT@@"
 port = 8883
-topic = "rooted/machines/${ROOTED_DEVICE_ID}/telemetry"
+topic = "rooted/machines/@@ROOTED_DEVICE_ID@@/telemetry"
+# Unique, non-empty client id (command_handler.py connects as the bare device id;
+# the -vector suffix avoids AWS IoT kicking one connection for a duplicate id).
+client_id = "@@ROOTED_DEVICE_ID@@-vector"
 encoding.codec = "json"
 quality_of_service = "atleastonce"
 

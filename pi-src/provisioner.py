@@ -26,6 +26,83 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 STATE_FILE = os.path.join(SCRIPT_DIR, 'onboard_state.json')
 DEVICE_FILE = os.path.join(SCRIPT_DIR, 'device_config.json')
 
+# --- Advertising workaround for Broadcom BCM4345C0 (Raspberry Pi onboard BT) ---
+# On this chip, bluetoothd/kernel use LE *Extended* Advertising, but the
+# controller firmware rejects the "LE Set Extended Advertising Data" HCI command
+# with "Invalid Parameters (0x0d)". As a result every D-Bus advertisement
+# registration (including bluezero's built-in one) fails and the device never
+# shows up in BLE scans, even though the GATT server is running. See
+# raspberrypi/linux#7473.
+#
+# The workaround is to advertise via `btmgmt`, which drives the *legacy* HCI
+# advertising commands (LE Set Advertising Parameters / Data / Enable) that the
+# chip handles correctly. We keep bluezero for the GATT server and only replace
+# its advertisement step (see start_ble). mgmt-managed advertising instances
+# auto-resume after a client disconnects, so no manual re-advertise loop needed.
+
+BTMGMT = "btmgmt"
+HCI_INDEX = "0"  # onboard controller (hci0)
+
+
+def _build_scan_response(device_name):
+    """Build scan-response AD data (hex) carrying the Complete Local Name.
+
+    Keeping the name in the scan response (a separate 31-byte payload) leaves the
+    primary packet for flags + the 128-bit service UUID, so the web app can still
+    filter by both UUID (onboarding) and name (change-WiFi).
+    """
+    name = device_name.encode("utf-8")[:29]   # 31 - 2 (length + type) byte cap
+    ad = bytes([len(name) + 1, 0x09]) + name  # 0x09 = Complete Local Name
+    return ad.hex()
+
+
+def start_btmgmt_advertising(service_uuid, device_name):
+    """Advertise via btmgmt's legacy path (works around the BCM4345C0 ext-adv bug).
+
+    Adds a connectable, general-discoverable instance carrying the service UUID
+    in the advertising packet and the device name in the scan response.
+    """
+    scan_rsp = _build_scan_response(device_name)
+    # Clear stale instances first so we don't collide on instance ids.
+    _btmgmt("clr-adv")
+    output = _btmgmt(
+        "add-adv",
+        "-c",                 # connectable
+        "-g",                 # general discoverable
+        "-u", service_uuid,   # 128-bit service UUID in advertising data
+        "-s", scan_rsp,       # device name in scan response
+        "1")                  # instance id
+    if "Instance added" in output:
+        print(f"btmgmt advertising active as: {device_name} ({output})")
+        return True
+    print(f"btmgmt advertising FAILED: {output}")
+    return False
+
+
+def stop_btmgmt_advertising():
+    """Remove all advertising instances added via btmgmt."""
+    _btmgmt("clr-adv")
+
+
+def _btmgmt(*args):
+    """Run a btmgmt command and return its combined output.
+
+    We pass an empty stdin via input="" (a pipe that closes at EOF) rather than
+    /dev/null. btmgmt hangs indefinitely when its stdin is /dev/null - which is
+    what both subprocess.DEVNULL and the default systemd service stdin provide -
+    but runs a one-shot command correctly when given a pipe that reaches EOF.
+    The timeout is a backstop against any other stall.
+    """
+    try:
+        result = subprocess.run(
+            [BTMGMT, "--index", HCI_INDEX, *args],
+            input="", capture_output=True, text=True, timeout=15)
+        return (result.stdout + result.stderr).strip()
+    except subprocess.TimeoutExpired:
+        return "btmgmt timed out"
+    except FileNotFoundError:
+        return "btmgmt not found"
+
 
 def get_device_config():
     """Load device config, auto-generating device_id if missing."""
@@ -186,6 +263,18 @@ def start_ble():
                            value=[0x00], notifying=False,
                            flags=['notify'],
                            notify_callback=machine.on_status_notify)
+
+    # Advertise via btmgmt's legacy path (the BCM4345C0 rejects bluetoothd's
+    # extended-advertising path - see the module notes above). This MUST happen
+    # before app.publish(): once bluezero registers its GATT application with
+    # bluetoothd, bluetoothd takes control of the adapter and concurrent btmgmt
+    # mgmt commands block indefinitely. So we set advertising up first, then
+    # neutralise bluezero's own (doomed) advertisement so publish() only
+    # registers the GATT server.
+    app.ad_manager.register_advertisement = lambda *a, **k: None
+    app.ad_manager.unregister_advertisement = lambda *a, **k: None
+
+    start_btmgmt_advertising(SERVICE_UUID, device_name)
 
     print(f"GATT Server running. Advertising as: {device_name}")
 
