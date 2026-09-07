@@ -58,9 +58,22 @@ network:
   version: 2
 EOF
 
-# Apply netplan changes
+# Apply netplan changes.
+# netplan generate rewrites the on-disk config (this is what persists across
+# reboot and is the part that actually matters). netplan apply then tries to
+# reconcile runtime state, which includes `ip addr flush wlan0`. That flush can
+# return non-zero on a re-run or when the interface is already in an odd state
+# (e.g. previously handed to NetworkManager), and it aborts `netplan apply`.
+# It is safe to tolerate: NetworkManager is restarted below and re-manages
+# wlan0 from scratch, so we do the flush/bounce ourselves as a best effort.
 netplan generate
-netplan apply
+if ! netplan apply; then
+    echo "⚠ 'netplan apply' returned an error (typically 'ip addr flush wlan0')."
+    echo "  Config was already regenerated; cleaning up wlan0 runtime state manually."
+    ip addr flush dev "${WLAN_INTERFACE}" 2>/dev/null || true
+    ip link set "${WLAN_INTERFACE}" down 2>/dev/null || true
+    ip link set "${WLAN_INTERFACE}" up 2>/dev/null || true
+fi
 
 # Remove any leftover netplan wpa_supplicant config
 rm -f /run/netplan/wpa-wlan0.conf 2>/dev/null || true
