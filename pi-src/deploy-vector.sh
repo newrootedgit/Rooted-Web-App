@@ -80,6 +80,10 @@ sshpass -p "$SSH_PASSWORD" scp -o StrictHostKeyChecking=no \
     "${SCRIPT_DIR}/vector/rooted-vector.service" \
     "${PI_USER}@${PI_HOST}:${REMOTE_DIR}/vector/"
 
+# Our Vector build (musl) does NOT interpolate ${VAR} env vars in its config, so
+# bake the device ID and IoT endpoint into the config directly at deploy time.
+run_ssh "sed -i 's|@@AWS_IOT_ENDPOINT@@|${IOT_ENDPOINT}|g; s|@@ROOTED_DEVICE_ID@@|${DEVICE_ID}|g' ${REMOTE_DIR}/vector/rooted-telemetry.toml"
+
 echo -e "${GREEN}[2/5] Copying systemd service files...${NC}"
 
 sshpass -p "$SSH_PASSWORD" scp -o StrictHostKeyChecking=no \
@@ -115,6 +119,10 @@ run_ssh "sed 's|/usr/bin/vector|${VECTOR_BIN}|g' ${REMOTE_DIR}/vector/rooted-vec
 # Install service files
 run_ssh "echo '${SSH_PASSWORD}' | sudo -S mv /tmp/rooted-ingest.service /etc/systemd/system/"
 run_ssh "echo '${SSH_PASSWORD}' | sudo -S mv /tmp/rooted-vector.service /etc/systemd/system/"
+
+# Vector's data_dir (checkpoints + disk buffer) must exist before start or it
+# exits with a config error (status 78) and crash-loops until it does.
+run_ssh "echo '${SSH_PASSWORD}' | sudo -S mkdir -p /var/lib/vector"
 
 # Reload, enable, start
 run_ssh "echo '${SSH_PASSWORD}' | sudo -S systemctl daemon-reload"

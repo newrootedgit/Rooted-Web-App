@@ -159,6 +159,31 @@ systemctl daemon-reload
 echo "✓ Flask service created"
 echo ""
 
+echo "Step 7: Setting up clock sync on WiFi connect..."
+# The Pi has no real-time clock, so its clock is wrong on every boot. AWS IoT
+# uses TLS mutual auth, which fails the cert time-window check if the clock is
+# off - so the IoT/Vector services can't connect until NTP corrects the clock.
+# Force an immediate resync the moment wlan0 comes up (NetworkManager-managed),
+# and make time-sync.target actually block until the clock is set so the
+# IoT/Vector units (After=time-sync.target) connect on the first try.
+cat > /etc/NetworkManager/dispatcher.d/50-timesync <<'DISPATCH'
+#!/bin/bash
+# Force NTP resync as soon as wlan0 comes up (Pi has no RTC)
+interface="$1"
+action="$2"
+if [ "$interface" = "wlan0" ] && [ "$action" = "up" ]; then
+    timedatectl set-ntp true
+    systemctl restart systemd-timesyncd
+fi
+DISPATCH
+chown root:root /etc/NetworkManager/dispatcher.d/50-timesync
+chmod 755 /etc/NetworkManager/dispatcher.d/50-timesync
+
+# Make time-sync.target wait for an actual sync (not enabled by default)
+systemctl enable systemd-time-wait-sync.service >/dev/null 2>&1 || true
+echo "✓ Clock sync on WiFi connect configured"
+echo ""
+
 echo "======================================"
 echo "  Setup Complete!"
 echo "======================================"

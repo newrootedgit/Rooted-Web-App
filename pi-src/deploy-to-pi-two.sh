@@ -340,11 +340,17 @@ fi
 echo "  Installing Vector service..."
 echo "${SSH_PASSWORD}" | sudo -S cp \${REMOTE_DIR}/vector/rooted-vector.service /etc/systemd/system/
 
-# Write environment file with device ID and IoT endpoint
+# Write environment file with device ID and IoT endpoint (required: the vector
+# unit references it via EnvironmentFile with ignore_errors=no)
 echo "${SSH_PASSWORD}" | sudo -S tee /etc/default/vector > /dev/null << VECTORENV
 ROOTED_DEVICE_ID=${DEVICE_UUID}
 AWS_IOT_ENDPOINT=${IOT_ENDPOINT}
 VECTORENV
+
+# Our Vector build (musl) does NOT interpolate \${VAR} env vars in its config, so
+# bake the device ID and IoT endpoint into the config directly at deploy time.
+echo "  Rendering Vector config..."
+echo "${SSH_PASSWORD}" | sudo -S sed -i "s|@@AWS_IOT_ENDPOINT@@|${IOT_ENDPOINT}|g; s|@@ROOTED_DEVICE_ID@@|${DEVICE_UUID}|g" \${REMOTE_DIR}/vector/rooted-telemetry.toml
 
 # Reload systemd
 echo "  Reloading systemd..."
@@ -374,6 +380,10 @@ fi
 
 # Enable and start Vector if IoT is provisioned
 if [ -f "\${REMOTE_DIR}/certs/certificate.pem.crt" ] && [ -n "${IOT_ENDPOINT}" ]; then
+    # Vector's data_dir (checkpoints + disk buffer) must exist before start or
+    # it exits with a config error (status 78) and crash-loops until it does.
+    echo "  Creating Vector data_dir..."
+    echo "${SSH_PASSWORD}" | sudo -S mkdir -p /var/lib/vector
     echo "  Enabling Vector service..."
     echo "${SSH_PASSWORD}" | sudo -S systemctl enable rooted-vector.service
     echo "  Starting Vector service..."
