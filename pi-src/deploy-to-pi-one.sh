@@ -29,9 +29,11 @@ echo ""
 # Fix line endings for Windows compatibility
 find "${SCRIPT_DIR}" -name "*.sh" -exec sed -i.bak 's/\r$//' {} \; -exec rm -f {}.bak \;
 
-# Ask user for Raspberry Pi hostname/IP and login username
-read -p "Enter the Raspberry Pi hostname or IP (default: rootedpi): " PI_HOST
-PI_HOST=${PI_HOST:-rootedpi}
+# Ask user for Raspberry Pi hostname/IP and login username.
+# Default is the mDNS name: every Rooted Pi is imaged with hostname 'rooted' and
+# avahi-daemon, so rooted.local resolves without hunting for a DHCP address.
+read -p "Enter the Raspberry Pi hostname or IP (default: rooted.local): " PI_HOST
+PI_HOST=${PI_HOST:-rooted.local}
 
 # Test connectivity first
 echo "Testing connectivity to ${PI_HOST}..."
@@ -41,8 +43,11 @@ if ! ping -c 2 "$PI_HOST" > /dev/null 2>&1; then
 fi
 echo -e "${GREEN}✓ Connection successful${NC}"
 
-read -p "Enter the Raspberry Pi login username (default: ubuntu): " PI_USER
-PI_USER=${PI_USER:-ubuntu}
+# 'rooted' - NOT 'ubuntu'. Every systemd unit (rooted-iot, rooted-ingest,
+# rooted-vector) declares User=rooted and hardcodes /home/rooted, and the images
+# are built with only the rooted account.
+read -p "Enter the Raspberry Pi login username (default: rooted): " PI_USER
+PI_USER=${PI_USER:-rooted}
 
 # Get SSH password for sudo operations
 read -s -p "Enter the SSH password for ${PI_USER}@${PI_HOST}: " SSH_PASSWORD
@@ -62,19 +67,75 @@ echo ""
 echo -e "${GREEN}[1/5] Installing packages on Pi...${NC}"
 
 sshpass -p "$SSH_PASSWORD" ssh -o StrictHostKeyChecking=no "${PI_USER}@${PI_HOST}" << ENDSSH
+set -e
+
+# -----------------------------------------------------------------------------
+# Pre-seed debconf for iptables-persistent
+# -----------------------------------------------------------------------------
+# It asks two questions at install time and there is no TTY on this SSH session,
+# so without this the package phase can stall indefinitely.
+echo '$SSH_PASSWORD' | sudo -S bash -c "echo 'iptables-persistent iptables-persistent/autosave_v4 boolean false' | debconf-set-selections; echo 'iptables-persistent iptables-persistent/autosave_v6 boolean false' | debconf-set-selections"
+
+# -----------------------------------------------------------------------------
+# Ensure the <codename>-updates pocket is configured
+# -----------------------------------------------------------------------------
+# Ubuntu 24.04 Pi images ship /etc/apt/sources.list.d/ubuntu.sources listing only
+# <codename> and <codename>-security - but the image is BUILT with -updates
+# packages already installed. So libdbus-1-3 sits at 1.14.10-4ubuntu4.1 while apt
+# can only see libdbus-1-dev at ...4ubuntu4, and every -dev package whose runtime
+# half was updated becomes uninstallable:
+#     libdbus-1-dev : Depends: libdbus-1-3 (= ...4) but ...4.1 is to be installed
+#     E: Unable to correct problems, you have held broken packages.
+# That hits libdbus-1-dev, libpcre2-dev and libselinux1-dev in the list below, so
+# WITHOUT THIS THE INSTALL BELOW CANNOT SUCCEED on a fresh image. It looks like a
+# broken mirror or a stuck background upgrade; it is neither.
+# Idempotent, and the URI/keyring are read from the existing config so this works
+# on both ports.ubuntu.com (arm64) and archive.ubuntu.com (amd64).
+echo 'Checking apt sources...'
+echo '$SSH_PASSWORD' | sudo -S bash -c '
+. /etc/os-release
+if ! grep -rqs "\${VERSION_CODENAME}-updates" /etc/apt/sources.list /etc/apt/sources.list.d/ 2>/dev/null; then
+  SRC=/etc/apt/sources.list.d/ubuntu.sources
+  URI=\$(grep -m1 "^URIs:" "\$SRC" 2>/dev/null | awk "{print \\\$2}")
+  KEY=\$(grep -m1 "^Signed-By:" "\$SRC" 2>/dev/null | awk "{print \\\$2}")
+  printf "%s\n" "Types: deb" "URIs: \${URI:-http://ports.ubuntu.com/ubuntu-ports/}" \
+    "Suites: \${VERSION_CODENAME}-updates" "Components: main restricted universe multiverse" \
+    "Signed-By: \${KEY:-/usr/share/keyrings/ubuntu-archive-keyring.gpg}" \
+    > /etc/apt/sources.list.d/rooted-updates.sources
+  echo "  added \${VERSION_CODENAME}-updates pocket"
+else
+  echo "  updates pocket already present"
+fi'
+
+# -----------------------------------------------------------------------------
+# apt, with a lock timeout
+# -----------------------------------------------------------------------------
+# A freshly imaged Ubuntu runs unattended-upgrades on first boot and holds
+# /var/lib/dpkg/lock-frontend for several minutes. Without DPkg::Lock::Timeout
+# apt fails immediately with "Could not get lock"; with it, apt WAITS.
+# (apt >= 2.0; Ubuntu 24.04 ships 2.8.)
+APT_OPTS="-o DPkg::Lock::Timeout=900"
+
+if pgrep -f '/usr/bin/unattended-upgrade' >/dev/null 2>&1; then
+    # NOTE: pgrep matches a 15-char comm by default and "unattended-upgrade" is
+    # 18, so -x silently never matches here. -f matches the full command line.
+    echo '  unattended-upgrades is running - apt will wait for it (up to 15 min).'
+    echo '  This is normal on a freshly imaged Pi; leave it alone.'
+fi
+
 echo 'Updating package lists...'
-echo '$SSH_PASSWORD' | sudo -S apt update
+echo '$SSH_PASSWORD' | sudo -S DEBIAN_FRONTEND=noninteractive apt-get \$APT_OPTS update
 echo 'Upgrading packages...'
-echo '$SSH_PASSWORD' | sudo -S DEBIAN_FRONTEND=noninteractive apt upgrade -y
+echo '$SSH_PASSWORD' | sudo -S DEBIAN_FRONTEND=noninteractive apt-get \$APT_OPTS upgrade -y
 echo 'Installing required packages...'
-echo '$SSH_PASSWORD' | sudo -S DEBIAN_FRONTEND=noninteractive apt install -y \
+echo '$SSH_PASSWORD' | sudo -S DEBIAN_FRONTEND=noninteractive apt-get \$APT_OPTS install -y \
     network-manager dnsmasq dnsmasq-base iptables iptables-persistent \
     rfkill wireless-tools \
     bluez bluetooth \
     python3 python3-pip python3-flask python3.12-venv python3-dev \
     pkg-config libcairo2-dev libgirepository1.0-dev libglib2.0-dev libdbus-1-dev \
     libhidapi-hidraw0 libhidapi-libusb0 libusb-1.0-0 libusb-1.0-0-dev \
-    git curl
+    avahi-daemon git curl
 ENDSSH
 
 # =============================================================================
