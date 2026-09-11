@@ -116,6 +116,28 @@ ssh rooted@<host> "sudo nmcli connection delete urbanfarms"
 `build-golden-image.sh` strips it automatically, along with the plaintext copy
 cloud-init leaves in `/boot/firmware/network-config`.
 
+## Tailscale auth key
+
+Machines join the tailnet via a reusable, pre-authorized auth key with
+`tag:rooted-machine`. Tagged devices have **no key expiry** - field machines
+never fall off the tailnet. Only the auth key itself expires (90 days max),
+and an expired key only blocks NEW joins at the bench; deployed machines are
+unaffected.
+
+One-time setup: in the admin console add
+`"tagOwners": { "tag:rooted-machine": ["autogroup:admin"] }` to the ACL
+policy, then Settings -> Keys -> Generate auth key (reusable, pre-authorized,
+tag:rooted-machine, 90 days). Save it with:
+
+```bash
+bash -c 'read -rsp "Tailscale key: " K; echo; umask 077; printf "KEY=%s\nCREATED=%s\n" "$K" "$(date +%Y-%m-%d)" > ~/.rooted-tailscale-key; echo saved'
+```
+
+`personalize-pi.sh` reads the file automatically, warns when the key is 75+
+days old, and on a failed join tells you it is likely expired and how to
+recover. Re-run the same save command with a fresh key each quarter - the
+script does the remembering.
+
 ## Proving it survives a power cycle
 
 `systemctl start` proves a service runs. It does **not** prove it comes back

@@ -325,15 +325,54 @@ sudox "timeout 45 systemctl restart rooted-ingest.service" >/dev/null 2>&1 && ok
 # -----------------------------------------------------------------------------
 stage "Tailscale"
 # -----------------------------------------------------------------------------
+# Key handling: --tailscale-key wins; otherwise ~/.rooted-tailscale-key is read
+# automatically. That file is written by the save-helper (see SETUP.md) as
+#     KEY=tskey-auth-...
+#     CREATED=YYYY-MM-DD
+# so this script can do the "remember to refresh every 90 days" job for you.
+# An EXPIRED auth key only blocks NEW joins - machines already on the tailnet
+# are tagged and never expire - so the worst case is this stage failing here at
+# the bench, where the fix is a 2-minute key regeneration and a re-run.
+TS_KEY_FILE="${HOME}/.rooted-tailscale-key"
+TS_KEY_AGE=""
+if [ -z "$TAILSCALE_KEY" ] && [ -f "$TS_KEY_FILE" ]; then
+    if grep -q '^KEY=' "$TS_KEY_FILE"; then
+        TAILSCALE_KEY=$(grep -m1 '^KEY=' "$TS_KEY_FILE" | cut -d= -f2-)
+        TS_CREATED=$(grep -m1 '^CREATED=' "$TS_KEY_FILE" | cut -d= -f2-)
+        if [ -n "$TS_CREATED" ]; then
+            TS_KEY_AGE=$(( ( $(date +%s) - $(date -j -f %Y-%m-%d "$TS_CREATED" +%s 2>/dev/null || echo 0) ) / 86400 ))
+        fi
+    else
+        # Legacy format: file is the bare key.
+        TAILSCALE_KEY=$(head -1 "$TS_KEY_FILE")
+    fi
+    [ -n "$TAILSCALE_KEY" ] && ok "using auth key from ${TS_KEY_FILE}${TS_KEY_AGE:+ (${TS_KEY_AGE} days old)}"
+fi
+
+if [ -n "$TS_KEY_AGE" ] && [ "$TS_KEY_AGE" -ge 75 ]; then
+    warn "auth key is ${TS_KEY_AGE} days old - Tailscale keys live at most 90."
+    warn "Regenerate soon (admin console -> Settings -> Keys) and re-run the"
+    warn "save-helper, or this stage will start failing at the bench."
+fi
+
 if [ -n "$TAILSCALE_KEY" ]; then
     if sshx "command -v tailscale >/dev/null" 2>/dev/null; then
-        sudox "tailscale up --authkey=${TAILSCALE_KEY} --hostname=${SYS_HOSTNAME} --accept-dns=false" \
-            && ok "joined the tailnet as ${SYS_HOSTNAME}" || warn "tailscale up failed"
+        if sudox "tailscale up --authkey=${TAILSCALE_KEY} --hostname=${SYS_HOSTNAME} --accept-dns=false"; then
+            ok "joined the tailnet as ${SYS_HOSTNAME}"
+        else
+            warn "tailscale up FAILED."
+            if [ -n "$TS_KEY_AGE" ] && [ "$TS_KEY_AGE" -ge 85 ]; then
+                warn "The key is ${TS_KEY_AGE} days old - almost certainly expired."
+            fi
+            warn "Fix: regenerate the key (reusable + pre-authorized + tag:rooted-machine),"
+            warn "re-run the save-helper, then re-run this script - it is safe to re-run"
+            warn "and will skip everything already done. Existing machines are unaffected."
+        fi
     else
         warn "tailscale not installed on this Pi (should be in the golden image)"
     fi
 else
-    warn "no --tailscale-key given - join manually with: sudo tailscale up"
+    warn "no auth key (flag or ~/.rooted-tailscale-key) - join manually: sudo tailscale up"
 fi
 
 # -----------------------------------------------------------------------------
