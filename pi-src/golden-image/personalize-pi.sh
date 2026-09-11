@@ -372,6 +372,29 @@ stage "Cold-boot test"
 fi
 
 # -----------------------------------------------------------------------------
+stage "Deployment ledger"
+# -----------------------------------------------------------------------------
+# Records which golden image this machine was built from, without ever copying
+# the multi-GB image anywhere. The image id comes from /etc/rooted-image-release,
+# baked in by build-golden-image.sh at capture time; the customer is already
+# encoded in the machine name (TYPE-customer-n). One committed CSV answers
+# "which image is that customer's machine running?" forever.
+IMAGE_ID=$(sshx "grep -s '^IMAGE_ID=' /etc/rooted-image-release 2>/dev/null | cut -d= -f2" 2>/dev/null | tr -d '\r')
+IMAGE_ID=${IMAGE_ID:-unknown-pre-release-image}
+LEDGER="${PI_SRC}/golden-images/DEPLOYMENTS.csv"
+if [ -f "$LEDGER" ]; then
+    if grep -q ",${DEVICE_UUID}," "$LEDGER"; then
+        ok "already in DEPLOYMENTS.csv (re-personalization run)"
+    else
+        printf '%s,%s,%s,%s,%s\n' "$(date +%Y-%m-%d)" "$MACHINE_NAME" "$DEVICE_UUID" "$IMAGE_ID" "" >> "$LEDGER"
+        ok "recorded in golden-images/DEPLOYMENTS.csv (image: ${IMAGE_ID})"
+        warn "remember to commit the ledger: git add pi-src/golden-images/DEPLOYMENTS.csv"
+    fi
+else
+    warn "no ${LEDGER} - deployment not recorded"
+fi
+
+# -----------------------------------------------------------------------------
 echo ""
 echo -e "${GREEN}===============================================${NC}"
 echo -e "${GREEN}  Personalization complete                     ${NC}"
@@ -380,6 +403,7 @@ echo "  Machine:   ${MACHINE_NAME}"
 echo "  Hostname:  ${SYS_HOSTNAME}"
 echo "  Device ID: ${DEVICE_UUID}"
 echo "  Endpoint:  ${IOT_ENDPOINT:-<not provisioned>}"
+echo "  Image:     ${IMAGE_ID}"
 echo ""
 if [ "$DO_REBOOT" != "true" ]; then
 echo -e "${YELLOW}Verify (and prove it survives a power cycle):${NC}"

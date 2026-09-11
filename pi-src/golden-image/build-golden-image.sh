@@ -263,6 +263,20 @@ ok "cloud-init state cleared"
 # all other work and after verification.
 
 # -----------------------------------------------------------------------------
+stage "Image identity"
+# -----------------------------------------------------------------------------
+# Baked into the image ON PURPOSE - this is image-specific, not device-specific.
+# Every machine flashed from this image carries its own lineage
+# (cat /etc/rooted-image-release in the field), and personalize-pi.sh reads it
+# to append the machine to golden-images/DEPLOYMENTS.csv, so "which image is
+# that customer's machine running?" is answerable from git instead of memory.
+IMAGE_ID="rooted-golden-$(date +%Y%m%d)"
+GIT_SHA=$(git -C "${PI_SRC}" rev-parse --short HEAD 2>/dev/null || echo unknown)
+sudox "bash -c \"printf 'IMAGE_ID=%s\nBUILD_DATE=%s\nREPO_SHA=%s\n' '${IMAGE_ID}' '$(date -u +%Y-%m-%dT%H:%M:%SZ)' '${GIT_SHA}' > /etc/rooted-image-release\"" \
+    || die "writing /etc/rooted-image-release"
+ok "baked ${IMAGE_ID} (repo ${GIT_SHA}) into /etc/rooted-image-release"
+
+# -----------------------------------------------------------------------------
 stage "Runtime data and logs"
 # -----------------------------------------------------------------------------
 sudox "rm -rf /var/lib/vector/*"
