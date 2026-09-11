@@ -106,6 +106,56 @@ if [ "$ASSUME_YES" != "true" ]; then
 fi
 
 # -----------------------------------------------------------------------------
+stage "Pre-capture audit: does the Pi match the repo?"
+# -----------------------------------------------------------------------------
+# A golden image is only as good as the files on the reference Pi. Anything
+# hand-copied during debugging, or copied from a since-edited source, gets baked
+# into every machine - silently, because nothing about a stale file looks wrong.
+# This caught a real one: setup-captive-portal.sh had been copied to the Pi
+# minutes before its stale "password: raspberry" line was fixed in the repo.
+DRIFT=0
+audit_file() { # $1 local (relative to pi-src), $2 remote
+    local L R
+    L=$(shasum -a 256 "${PI_SRC}/$1" 2>/dev/null | awk '{print $1}')
+    R=$(sshx "sha256sum '$2' 2>/dev/null | awk '{print \$1}'" 2>/dev/null | tr -d '\r')
+    if [ -z "$R" ]; then echo -e "  ${RED}MISSING${NC}  $2"; DRIFT=$((DRIFT+1))
+    elif [ "$L" != "$R" ]; then echo -e "  ${RED}DRIFTED${NC}  $2"; DRIFT=$((DRIFT+1)); fi
+}
+for f in provisioner.py requirements.txt ble-wrapper.sh rooted-ble.service \
+         rooted-ble.timer rooted-iot.service rooted-ingest.service; do
+    audit_file "$f" "${REMOTE_DIR}/$f"
+done
+for f in "${PI_SRC}"/aws/*.py; do audit_file "aws/$(basename "$f")" "${REMOTE_DIR}/aws/$(basename "$f")"; done
+audit_file vector/rooted-vector.service "${REMOTE_DIR}/vector/rooted-vector.service"
+audit_file setup-scripts/setup-nm.sh "${REMOTE_DIR}/setup-scripts/setup-nm.sh"
+audit_file setup-scripts/setup-ethernet.sh "${REMOTE_DIR}/setup-scripts/setup-ethernet.sh"
+for f in "${PI_SRC}"/wifi-setup/*.sh; do audit_file "wifi-setup/$(basename "$f")" "${PORTAL_DIR}/wifi-setup/$(basename "$f")"; done
+audit_file captive-portal/captive_portal.py "${PORTAL_DIR}/captive-portal/captive_portal.py"
+
+if [ "$DRIFT" -ne 0 ]; then
+    echo ""
+    echo "  Re-copy the drifted files to the Pi, then re-run. Simplest:"
+    echo "    ./deploy-to-pi-one.sh   (host ${PI_HOST}, re-copies everything)"
+    die "${DRIFT} file(s) on the Pi do not match the repo - refusing to capture"
+fi
+ok "every tracked file on the Pi matches the repo"
+
+# The image's whole value is that these self-heal in the field. Capturing
+# without them ships machines that need a human for failures we already fixed.
+for unit in rooted-ssh-watchdog.timer rooted-sshd-keygen.service; do
+    if sshx "systemctl is-enabled ${unit}" 2>/dev/null | grep -q enabled; then
+        ok "${unit} enabled"
+    else
+        die "${unit} is not enabled - run golden-image/harden-updates.sh first"
+    fi
+done
+if sshx "grep -q _advertising_watchdog ${REMOTE_DIR}/provisioner.py" 2>/dev/null; then
+    ok "BLE advertising watchdog present in provisioner.py"
+else
+    die "provisioner.py has no BLE advertising watchdog - a dropped advert would need a manual restart"
+fi
+
+# -----------------------------------------------------------------------------
 stage "Stopping services"
 # -----------------------------------------------------------------------------
 sudox "systemctl stop rooted-iot.service rooted-vector.service rooted-ingest.service captive-portal.service rooted-ble.timer rooted-ble.service" >/dev/null 2>&1
