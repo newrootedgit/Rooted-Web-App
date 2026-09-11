@@ -1,0 +1,46 @@
+# =============================================================================
+# Rooted Robotics - first-boot network configuration
+# =============================================================================
+# Written to the boot partition as /network-config by write-boot-config.sh.
+# cloud-init renders this into /etc/netplan/50-cloud-init.yaml on first boot.
+#
+# Its only job is to get the Pi onto WiFi so cloud-init's package/pip/Vector
+# work has internet, and so you can SSH in for deploy-to-pi-one.sh.
+#
+# This file is INTENTIONALLY temporary. deploy-to-pi-two.sh later runs
+# setup-nm.sh, which replaces 50-cloud-init.yaml with an empty stub and hands
+# wlan0 to NetworkManager. That stub removes EVERYTHING in this file - eth0
+# included. Nothing here survives provisioning, so:
+#
+#   - do NOT put eth0's static address here. setup-ethernet.sh owns it via
+#     /etc/netplan/99-eth0-static.yaml, which survives precisely because it is a
+#     separate, higher-numbered file that setup-nm.sh does not touch.
+#   - deploy-to-pi-one.sh MUST run before deploy-to-pi-two.sh, so that static
+#     config exists before the stub lands. Otherwise the Pi is left with no
+#     network at all and needs HDMI to recover.
+# =============================================================================
+
+version: 2
+
+wifis:
+  wlan0:
+    dhcp4: true
+    dhcp6: false
+    # Without a regulatory domain the radio is limited to the lowest common
+    # channel set, so an AP on a high 5GHz channel never appears.
+    regulatory-domain: "@@WIFI_REGDOM@@"
+    # optional:true stops systemd-networkd-wait-online holding boot for ~2
+    # minutes when the AP is out of range.
+    optional: true
+    access-points:
+      @@WIFI_SSID@@:
+        # Accepts either a plaintext passphrase or a 64-character hex PSK.
+        # Raspberry Pi Imager writes the pre-computed hex PSK rather than the
+        # passphrase, and write-boot-config.sh passes either through as-is.
+        password: @@WIFI_PSK@@
+
+ethernets:
+  eth0:
+    dhcp4: true
+    dhcp6: false
+    optional: true

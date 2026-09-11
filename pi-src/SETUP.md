@@ -1,0 +1,149 @@
+# Pi setup — what's what
+
+Three ways to set up a Pi live in this directory. This file says which is which,
+so nobody has to reverse-engineer it from the scripts.
+
+## The three paths
+
+### A. Current flow (works today)
+
+```
+Raspberry Pi Imager (advanced options: hostname, rooted user, WiFi, SSH)
+  └─ ./deploy-to-pi-one.sh     over WiFi   — packages, venv, Vector, files, eth0 static
+  └─ ./deploy-to-pi-two.sh     over cable  — identity, IoT, NM, portal, services
+  └─ ./verify-pi.sh --host 192.168.10.1
+```
+
+~30 min/machine. This is what's proven in the field.
+
+### B. Current flow + stamp (optional, ~6 min faster)
+
+Adds one step before booting: `provisioning/write-boot-config.sh` stamps
+cloud-init onto the boot partition so the ~15 minutes of apt/venv/Vector happens
+unattended during first boot. `deploy-to-pi-one.sh` then takes seconds.
+
+Clearly worth it on an SD-card Pi (the card is already in the reader). Marginal
+on a Compute Module, where you must re-enter usbboot mode and run `rpiboot`
+again just to reach the boot partition.
+
+### C. Golden image (in progress — for building at volume)
+
+```
+flash golden image → boot → cable to 192.168.10.1
+  └─ golden-image/personalize-pi.sh    name, UUID, IoT certs, Tailscale
+  └─ ./verify-pi.sh --host 192.168.10.1
+```
+
+Target ~15 min/machine, and **no WiFi needed during provisioning** — the image
+already has the NetworkManager handover baked in, so nothing can drop your
+session. WiFi is provisioned on site by the customer over BLE or the captive
+portal, which is how the product works anyway.
+
+## Directory map
+
+| Path | What it is |
+|---|---|
+| `deploy-to-pi-one.sh` | Path A step 1. Everything needing internet on the Pi. |
+| `deploy-to-pi-two.sh` | Path A step 2. Offline; identity + config. Needs the cable. |
+| `finish-pi-setup.sh` | Recovery for a `deploy-to-pi-two.sh` that died mid-run. Duplicates its step 7 — superseded by path C. |
+| `verify-pi.sh` | **Shared by all paths.** 25 checks incl. a real mTLS handshake to AWS IoT. Exit 0 only if everything passes. |
+| `provisioning/` | Path B. The cloud-init stamp. |
+| `golden-image/` | Path C. `bake-common.sh` (once), `build-golden-image.sh` (de-personalize + capture), `personalize-pi.sh` (per machine). |
+| `setup-scripts/` | Run on the Pi: `setup-nm.sh`, `setup-ethernet.sh`, `provision-iot-device.sh`. |
+| `wifi-setup/`, `captive-portal/` | Captive portal + hotspot. |
+| `aws/` | Runs on the Pi: `telemetry_ingest.py`, `command_handler.py`. |
+| `vector/` | Vector config template + unit. |
+| `deploy-vector.sh` | Standalone Vector/ingest redeploy to an existing Pi. |
+| `deploy-with-iot.sh`, `setup-aws-iot.sh` | Older one-shot deploy helpers. Not part of A/B/C. |
+
+## Ordering rule that must not be broken
+
+`setup-nm.sh` replaces `/etc/netplan/50-cloud-init.yaml` with an empty stub to
+take `wlan0` away from netplan. That stub removes **everything** in that file —
+including `eth0`'s config and the WiFi credentials.
+
+So `setup-ethernet.sh` (which writes `99-eth0-static.yaml`, a separate
+higher-numbered file that survives) **must run before** `setup-nm.sh`. In path A
+that's guaranteed because `deploy-to-pi-one.sh` runs first. In path C it's baked
+into the image.
+
+Get this backwards and the Pi ends up with no network at all and needs HDMI to
+recover. This has already happened once.
+
+## What the machine NAME controls
+
+Not cosmetic. Both `apps/api/src/domains/machine-domain/machineType.ts` and
+`aws/telemetry_ingest.py` derive the machine type by **prefix match**:
+
+```
+startsWith("SEEDER")    -> SEEDER
+startsWith("HARVESTER") -> HARVESTER
+otherwise               -> OTHER
+```
+
+`OTHER` means telemetry frames are dropped (no field layout) and the parts API
+returns an empty list — while every service still reports healthy. Name machines
+`TYPE-customer-unit`, e.g. `HARVESTER-koppert-1`.
+
+**`WASHER` is not a recognised type**, despite `deploy-to-pi-two.sh` listing it
+as recommended. A washer classifies as `OTHER`.
+
+## Office WiFi for bench testing
+
+A machine from the golden image has **no WiFi credentials by design** — WiFi is
+provisioned on site by the customer. On the bench that means it can't reach AWS
+IoT, so `rooted-iot` crash-loops and you can't confirm the machine works.
+
+`personalize-pi.sh --office-wifi` closes that gap, reading credentials from
+`~/.rooted-office-wifi` — deliberately outside the repo, so it can never be
+committed. Create it with:
+
+```bash
+bash -c 'read -rp "SSID [urbanfarms]: " S; S=${S:-urbanfarms}; read -rsp "Password: " P; echo; umask 077; printf "SSID=%s\nPSK=%s\n" "$S" "$P" > ~/.rooted-office-wifi; echo "saved (mode $(stat -f %Lp ~/.rooted-office-wifi))"'
+```
+
+Format is `SSID=` / `PSK=`, one per line, mode 600. The PSK may be a passphrase
+or a 64-hex key.
+
+**This must be removed before shipping.** NetworkManager stores the PSK in
+`/etc/NetworkManager/system-connections/`, so a machine that ships with it
+carries your office WiFi password into a customer facility:
+
+```bash
+ssh rooted@<host> "sudo nmcli connection delete urbanfarms"
+```
+
+`build-golden-image.sh` strips it automatically, along with the plaintext copy
+cloud-init leaves in `/boot/firmware/network-config`.
+
+## Proving it survives a power cycle
+
+`systemctl start` proves a service runs. It does **not** prove it comes back
+after a power cycle — wrong ordering or a missing `After=` only shows up on a
+cold boot, and these machines get power-cycled in the field constantly.
+`rooted-iot` and `rooted-vector` both depend on `network-online.target` and
+`time-sync.target`, the usual sources of boot-order flakiness.
+
+```bash
+./golden-image/personalize-pi.sh --host 192.168.10.1 --reboot
+```
+
+reboots, waits for the Pi to answer, then runs `verify-pi.sh` automatically.
+
+## Known issues, not yet fixed
+
+- **The captive-portal hotspot has a random, unknowable password.**
+  `setup-captive-portal.sh` calls `nmcli device wifi hotspot` with no `password`
+  argument, so NetworkManager generates one. Reading it requires already being
+  logged in. That makes the field-recovery network unjoinable on every machine.
+- **`deploy-to-pi-two.sh` renders `rooted-telemetry.toml` in place.** Re-running
+  it with a new UUID finds no `@@PLACEHOLDER@@` tokens left and silently keeps
+  publishing under the previous device id. `verify-pi.sh` detects this; path C
+  fixes it by rendering from a pristine `.toml.template`.
+- **`harden-pi.sh` is referenced as canonical at `pi-src/harden-pi.sh`** by
+  `rooted-machines-code/customer-code/superior-super-foods/harden-pi.sh`, but it
+  does not exist here.
+- **HARVESTER telemetry layout may be stale.** `telemetry_ingest.py` says
+  `# HARVESTER layouts are added when that firmware ships` and its `STATUS_FIELDS`
+  entry has 6 fields against SEEDER's 10. Verify against current ClearCore
+  harvester firmware before building at volume.
