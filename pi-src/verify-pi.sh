@@ -404,6 +404,26 @@ else
     warn "btmgmt not installed" "cannot verify BLE advertising state"
 fi
 
+# --- Captive portal hotspot is JOINABLE ---------------------------------------
+# The hotspot is the customer's fallback for setting WiFi (and for changing it
+# when their credentials rotate). `nmcli device wifi hotspot` with no password
+# argument generates a RANDOM key that exists only on that machine, which made
+# the fallback unusable on every machine built that way - silently, since the
+# hotspot still appears in scans. Assert the known fleet password is set.
+EXPECTED_HOTSPOT_PSK="${EXPECTED_HOTSPOT_PSK:-RootedSetup2026}"
+if nmcli connection show Rooted-Robotics-Setup >/dev/null 2>&1; then
+    HS_PSK=$(sudo nmcli -s -g 802-11-wireless-security.psk connection show Rooted-Robotics-Setup 2>/dev/null | tr -d '\r')
+    if [ "$HS_PSK" = "$EXPECTED_HOTSPOT_PSK" ]; then
+        pass "captive-portal hotspot uses the known fleet password"
+    elif [ -z "$HS_PSK" ]; then
+        fail "captive-portal hotspot has NO password set" "fix: sudo bash /opt/rootedpi/wifi-setup/setup-captive-portal.sh"
+    else
+        fail "captive-portal hotspot password is not the fleet password" "it is almost certainly nmcli's random key, which nobody can know - the customer could not set or change WiFi. fix: sudo bash /opt/rootedpi/wifi-setup/setup-captive-portal.sh"
+    fi
+else
+    fail "Rooted-Robotics-Setup hotspot connection missing" "the customer has no way to provision WiFi; run setup-captive-portal.sh"
+fi
+
 # =============================================================================
 echo "SECTION|Network"
 # =============================================================================

@@ -163,10 +163,12 @@ reboots, waits for the Pi to answer, then runs `verify-pi.sh` automatically.
   changed. `_advertising_watchdog` now re-arms it within 30s, and verify-pi.sh
   fails on a dead advert. Machines from images before 2026-09-11 do not have
   this: recover with `sudo systemctl restart rooted-ble`.
-- **The captive-portal hotspot has a random, unknowable password.**
-  `setup-captive-portal.sh` calls `nmcli device wifi hotspot` with no `password`
-  argument, so NetworkManager generates one. Reading it requires already being
-  logged in. That makes the field-recovery network unjoinable on every machine.
+- ~~**The captive-portal hotspot has a random, unknowable password.**~~ FIXED
+  2026-09-11: `HOTSPOT_PASSWORD` is now pinned (default `RootedSetup2026`) and
+  applied on both the create and update paths, so older machines are corrected
+  on the next run. verify-pi.sh fails if a machine has any other key. Note this
+  is a fleet-wide shared credential and the portal has no other auth - anyone in
+  WiFi range who knows it can repoint a machine's WiFi.
 - **`deploy-to-pi-two.sh` renders `rooted-telemetry.toml` in place.** Re-running
   it with a new UUID finds no `@@PLACEHOLDER@@` tokens left and silently keeps
   publishing under the previous device id. `verify-pi.sh` detects this; path C

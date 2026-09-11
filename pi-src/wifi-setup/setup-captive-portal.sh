@@ -28,6 +28,30 @@ echo "✓ Captive portal files copied to /opt/captive-portal"
 
 HOTSPOT_INTERFACE="wlan0"
 HOTSPOT_IP="10.42.0.1"
+
+# --- Hotspot password ---------------------------------------------------------
+# MUST be set explicitly. `nmcli device wifi hotspot` with no password argument
+# does NOT create an open network - it GENERATES A RANDOM WPA KEY that exists
+# only on that one machine. Reading it back requires already being logged in,
+# so the recovery/onboarding hotspot became unjoinable on every machine built
+# that way. (Observed: a field machine advertising Rooted-Robotics-Setup with
+# PSK 7Pr3si4thJ49, knowable by nobody.)
+#
+# This is a FLEET-WIDE shared credential and it is the ONLY access control on
+# the portal - captive_portal.py itself asks for no code, it just accepts an
+# SSID and password and joins. Anyone within WiFi range who knows this string
+# can therefore point a machine at a different network. That is an accepted
+# trade: the alternative, a per-machine password, cannot be typed by a customer
+# who has no other way in, which is the exact situation the hotspot exists for.
+#
+# Change it here and it applies to every machine built afterwards; existing
+# machines pick it up on the next run of this script.
+HOTSPOT_PASSWORD="${HOTSPOT_PASSWORD:-RootedSetup2026}"
+
+if [ ${#HOTSPOT_PASSWORD} -lt 8 ]; then
+    echo "ERROR: HOTSPOT_PASSWORD must be at least 8 characters (WPA2 minimum)."
+    exit 1
+fi
 FLASK_PORT="80"
 
 # echo "Step 1: Installing dependencies..."
@@ -79,25 +103,36 @@ echo ""
 echo "Step 3: Configuring hotspot..."
 
 if nmcli connection show "Rooted-Robotics-Setup" &>/dev/null; then
-    nmcli connection modify "Rooted-Robotics-Setup" \
-        ipv4.method shared \
-        ipv4.addresses "${HOTSPOT_IP}/24" \
-        connection.autoconnect yes \
-        connection.autoconnect-priority -999
-    echo "✓ Hotspot configured (priority: -999, will only activate if no WiFi available)"
+    echo "Updating existing Rooted-Robotics-Setup hotspot..."
 else
     echo "Creating Rooted-Robotics-Setup hotspot..."
+    # `password` is REQUIRED here - omitting it makes nmcli invent a random key
+    # that nobody can ever know. See the HOTSPOT_PASSWORD notes at the top.
     nmcli device wifi hotspot \
         ifname wlan0 \
         con-name Rooted-Robotics-Setup \
-        ssid Rooted-Robotics-Setup 
+        ssid Rooted-Robotics-Setup \
+        password "${HOTSPOT_PASSWORD}"
+fi
 
-    nmcli connection modify "Rooted-Robotics-Setup" \
-        ipv4.method shared \
-        ipv4.addresses "${HOTSPOT_IP}/24" \
-        connection.autoconnect yes \
-        connection.autoconnect-priority -999
-    echo "✓ Hotspot created and configured (priority: -999, will only activate if no WiFi available)"
+# Applied on BOTH paths, so a machine built before the password was pinned gets
+# corrected the next time this runs, rather than keeping its unknowable key.
+nmcli connection modify "Rooted-Robotics-Setup" \
+    ipv4.method shared \
+    ipv4.addresses "${HOTSPOT_IP}/24" \
+    connection.autoconnect yes \
+    connection.autoconnect-priority -999 \
+    802-11-wireless-security.key-mgmt wpa-psk \
+    802-11-wireless-security.psk "${HOTSPOT_PASSWORD}"
+
+# Verify the PSK actually took - a silently-unjoinable hotspot is the whole bug.
+ACTUAL_PSK=$(nmcli -s -g 802-11-wireless-security.psk connection show "Rooted-Robotics-Setup" 2>/dev/null)
+if [ "$ACTUAL_PSK" = "$HOTSPOT_PASSWORD" ]; then
+    echo "✓ Hotspot configured with the known password (priority: -999, only activates if no WiFi available)"
+else
+    echo "✗ Hotspot password did NOT take (got '${ACTUAL_PSK:-<empty>}')."
+    echo "  The hotspot would be unjoinable. Fix before shipping this machine."
+    exit 1
 fi
 
 echo ""
@@ -234,7 +269,7 @@ echo ""
 
 echo "Client Testing:"
 echo "---------------"
-echo "1. Connect phone/laptop to 'Rooted-Robotics-Setup' WiFi (password: raspberry)"
+echo "1. Connect phone/laptop to 'Rooted-Robotics-Setup' WiFi (password: ${HOTSPOT_PASSWORD})"
 echo "2. Captive portal should pop up automatically"
 echo "3. If not, browse to: http://google.com"
 echo ""
