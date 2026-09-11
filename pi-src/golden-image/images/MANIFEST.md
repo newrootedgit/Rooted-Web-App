@@ -23,7 +23,7 @@ Verify a copy before trusting it:  shasum -a 256 -c <(grep <name> MANIFEST.md)
 - restore (~2.5 min - conv=sparse skips the zeroed space; drop it only when
   re-flashing a module that held customer data and must be fully overwritten):
     gunzip -c rooted-golden-20260910.img.gz | sudo dd of=/dev/rdiskN bs=4m conv=sparse
-- then: ../golden-image/personalize-pi.sh --machine <TYPE-customer-n> --office-wifi --reboot
+- then: ../personalize-pi.sh --machine <TYPE-customer-n> --office-wifi --reboot
 - note: this image predates /etc/rooted-image-release, so machines flashed
   from it appear in DEPLOYMENTS.csv as "unknown-pre-release-image" - which
   uniquely means THIS image, as every later image carries the release file

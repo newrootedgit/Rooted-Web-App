@@ -381,14 +381,14 @@ stage "Deployment ledger"
 # "which image is that customer's machine running?" forever.
 IMAGE_ID=$(sshx "grep -s '^IMAGE_ID=' /etc/rooted-image-release 2>/dev/null | cut -d= -f2" 2>/dev/null | tr -d '\r')
 IMAGE_ID=${IMAGE_ID:-unknown-pre-release-image}
-LEDGER="${PI_SRC}/golden-images/DEPLOYMENTS.csv"
+LEDGER="${SCRIPT_DIR}/images/DEPLOYMENTS.csv"
 if [ -f "$LEDGER" ]; then
     if grep -q ",${DEVICE_UUID}," "$LEDGER"; then
         ok "already in DEPLOYMENTS.csv (re-personalization run)"
     else
         printf '%s,%s,%s,%s,%s\n' "$(date +%Y-%m-%d)" "$MACHINE_NAME" "$DEVICE_UUID" "$IMAGE_ID" "" >> "$LEDGER"
-        ok "recorded in golden-images/DEPLOYMENTS.csv (image: ${IMAGE_ID})"
-        warn "remember to commit the ledger: git add pi-src/golden-images/DEPLOYMENTS.csv"
+        ok "recorded in golden-image/images/DEPLOYMENTS.csv (image: ${IMAGE_ID})"
+        warn "remember to commit the ledger: git add pi-src/golden-image/images/DEPLOYMENTS.csv"
     fi
 else
     warn "no ${LEDGER} - deployment not recorded"

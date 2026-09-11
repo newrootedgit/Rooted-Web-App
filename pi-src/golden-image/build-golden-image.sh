@@ -268,7 +268,7 @@ stage "Image identity"
 # Baked into the image ON PURPOSE - this is image-specific, not device-specific.
 # Every machine flashed from this image carries its own lineage
 # (cat /etc/rooted-image-release in the field), and personalize-pi.sh reads it
-# to append the machine to golden-images/DEPLOYMENTS.csv, so "which image is
+# to append the machine to golden-image/images/DEPLOYMENTS.csv, so "which image is
 # that customer's machine running?" is answerable from git instead of memory.
 IMAGE_ID="rooted-golden-$(date +%Y%m%d)"
 GIT_SHA=$(git -C "${PI_SRC}" rev-parse --short HEAD 2>/dev/null || echo unknown)
