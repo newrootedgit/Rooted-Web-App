@@ -33,6 +33,7 @@ RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PI_SRC="$(cd "${SCRIPT_DIR}/.." && pwd)"
 REMOTE_DIR="/opt/rooted-ble"
+PORTAL_DIR="/opt/rootedpi"
 
 PI_HOST="192.168.10.1"; PI_USER="rooted"; DO_SHUTDOWN="true"; ASSUME_YES="false"
 
