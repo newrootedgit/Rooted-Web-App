@@ -1,13 +1,23 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { createOrUpdateMachine } from '../createOrUpdateMachine.js';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createMockPrisma, createMockDbMachine, type MockPrismaClient } from '../../../../test/mockPrisma.js';
 import type { PrismaClient } from '../../../../generated/prisma/client.js';
+
+// The onboarding liveness probe publishes to AWS IoT. Without this mock the
+// suite would publish to the real broker whenever local AWS credentials exist.
+vi.mock('../../../../lib/aws/iot-client.js', () => ({
+  publishToDevice: vi.fn().mockResolvedValue(undefined),
+}));
+
+// Import after mock is set up
+const { publishToDevice } = await import('../../../../lib/aws/iot-client.js');
+const { createOrUpdateMachine } = await import('../createOrUpdateMachine.js');
 
 describe('createOrUpdateMachine', () => {
   let mockPrisma: MockPrismaClient;
 
   beforeEach(() => {
     mockPrisma = createMockPrisma();
+    vi.clearAllMocks();
   });
 
   it('should create new machine when deviceId does not exist', async () => {
@@ -126,6 +136,47 @@ describe('createOrUpdateMachine', () => {
 
     expect(result.tenantId).toBe('specific-tenant');
     expect(result.farmId).toBe('specific-farm');
+  });
+
+  it('should probe the device for liveness after creation', async () => {
+    // A device that connected to AWS IoT BEFORE its machine row existed had its
+    // presence event dropped, so the dashboard showed offline until a reconnect.
+    // The probe solicits a pong; pongHandler then marks the machine online.
+    mockPrisma.machines.findFirst.mockResolvedValue(null);
+    mockPrisma.machines.create.mockResolvedValue(
+      createMockDbMachine({ id: 'm-1', device_id: 'probe-device' })
+    );
+
+    await createOrUpdateMachine(
+      mockPrisma as unknown as PrismaClient,
+      { name: 'Probe Machine', deviceId: 'probe-device' },
+      'tenant-1',
+      'farm-1'
+    );
+
+    expect(publishToDevice).toHaveBeenCalledWith('probe-device', {
+      action: 'get_presets',
+      requestId: expect.stringMatching(/^onboard-probe-/),
+    });
+  });
+
+  it('should not fail onboarding when the liveness probe cannot be published', async () => {
+    vi.mocked(publishToDevice).mockRejectedValueOnce(new Error('iot unreachable'));
+    mockPrisma.machines.findFirst.mockResolvedValue(null);
+    mockPrisma.machines.create.mockResolvedValue(
+      createMockDbMachine({ id: 'm-2', device_id: 'offline-device' })
+    );
+
+    const result = await createOrUpdateMachine(
+      mockPrisma as unknown as PrismaClient,
+      { name: 'Offline Machine', deviceId: 'offline-device' },
+      'tenant-1',
+      'farm-1'
+    );
+
+    // The probe is fire-and-forget: a publish failure must never surface to the
+    // onboarding flow.
+    expect(result.id).toBe('m-2');
   });
 
   it('should create machine with null farmId', async () => {

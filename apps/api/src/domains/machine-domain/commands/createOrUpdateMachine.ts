@@ -1,7 +1,9 @@
+import { randomUUID } from 'node:crypto';
 import type { PrismaClient } from '../../../generated/prisma/client.js';
 import type { AddMachineInput, Machine } from '../types.js';
 import { findMachineByDeviceId } from '../queries/findMachineByDeviceId.js';
 import { subscribeToDevice } from '../mqtt/subscriber.js';
+import { publishToDevice } from '../../../lib/aws/iot-client.js';
 
 export async function createOrUpdateMachine(
   prisma: PrismaClient,
@@ -38,6 +40,23 @@ export async function createOrUpdateMachine(
 
   if (machine.device_id) {
     await subscribeToDevice(machine.device_id);
+
+    // Solicit proof of life. Status is normally set by AWS IoT presence events,
+    // but a device that connected BEFORE this row existed had its "connected"
+    // event dropped as unknown-device - so a freshly added machine showed
+    // offline until its rooted-iot service reconnected, and onboarding a Pi
+    // that was already running ALWAYS hit that. The device answers get_presets
+    // on its pong topic; pongHandler marks it online (markDeviceSeen). If it is
+    // genuinely offline there is no answer and no harm - the presence event
+    // marks it online whenever it does connect, which now works because the
+    // row exists. Fire-and-forget: onboarding must not fail because a probe
+    // could not be published.
+    publishToDevice(machine.device_id, {
+      action: 'get_presets',
+      requestId: `onboard-probe-${randomUUID()}`,
+    }).catch((err) => {
+      console.error('[machines] onboarding liveness probe failed for', machine.device_id, err);
+    });
   }
 
   return {
