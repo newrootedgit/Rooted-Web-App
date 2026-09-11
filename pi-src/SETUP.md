@@ -176,7 +176,8 @@ reboots, waits for the Pi to answer, then runs `verify-pi.sh` automatically.
 - **`harden-pi.sh` is referenced as canonical at `pi-src/harden-pi.sh`** by
   `rooted-machines-code/customer-code/superior-super-foods/harden-pi.sh`, but it
   does not exist here.
-- **HARVESTER telemetry layout may be stale.** `telemetry_ingest.py` says
-  `# HARVESTER layouts are added when that firmware ships` and its `STATUS_FIELDS`
-  entry has 6 fields against SEEDER's 10. Verify against current ClearCore
-  harvester firmware before building at volume.
+- ~~**HARVESTER telemetry layout may be stale.**~~ VERIFIED 2026-09-11 against
+  `rooted-machines-code/customer-code/koppert/harvester/clearcore/autoadjust_harvester/`:
+  the firmware emits `STATUS_UPDATE,2,bootId,seq,uptimeMs,belt_motor_uptime_ms,
+  blade_motor_uptime_ms,cmdAgeMs`, which matches telemetry_ingest.py's HARVESTER
+  field list exactly (6 fields, same order, schema_ver 2).
