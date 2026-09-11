@@ -372,6 +372,38 @@ else
     warn "/etc/machine-info missing" "BlueZ will fall back to the system hostname for the advertised name"
 fi
 
+# --- Is it ACTUALLY advertising right now? ------------------------------------
+# The name above is only what it WOULD advertise. rooted-ble can be active with
+# zero restarts, its startup log claiming success, while the controller has no
+# advertising instance at all - which happens after a central connects and
+# disconnects. The machine is then invisible to every scanner and cannot be
+# onboarded or have its WiFi changed. `btmgmt advinfo` is the ground truth.
+if command -v btmgmt &>/dev/null; then
+    # `printf '' |` is load-bearing, not decoration. btmgmt HANGS FOREVER when
+    # its stdin is /dev/null; it needs a pipe that reaches EOF. And it must get
+    # *some* redirect, because this script arrives on ssh's stdin - without one
+    # btmgmt would swallow the rest of the script. provisioner.py hit the same
+    # trap; see its _btmgmt docstring. timeout is the backstop.
+    ADV_COUNT=$(printf '' | timeout 15 sudo btmgmt --index 0 advinfo 2>/dev/null | grep -oE 'Instances list with [0-9]+ item' | grep -oE '[0-9]+')
+    if [ -z "$ADV_COUNT" ]; then
+        warn "could not read advertising state from btmgmt"
+    elif [ "$ADV_COUNT" -gt 0 ]; then
+        pass "BLE advertising active (${ADV_COUNT} instance)"
+    else
+        fail "BLE advertising is DEAD - no advertising instance" "the machine is invisible to BLE scans and cannot be onboarded; fix: sudo systemctl restart rooted-ble (a watchdog in provisioner.py should re-arm within 30s - check: journalctl -u rooted-ble | grep adv-watchdog)"
+    fi
+
+    # The watchdog is what makes this self-healing in the field. Its absence is
+    # not fatal, but the machine then needs a human to recover.
+    if printf '' | sudo journalctl -u rooted-ble.service --no-pager 2>/dev/null | grep -q "Advertising watchdog started"; then
+        pass "BLE advertising watchdog running"
+    else
+        warn "no BLE advertising watchdog" "this Pi runs an older provisioner.py; a dropped advert will need a manual restart"
+    fi
+else
+    warn "btmgmt not installed" "cannot verify BLE advertising state"
+fi
+
 # =============================================================================
 echo "SECTION|Network"
 # =============================================================================

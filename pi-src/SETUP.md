@@ -154,6 +154,15 @@ reboots, waits for the Pi to answer, then runs `verify-pi.sh` automatically.
 
 ## Known issues, not yet fixed
 
+- **BLE advertising dies after a client disconnects** (FIXED in provisioner.py,
+  needs a golden image rebuild to ship). The mgmt advertising instance is torn
+  down when a central disconnects - including a failed pairing attempt - and
+  does not come back. rooted-ble stays `active` with zero restarts and its log
+  still claims it is advertising, so nothing looks wrong; the machine is simply
+  invisible to every BLE scanner and cannot be onboarded or have its WiFi
+  changed. `_advertising_watchdog` now re-arms it within 30s, and verify-pi.sh
+  fails on a dead advert. Machines from images before 2026-09-11 do not have
+  this: recover with `sudo systemctl restart rooted-ble`.
 - **The captive-portal hotspot has a random, unknowable password.**
   `setup-captive-portal.sh` calls `nmcli device wifi hotspot` with no `password`
   argument, so NetworkManager generates one. Reading it requires already being
