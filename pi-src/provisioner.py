@@ -3,6 +3,8 @@ import subprocess
 import os
 import sys
 import threading
+import time
+import re
 from bluezero import peripheral
 from bluezero import adapter
 import json
@@ -37,8 +39,18 @@ DEVICE_FILE = os.path.join(SCRIPT_DIR, 'device_config.json')
 # The workaround is to advertise via `btmgmt`, which drives the *legacy* HCI
 # advertising commands (LE Set Advertising Parameters / Data / Enable) that the
 # chip handles correctly. We keep bluezero for the GATT server and only replace
-# its advertisement step (see start_ble). mgmt-managed advertising instances
-# auto-resume after a client disconnects, so no manual re-advertise loop needed.
+# its advertisement step (see start_ble).
+#
+# NOTE: an earlier version of this comment claimed "mgmt-managed advertising
+# instances auto-resume after a client disconnects, so no manual re-advertise
+# loop needed". That is WRONG, and it was wrong silently. Observed twice on two
+# separate builds: after a central connects and disconnects (including a failed
+# pairing attempt), the instance is torn down and never comes back. The service
+# stays `active` with zero restarts and its startup log still says it is
+# advertising, while `btmgmt advinfo` reports "Instances list with 0 items" and
+# the machine is invisible to every scanner. For a customer this means the
+# machine cannot be onboarded or have its WiFi changed, with nothing to indicate
+# why. See _advertising_watchdog below.
 
 BTMGMT = "btmgmt"
 HCI_INDEX = "0"  # onboard controller (hci0)
@@ -82,6 +94,64 @@ def start_btmgmt_advertising(service_uuid, device_name):
 def stop_btmgmt_advertising():
     """Remove all advertising instances added via btmgmt."""
     _btmgmt("clr-adv")
+
+
+def is_advertising():
+    """True if the controller currently has at least one advertising instance.
+
+    This is the ground truth - not whether this process thinks it advertised at
+    startup. `btmgmt advinfo` prints "Instances list with N items".
+    """
+    output = _btmgmt("advinfo")
+    match = re.search(r"Instances list with (\d+) item", output)
+    if match:
+        return int(match.group(1)) > 0
+    # Unparseable output (timeout, btmgmt missing, format change): report True so
+    # a broken probe cannot trigger an endless re-advertise loop. A genuinely
+    # dead advert still gets caught on the next tick once the probe recovers.
+    print(f"[adv-watchdog] could not parse advinfo, assuming OK: {output!r}")
+    return True
+
+
+def _advertising_watchdog(service_uuid, device_name, interval=30):
+    """Re-arm the BLE advertisement if the controller drops it.
+
+    Runs forever in a daemon thread. Safe to call btmgmt from here while the
+    GATT server is published: verified on-device that both advinfo (read) and
+    clr-adv/add-adv (write) complete normally while bluezero holds the adapter.
+    The startup ORDERING still matters (advertise before app.publish(), see
+    start_ble) - this is only about the steady state afterwards.
+
+    Without this, one disconnected client permanently ends the machine's
+    discoverability and the only recovery is `systemctl restart rooted-ble` -
+    which is not something a customer can be expected to know.
+    """
+    consecutive_failures = 0
+    while True:
+        time.sleep(interval)
+        try:
+            if is_advertising():
+                consecutive_failures = 0
+                continue
+            print("[adv-watchdog] advertisement is GONE - re-arming")
+            if start_btmgmt_advertising(service_uuid, device_name):
+                consecutive_failures = 0
+                print("[adv-watchdog] re-armed successfully")
+            else:
+                consecutive_failures += 1
+                print(f"[adv-watchdog] re-arm FAILED ({consecutive_failures} in a row)")
+                # Repeated failure means the controller is wedged beyond what
+                # clr-adv/add-adv can fix. Bounce the adapter power and let the
+                # next tick re-add the instance.
+                if consecutive_failures >= 3:
+                    print("[adv-watchdog] bouncing the adapter")
+                    _btmgmt("power", "off")
+                    time.sleep(2)
+                    _btmgmt("power", "on")
+                    time.sleep(2)
+                    consecutive_failures = 0
+        except Exception as exc:  # never let the watchdog thread die
+            print(f"[adv-watchdog] unexpected error, continuing: {exc}")
 
 
 def _btmgmt(*args):
@@ -276,7 +346,18 @@ def start_ble():
 
     start_btmgmt_advertising(SERVICE_UUID, device_name)
 
+    # Keep it advertising. A central connecting and disconnecting tears the
+    # instance down and it does NOT come back on its own - see the module notes.
+    # Daemon thread so it cannot keep the process alive on shutdown.
+    threading.Thread(
+        target=_advertising_watchdog,
+        args=(SERVICE_UUID, device_name),
+        daemon=True,
+        name="adv-watchdog",
+    ).start()
+
     print(f"GATT Server running. Advertising as: {device_name}")
+    print("Advertising watchdog started (checks every 30s)")
 
     try:
         app.publish()

@@ -1,0 +1,229 @@
+#cloud-config
+# =============================================================================
+# Rooted Robotics - first-boot configuration for a new Pi
+# =============================================================================
+# Written to the boot partition as /user-data by write-boot-config.sh.
+# Ubuntu's cloud-init (NoCloud datasource) reads it on the very first boot.
+#
+# Scope: this file does the SLOW, IDENTICAL-ON-EVERY-PI work - the ~15 minutes
+# of apt packages, the Python venv and the Vector binary - unattended while the
+# Pi boots. It deliberately does NOT touch networking, systemd units, the
+# captive portal or NetworkManager.
+#
+# Everything after this is your existing, known-good flow:
+#     deploy-to-pi-one.sh   (now fast - its apt/pip/Vector steps are no-ops)
+#     deploy-to-pi-two.sh   (over the ethernet cable, unchanged)
+#     verify-pi.sh          (confirms it actually works)
+#
+# That split is deliberate. deploy-to-pi-one.sh runs setup-ethernet.sh BEFORE
+# deploy-to-pi-two.sh runs setup-nm.sh, and that ordering is load-bearing:
+# setup-nm.sh replaces /etc/netplan/50-cloud-init.yaml with an empty stub, which
+# removes eth0's config along with wlan0's. Without the static 192.168.10.1
+# already in place from 99-eth0-static.yaml, the Pi ends up with no network at
+# all and is only recoverable over HDMI. Do not reorder those two scripts, and
+# do not move their work into this file.
+#
+# Needs INTERNET on first boot - network-config joins WiFi before this runs.
+# =============================================================================
+
+hostname: @@HOSTNAME@@
+manage_etc_hosts: true
+preserve_hostname: false
+
+timezone: @@TIMEZONE@@
+
+# systemd-resolved owns resolv.conf; cloud-init rewriting it just fights that.
+manage_resolv_conf: false
+
+# --- apt date check ---------------------------------------------------------
+# DO NOT REMOVE. A Compute Module has no battery-backed RTC, so on first boot
+# the clock can be far enough off that apt rejects the archive Release file as
+# "not yet valid", which would take the whole package phase with it. Raspberry
+# Pi Imager sets exactly this, for exactly this reason.
+apt:
+  preserve_sources_list: true
+  conf: |
+    Acquire {
+      Check-Date "false";
+    };
+
+# --- Login ------------------------------------------------------------------
+# Defining `users:` replaces cloud-init's default list, so the stock 'ubuntu'
+# account is deliberately never created. The deploy scripts and every systemd
+# unit (rooted-iot, rooted-ingest, rooted-vector) assume 'rooted' and hardcode
+# /home/rooted.
+#
+# Only groups guaranteed to exist on a stock image are listed: the users module
+# runs BEFORE packages, so naming a group a package creates later (e.g.
+# 'bluetooth') would fail user creation outright. The rest are added in runcmd.
+users:
+  - name: rooted
+    gecos: Rooted Robotics
+    shell: /bin/bash
+    groups: [adm, sudo, dialout]
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    lock_passwd: false
+    passwd: @@PASSWORD_HASH@@
+    ssh_authorized_keys:
+      - @@SSH_PUBKEY@@
+
+# Password login stays on so the sshpass-based deploy scripts keep working.
+ssh_pwauth: true
+disable_root: true
+
+# --- Very early commands ----------------------------------------------------
+# bootcmd runs in the init stage, BEFORE packages are installed. Both fixes
+# below have to happen in that window or the package phase fails.
+bootcmd:
+  # iptables-persistent asks two debconf questions at install time and
+  # cloud-init has no TTY to answer them, so the package phase can stall.
+  - |
+    echo 'iptables-persistent iptables-persistent/autosave_v4 boolean false' | debconf-set-selections
+    echo 'iptables-persistent iptables-persistent/autosave_v6 boolean false' | debconf-set-selections
+
+  # THE -updates POCKET. Ubuntu 24.04 Pi images ship sources listing only
+  # <codename> and <codename>-security - but the image itself is built with
+  # -updates packages already installed. So libdbus-1-3 sits at 1.14.10-4ubuntu4.1
+  # while apt can only see libdbus-1-dev at ...4ubuntu4, and every -dev package
+  # whose runtime half was updated becomes uninstallable:
+  #     libdbus-1-dev : Depends: libdbus-1-3 (= ...4) but ...4.1 is to be installed
+  #     E: Unable to correct problems, you have held broken packages.
+  # This hits libdbus-1-dev, libpcre2-dev and libselinux1-dev in the list below,
+  # so without this the package phase cannot succeed. Idempotent - bootcmd runs
+  # on every boot. URI and keyring are read from the existing config so this
+  # works on both ports.ubuntu.com (arm64) and archive.ubuntu.com.
+  - |
+    . /etc/os-release
+    if ! grep -rqs "${VERSION_CODENAME}-updates" /etc/apt/sources.list /etc/apt/sources.list.d/ 2>/dev/null; then
+      SRC=/etc/apt/sources.list.d/ubuntu.sources
+      URI=$(grep -m1 '^URIs:' "$SRC" 2>/dev/null | awk '{print $2}')
+      KEY=$(grep -m1 '^Signed-By:' "$SRC" 2>/dev/null | awk '{print $2}')
+      printf '%s\n' \
+        'Types: deb' \
+        "URIs: ${URI:-http://ports.ubuntu.com/ubuntu-ports/}" \
+        "Suites: ${VERSION_CODENAME}-updates" \
+        'Components: main restricted universe multiverse' \
+        "Signed-By: ${KEY:-/usr/share/keyrings/ubuntu-archive-keyring.gpg}" \
+        > /etc/apt/sources.list.d/rooted-updates.sources
+    fi
+
+# --- Packages ---------------------------------------------------------------
+# Same list as deploy-to-pi-one.sh [1/5], plus avahi-daemon for mDNS.
+package_update: true
+package_upgrade: @@PACKAGE_UPGRADE@@
+
+packages:
+  # mDNS - makes `ssh rooted@<hostname>.local` work, removing the
+  # "search the network for what IP it got" step.
+  - avahi-daemon
+  # Networking / captive portal
+  - network-manager
+  - dnsmasq
+  - dnsmasq-base
+  - iptables
+  - iptables-persistent
+  - rfkill
+  - wireless-tools
+  # Bluetooth
+  - bluez
+  - bluetooth
+  # Python
+  - python3
+  - python3-pip
+  - python3-flask
+  - python3.12-venv
+  - python3-dev
+  # Build deps for the dbus-python / bluezero wheels
+  - pkg-config
+  - libcairo2-dev
+  - libgirepository1.0-dev
+  - libglib2.0-dev
+  - libdbus-1-dev
+  # HID / USB
+  - libhidapi-hidraw0
+  - libhidapi-libusb0
+  - libusb-1.0-0
+  - libusb-1.0-0-dev
+  # Misc
+  - git
+  - curl
+
+# --- Files ------------------------------------------------------------------
+write_files:
+  # Keep in sync with pi-src/requirements.txt. Inlined because the repo files
+  # have not been copied to the Pi yet at first boot.
+  - path: /opt/rooted-ble/requirements.txt
+    owner: root:root
+    permissions: '0644'
+    content: |
+      dbus-python
+      bluezero
+      awsiotsdk
+
+  # SSH host keys. A golden image must not contain them - every machine would
+  # share one identity - so build-golden-image.sh deletes them. cloud-init does
+  # NOT reliably regenerate them afterwards: a de-personalized Pi came back with
+  # sshd listening but no host keys, so every connection died at key exchange
+  # ("kex_exchange_identification: Connection reset by peer"). It answered ping
+  # and was otherwise healthy, but was unreachable over SSH - which on a
+  # headless machine in the field means unreachable, full stop.
+  # ssh-keygen -A only creates missing keys, so this is idempotent. Ordered
+  # before ssh.socket too, because Ubuntu 24.04 socket-activates sshd.
+  - path: /etc/systemd/system/rooted-sshd-keygen.service
+    owner: root:root
+    permissions: '0644'
+    content: |
+      [Unit]
+      Description=Generate SSH host keys if missing (Rooted)
+      Before=ssh.service ssh.socket
+      ConditionPathExistsGlob=!/etc/ssh/ssh_host_ed25519_key
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/bin/ssh-keygen -A
+      RemainAfterExit=yes
+
+      [Install]
+      WantedBy=multi-user.target
+
+# --- First-boot commands ----------------------------------------------------
+runcmd:
+  # Make the host-key generator active for every future boot, including on
+  # machines flashed from a golden image where the keys were deliberately
+  # stripped.
+  - [ systemctl, enable, rooted-sshd-keygen.service ]
+
+  # Supplementary groups that only exist once their packages are installed.
+  - |
+    for g in netdev video plugdev bluetooth; do
+      usermod -aG "$g" rooted 2>/dev/null || true
+    done
+
+  - [ systemctl, enable, --now, avahi-daemon ]
+
+  # Directory layout the deploy scripts expect.
+  - [ mkdir, -p, /opt/rooted-ble/setup-scripts, /opt/rooted-ble/aws, /opt/rooted-ble/vector, /opt/rooted-ble/certs, /opt/rootedpi ]
+  - [ mkdir, -p, /home/rooted/te-cli ]
+  # Vector exits with config error 78 and crash-loops if data_dir is missing.
+  - [ mkdir, -p, /var/lib/vector ]
+
+  # Python venv + dependencies (deploy-to-pi-one.sh step [3/5]).
+  - [ python3, -m, venv, /opt/rooted-ble/.venv ]
+  - [ /opt/rooted-ble/.venv/bin/pip, install, --upgrade, pip ]
+  - [ /opt/rooted-ble/.venv/bin/pip, install, -r, /opt/rooted-ble/requirements.txt ]
+
+  # Vector binary (deploy-to-pi-one.sh step [4/5]). runuser gives HOME=/home/rooted
+  # so the installer lands it at /home/rooted/.vector/bin/vector - the exact path
+  # rooted-vector.service hardcodes in ExecStart.
+  - |
+    runuser -u rooted -- bash -c 'curl --proto "=https" --tlsv1.2 -sSfL https://sh.vector.dev | bash -s -- -y'
+
+  - [ chown, -R, "rooted:rooted", /opt/rooted-ble, /opt/rootedpi, /home/rooted/te-cli ]
+
+  # Completion marker. verify-pi.sh --stage firstboot checks for this to tell
+  # "still installing" apart from "install failed" - without it, a slow Pi and a
+  # broken Pi look identical.
+  - |
+    date -Is > /opt/rooted-ble/.first-boot-complete
+
+final_message: "Rooted first-boot complete after $UPTIME seconds."

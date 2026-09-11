@@ -24,8 +24,11 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Default values - connects via ethernet!
+# The host stays 192.168.10.1 on purpose: this script runs setup-nm.sh, which
+# restarts NetworkManager and drops wlan0, so it must run over the direct cable.
+# rooted.local would be reachable right up until that step killed the session.
 DEFAULT_HOSTNAME="192.168.10.1"
-DEFAULT_USERNAME="ubuntu"
+DEFAULT_USERNAME="rooted"
 REMOTE_DIR="/opt/rooted-ble"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 

@@ -162,6 +162,28 @@ export async function startMqttSubscriber(): Promise<void> {
   }
 }
 
+// A device that answers on its pong topic is online, definitionally. This
+// matters because machine status is otherwise only set by AWS IoT presence
+// events - and a device that connected BEFORE its machine row existed had its
+// "connected" event dropped by handleLifecycleEvent as unknown-device, leaving
+// the dashboard stuck on offline until something forced a reconnect. (This was
+// the long-standing "added the machine but it never shows online" mystery:
+// onboarding a Pi that was already running always hit it.)
+// createOrUpdateMachine solicits exactly such a pong right after creating the
+// row, so a live machine flips online within about a second of being added.
+async function markDeviceSeen(deviceId: string): Promise<void> {
+  try {
+    // updateMany: a pong from a device with no machine row yet must be a no-op,
+    // not an error.
+    await prisma.machines.updateMany({
+      where: { device_id: deviceId },
+      data: { status: 'online', last_seen_at: new Date() },
+    });
+  } catch (err) {
+    console.error('[MQTT] Failed to mark device seen', deviceId, err);
+  }
+}
+
 const pongHandler = (topic: string, payload: ArrayBuffer): void => {
   try {
     const message = JSON.parse(new TextDecoder().decode(payload));
@@ -176,6 +198,8 @@ const pongHandler = (topic: string, payload: ArrayBuffer): void => {
 
     // Extract deviceId from topic: rooted/machines/<deviceId>/pong
     const deviceId = topic.split('/')[2];
+
+    void markDeviceSeen(deviceId);
 
     handleConfigResponse({ requestId, action, config, success, error, deviceId });
   } catch (err) {

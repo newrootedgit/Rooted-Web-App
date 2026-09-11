@@ -1,0 +1,3 @@
+date,machine_name,device_id,image_id,notes
+2026-09-10,HARVESTER-koppert-1 (RETIRED),f6dd1637-2ff5-4f7b-913f-e81cd8cb0c6b,rooted-golden-20260910,DESTROYED 2026-09-11 when this board was captured as golden image v2; AWS IoT Thing should be deleted. Superseded by eb69ddfd on the same hardware.
+2026-09-11,HARVESTER-koppert-1,eb69ddfd-cf80-44db-a9d0-da7a921adef6,rooted-golden-20260911,first machine built from golden image v2; verified 30/30 incl. BLE watchdog recovery

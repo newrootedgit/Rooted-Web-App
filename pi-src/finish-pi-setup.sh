@@ -19,7 +19,7 @@ set -e
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
 
 DEFAULT_HOSTNAME="192.168.10.1"
-DEFAULT_USERNAME="ubuntu"
+DEFAULT_USERNAME="rooted"
 REMOTE_DIR="/opt/rooted-ble"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 

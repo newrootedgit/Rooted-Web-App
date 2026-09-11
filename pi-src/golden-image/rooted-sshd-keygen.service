@@ -1,0 +1,30 @@
+[Unit]
+# Regenerate SSH host keys when they are absent.
+#
+# WHY THIS EXISTS. A golden image must NOT contain SSH host keys - every machine
+# flashed from it would share one identity, so any of them could impersonate any
+# other and a stolen image would let you MITM the whole fleet. So
+# build-golden-image.sh deletes them.
+#
+# The assumption was that cloud-init's `ssh` module would regenerate them on
+# first boot. It does not do so reliably: on a de-personalized Pi (cloud-init
+# clean + host keys removed) the machine came back up with sshd listening but no
+# host keys, so every connection was closed at key exchange:
+#     kex_exchange_identification: read: Connection reset by peer
+# The Pi was reachable by ping and otherwise healthy, but unreachable by SSH -
+# which on a headless machine in the field means unreachable, full stop.
+#
+# ssh-keygen -A only creates keys that are missing, so this is idempotent and
+# costs nothing on subsequent boots. Ordered before both ssh.service and
+# ssh.socket because Ubuntu 24.04 uses socket activation for sshd.
+Description=Generate SSH host keys if missing (Rooted golden image)
+Before=ssh.service ssh.socket
+ConditionPathExistsGlob=!/etc/ssh/ssh_host_ed25519_key
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/ssh-keygen -A
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
