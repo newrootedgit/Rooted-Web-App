@@ -1,2 +1,2 @@
 date,machine_name,device_id,image_id,notes
-2026-09-10,HARVESTER-golden-test,f6dd1637-2ff5-4f7b-913f-e81cd8cb0c6b,rooted-golden-20260910,pipeline validation build; image predates /etc/rooted-image-release
+2026-09-10,HARVESTER-koppert-1,f6dd1637-2ff5-4f7b-913f-e81cd8cb0c6b,rooted-golden-20260910,built as HARVESTER-golden-test (pipeline validation); renamed to Koppert unit 2026-09-11
