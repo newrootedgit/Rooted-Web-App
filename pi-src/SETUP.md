@@ -152,6 +152,32 @@ cold boot, and these machines get power-cycled in the field constantly.
 
 reboots, waits for the Pi to answer, then runs `verify-pi.sh` automatically.
 
+## The clock trap (why a field machine may never connect)
+
+A Pi has no RTC, so its clock is wrong at every boot and must self-correct.
+`rooted-iot` and `rooted-vector` are `After=time-sync.target`, and AWS IoT mTLS
+validates certificate time windows - so an unsynced clock means the services
+never start AND could not authenticate if they did.
+
+The trap: `systemd-timesyncd` gates on **systemd-networkd's** online state, but
+`setup-nm.sh` hands wlan0 to NetworkManager, leaving networkd managing only
+eth0 - the direct-cable service port, normally UNPLUGGED. netplan's
+`optional: true` does NOT emit `RequiredForOnline=no`, so networkd requires an
+absent cable, reports `ONLINE_STATE=offline`, and timesyncd never even attempts
+a sync: no log lines, no server selected, service looks healthy.
+
+Found on a Pi 5 whose clock was 8 days stale with 23 systemd jobs queued behind
+`systemd-time-wait-sync`, while NetworkManager reported `connected:full`.
+
+`setup-ethernet.sh` now writes a networkd drop-in setting
+`RequiredForOnline=no`, and verify-pi.sh fails on both an unsynced clock and
+the underlying misconfiguration. To check a machine by hand:
+
+```bash
+timedatectl show -p NTPSynchronized --value          # must be yes
+networkctl status eth0 | grep 'Required For Online'  # must be no
+```
+
 ## Known issues, not yet fixed
 
 - **BLE advertising dies after a client disconnects** (FIXED in provisioner.py,

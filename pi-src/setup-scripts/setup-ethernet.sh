@@ -60,6 +60,25 @@ network:
         - ${ETH_IP}/${ETH_NETMASK}
 EOF
 
+# netplan's `optional: true` does NOT emit RequiredForOnline=no into the
+# generated .network file, so networkd keeps requiring eth0 for online status.
+# eth0 is the direct-cable SERVICE port and is normally UNPLUGGED in the field,
+# which pins networkd's ONLINE_STATE at "offline" forever. systemd-timesyncd
+# gates on that state, so it never even attempts a sync - it logs nothing, picks
+# no server, and looks healthy. With no RTC the clock then stays wrong,
+# time-sync.target never completes, and rooted-iot / rooted-vector (both
+# After=time-sync.target) NEVER START.
+# Found on a Pi 5 whose clock was 8 days stale with 23 systemd jobs queued
+# behind systemd-time-wait-sync, while NetworkManager reported "connected:full".
+# Note this only bites once wlan0 is handed to NetworkManager (setup-nm.sh),
+# because networkd then manages no other link that could be online.
+mkdir -p /etc/systemd/network/10-netplan-eth0.network.d
+cat > /etc/systemd/network/10-netplan-eth0.network.d/10-rooted-not-required.conf <<'EOF'
+[Link]
+RequiredForOnline=no
+EOF
+echo "✓ eth0 marked not-required-for-online (keeps timesyncd working with no cable)"
+
 chmod 600 "${NETPLAN_FILE}"
 
 echo "✓ Netplan configuration created"

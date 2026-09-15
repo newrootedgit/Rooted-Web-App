@@ -119,8 +119,15 @@ elif command -v cloud-init &>/dev/null; then
     CI_STATUS=$(cloud-init status 2>/dev/null | head -1)
     if echo "$CI_STATUS" | grep -q running; then
         warn "cloud-init is STILL RUNNING - first boot has not finished" "wait, then re-run; watch with: sudo cloud-init status --wait"
-    else
+    elif [ "$STAGE" = "firstboot" ]; then
+        # In firstboot mode we are explicitly verifying that the cloud-init
+        # stamp applied, so a missing marker is a real failure.
         fail "cloud-init finished but left no completion marker" "the stamp may not have applied, or a runcmd failed: sudo cloud-init status --long; sudo journalctl -u cloud-final -n 50"
+    else
+        # Full verify: a machine built the classic way (Imager advanced options
+        # + deploy-to-pi-one/-two) never has this marker, and that is fine.
+        # Only the write-boot-config.sh stamp writes it.
+        warn "no cloud-init stamp marker" "normal for a machine built via Imager + deploy scripts rather than write-boot-config.sh"
     fi
 else
     warn "no cloud-init on this Pi" "set up by hand rather than via write-boot-config.sh"
@@ -402,6 +409,31 @@ if command -v btmgmt &>/dev/null; then
     fi
 else
     warn "btmgmt not installed" "cannot verify BLE advertising state"
+fi
+
+# --- Clock is synced, and can stay synced -------------------------------------
+# A Pi has no RTC, so a wrong clock is normal at boot and MUST self-correct.
+# rooted-iot and rooted-vector are After=time-sync.target, and AWS IoT mTLS
+# validates certificate time windows - so an unsynced clock means the machine
+# never connects AND never starts the services, silently. The specific trap:
+# networkd requires eth0 for "online" unless told otherwise, eth0 is the
+# service port and is unplugged in the field, so timesyncd sees "offline" and
+# never even tries. Seen on a Pi 5 whose clock was 8 days stale.
+if [ "$(timedatectl show -p NTPSynchronized --value 2>/dev/null)" = "yes" ]; then
+    pass "clock is NTP-synced"
+else
+    fail "clock is NOT NTP-synced (currently $(date -Iseconds 2>/dev/null))" "rooted-iot/-vector are After=time-sync.target so they will not start, and AWS IoT mTLS will reject the cert time window. Check: networkctl status eth0 | grep 'Required For Online' - it must be 'no'"
+fi
+
+# The specific misconfiguration that causes the above, checked directly so a
+# machine cannot pass while carrying the latent fault.
+if command -v networkctl &>/dev/null; then
+    ETH_REQ=$(networkctl status eth0 --no-pager 2>/dev/null | grep -i "Required For Online" | awk -F: '{print $2}' | xargs)
+    if [ "$ETH_REQ" = "no" ]; then
+        pass "eth0 not required-for-online (timesyncd works with no cable)"
+    elif [ -n "$ETH_REQ" ]; then
+        fail "eth0 is Required-For-Online=${ETH_REQ}" "with no cable this pins networkd offline and timesyncd never syncs. fix: sudo bash /opt/rooted-ble/setup-scripts/setup-ethernet.sh"
+    fi
 fi
 
 # --- Captive portal hotspot is JOINABLE ---------------------------------------
