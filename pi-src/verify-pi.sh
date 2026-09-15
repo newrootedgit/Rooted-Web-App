@@ -531,6 +531,95 @@ else
     warn "no /home/rooted/telemetry_log.jsonl yet" "created by rooted-ingest.service on the first UDP packet from the ClearCore"
 fi
 
+# =============================================================================
+# Seeder machine code (te-cli)
+# =============================================================================
+# Everything above proves the Pi is provisioned. None of it proves the Pi can
+# actually drive a seeder. A machine can pass all 30 checks, show up online in
+# the webapp, and still do nothing when it is bolted to a frame, because the
+# te-cli side is a separate install that nothing else here touches.
+#
+# This section was added after a backup Pi was found with both seeder units
+# enabled but with no journal entries at all - they had been enabled after the
+# last boot and had therefore never executed once. "enabled" is not "works".
+TE_DIR=/home/rooted/te-cli
+if [ -d "$TE_DIR" ]; then
+    echo "SECTION|Seeder machine code"
+
+    # The units run the venv interpreter by absolute path, so a missing venv is
+    # a start failure at boot rather than an import error you can see.
+    if [ -x "$TE_DIR/venv/bin/python" ]; then
+        if "$TE_DIR/venv/bin/python" -c "import te" 2>/dev/null; then
+            pass "te-cli venv imports the te package"
+        else
+            fail "te-cli venv cannot import 'te'" "reinstall: cd $TE_DIR && ./venv/bin/pip install -e ."
+        fi
+    else
+        fail "no te-cli venv at $TE_DIR/venv" "the seeder units run this interpreter by absolute path and will fail at boot"
+    fi
+
+    for script in autoadjust_seeder_poll.py autoadjust_seeder_tcp_server.py; do
+        if [ -f "$TE_DIR/$script" ]; then
+            pass "$script present"
+        else
+            fail "$script missing from $TE_DIR" "the seeder cannot run without it"
+        fi
+    done
+
+    # The integrity unit restores these from /opt/rooted/pristine on drift. If
+    # its manifest disagrees with what is on disk, that restore is the thing
+    # that will overwrite a hand-edit at the next boot - worth knowing now.
+    if [ -f /opt/rooted/pristine/manifest.sha256 ]; then
+        if (cd /opt/rooted/pristine && sha256sum --status -c manifest.sha256 2>/dev/null); then
+            pass "pristine seeder copy matches its manifest"
+        else
+            fail "pristine seeder copy does not match its manifest" "the integrity service restores from a corrupt reference; re-run deploy-seeder.sh"
+        fi
+    else
+        warn "no /opt/rooted/pristine manifest" "the integrity self-heal has no reference copy to restore from"
+    fi
+
+    for unit in autoadjust_seeder_poll autoadjust_seeder_tcp_server; do
+        ENABLED=$(systemctl is-enabled "$unit" 2>/dev/null || echo unknown)
+        ACTIVE=$(systemctl is-active "$unit" 2>/dev/null || echo unknown)
+        if [ "$ENABLED" != "enabled" ]; then
+            fail "$unit is $ENABLED" "it will not come up on the next boot: sudo systemctl enable $unit"
+        elif [ "$ACTIVE" = "active" ]; then
+            pass "$unit (active, enabled)"
+        else
+            # Distinguish "never ran" from "ran and died" - they need different fixes.
+            if [ -z "$(journalctl -u "$unit" -b --no-pager -n 1 2>/dev/null | grep -v 'No entries')" ]; then
+                fail "$unit enabled but has never run this boot" "nothing started it; reboot and re-check rather than trusting 'enabled'"
+            else
+                fail "$unit is enabled but $ACTIVE" "journalctl -u $unit -b"
+            fi
+        fi
+    done
+
+    # The ClearCore dials a fixed address. Bound to the wrong interface, the
+    # units look healthy and the machine still never receives a command.
+    if ss -tln 2>/dev/null | grep -q '192\.168\.10\.1:8888'; then
+        pass "ClearCore bridge listening on 192.168.10.1:8888"
+    else
+        fail "nothing listening on 192.168.10.1:8888" "the ClearCore dials this address; check eth0's static IP and autoadjust_seeder_tcp_server"
+    fi
+
+    # The settings file is this machine's tuned configuration and it is the only
+    # copy - the webapp reads presets FROM the device and never stores them, so
+    # there is nothing to restore from if a replacement Pi ships with defaults.
+    SETTINGS="$TE_DIR/TE_Variable_Values.json"
+    if [ -f "$SETTINGS" ]; then
+        VARIETIES=$(grep -cE '^\s*"[0-9]+"\s*:\s*\{' "$SETTINGS" 2>/dev/null || echo 0)
+        if [ "${VARIETIES:-0}" -gt 0 ]; then
+            pass "settings file holds ${VARIETIES} saved variety preset(s)"
+        else
+            warn "settings file has no saved variety presets" "defaults only - on a replacement Pi, copy TE_Variable_Values.json and PIN_Values.json from the machine it replaces, or every preset must be re-entered on the encoder"
+        fi
+    else
+        warn "no $SETTINGS yet" "created by autoadjust_seeder_poll on first run"
+    fi
+fi
+
 echo "TOTALS|${PASS_COUNT}|${FAIL_COUNT}|${WARN_COUNT}"
 REMOTE_CHECKS
 
