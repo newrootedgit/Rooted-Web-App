@@ -520,15 +520,42 @@ fi
 
 # The Vector source tails this file; if nothing ever writes it, telemetry is
 # silently empty even with every service green.
-if [ -f /home/rooted/telemetry_log.jsonl ]; then
-    LINES=$(wc -l < /home/rooted/telemetry_log.jsonl 2>/dev/null || echo 0)
-    if [ "${LINES:-0}" -gt 0 ]; then
-        pass "telemetry log has ${LINES} record(s)"
+TLOG=/home/rooted/telemetry_log.jsonl
+if [ -f "$TLOG" ]; then
+    LINES=$(wc -l < "$TLOG" 2>/dev/null || echo 0)
+
+    # Counting records is not enough, and this check used to do only that. A
+    # machine was found with a healthy-looking record count whose telemetry was
+    # being discarded in full: the file was owned root:root from an earlier
+    # run as root, while rooted-ingest.service runs as User=rooted. Every
+    # packet arrived, every write failed with EACCES, and the stale records
+    # from the root-era run made the count look fine. Ownership is the check.
+    INGEST_USER=$(systemctl show -p User --value rooted-ingest 2>/dev/null)
+    INGEST_USER=${INGEST_USER:-rooted}
+    if sudo -n -u "$INGEST_USER" test -w "$TLOG" 2>/dev/null; then
+        pass "telemetry log is writable by ${INGEST_USER} (${LINES} record(s))"
     else
-        warn "telemetry log exists but is empty" "expected until the ClearCore starts sending UDP"
+        fail "telemetry log is NOT writable by ${INGEST_USER} - telemetry is being dropped" \
+             "owner is $(stat -c '%U:%G' "$TLOG" 2>/dev/null) but rooted-ingest runs as ${INGEST_USER}; fix: sudo chown ${INGEST_USER}: ${TLOG}"
+    fi
+
+    # A file that is writable but has not been appended to in a long while,
+    # while the ingest service claims to be running, means the ClearCore has
+    # gone quiet - a different failure with the same symptom in the webapp.
+    if systemctl is-active --quiet rooted-ingest 2>/dev/null; then
+        AGE=$(( $(date +%s) - $(stat -c %Y "$TLOG" 2>/dev/null || echo 0) ))
+        if [ "$AGE" -lt 300 ]; then
+            pass "telemetry written within the last ${AGE}s"
+        else
+            warn "telemetry log last written ${AGE}s ago" "expected on a bench Pi with no ClearCore attached; on an assembled machine it means the ClearCore has stopped sending UDP to 192.168.10.1:9999"
+        fi
+    fi
+
+    if [ "${LINES:-0}" -eq 0 ]; then
+        warn "telemetry log is empty" "expected until the ClearCore starts sending UDP"
     fi
 else
-    warn "no /home/rooted/telemetry_log.jsonl yet" "created by rooted-ingest.service on the first UDP packet from the ClearCore"
+    warn "no ${TLOG} yet" "created by rooted-ingest.service on the first UDP packet from the ClearCore"
 fi
 
 # =============================================================================
