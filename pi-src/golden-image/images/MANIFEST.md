@@ -9,6 +9,10 @@ Verify a copy before trusting it:  shasum -a 256 -c <(grep <name> MANIFEST.md)
 ## rooted-golden-20260911  (CURRENT - use this one)
 
 - sha256: 3d518c0910edea217c7bfff0edfcfb68e68c75f0500b75e0a4b71009f8c8a1d3
+- offsite backup: Google Drive, Urban Farms / Quality Control / Golden Images.
+  Verified 2026-09-15 by streaming the full file back and re-hashing it -
+  byte-identical. Re-verify the same way after any future upload; a matching
+  filename and size do not prove the bytes survived.
 - size: 2.2G compressed (spans the full 31GB eMMC; free space zeroed)
 - built: 2026-09-11 from the HARVESTER-koppert-1 reference build, repo commit
   09bd94d. Captured after a clean pre-capture audit: every tracked Pi-side file
@@ -35,9 +39,13 @@ Verify a copy before trusting it:  shasum -a 256 -c <(grep <name> MANIFEST.md)
   plain always-listening service with a watchdog timer, and host-key
   regeneration on first boot.
 
-## rooted-golden-20260910  (superseded).img.gz
+## rooted-golden-20260910  (SUPERSEDED - binary deleted 2026-09-15)
 
 - sha256: 1ce7ba7ca2ac05debe0a62b6a255974e08c0c7101b8e4d47ad28062cc767a260
+- **Binary deliberately deleted**, not lost. v2 supersedes it and fixes two
+  customer-facing faults this image carries: BLE advertising dying permanently
+  after a disconnect, and an unjoinable captive-portal hotspot. Keeping it
+  risked someone flashing it by mistake. Details kept for provenance only.
 - size: 2.2G compressed (spans the full 31GB eMMC; free space zeroed)
 - built: 2026-09-10, from the HARVESTER_Koppert_1 reference build
   (Ubuntu 24.04, CM5), de-personalized by build-golden-image.sh and
