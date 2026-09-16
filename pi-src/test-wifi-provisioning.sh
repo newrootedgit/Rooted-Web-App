@@ -194,8 +194,12 @@ scp "${SSH_OPTS[@]}" "$REMOTE" "${PI_USER}@${PI_HOST}:/tmp/rooted-wifi-test.py" 
 # `ModuleNotFoundError: No module named 'bluezero'` and the test would look
 # broken when the code is fine.
 VENV_PY=/opt/rooted-ble/.venv/bin/python3
+# -u is not optional. Python block-buffers stdout when it is not a terminal, and
+# over SSH it is not, so without this the run prints NOTHING for its whole
+# multi-minute duration and then dumps everything at once. A test that looks
+# hung is a test people kill before it finishes.
 printf '%s\n' "$PSK" | ssh "${SSH_OPTS[@]}" "${PI_USER}@${PI_HOST}" \
-    "TEST_SSID='${SSID}' TEST_RUNS='${RUNS}' sudo -E ${VENV_PY} /tmp/rooted-wifi-test.py; rc=\$?; rm -f /tmp/rooted-wifi-test.py; exit \$rc"
+    "TEST_SSID='${SSID}' TEST_RUNS='${RUNS}' sudo -E ${VENV_PY} -u /tmp/rooted-wifi-test.py; rc=\$?; rm -f /tmp/rooted-wifi-test.py; exit \$rc"
 RC=$?
 
 echo ""
