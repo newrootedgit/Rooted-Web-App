@@ -242,6 +242,23 @@ ok "boot-partition network-config wiped"
 # behind - not ours to remove, and deleting them removes the rollback path if a
 # kernel update ever leaves a machine unbootable.
 sudox "bash -c 'rm -f /boot/firmware/user-data.rooted-orig /boot/firmware/network-config.rooted-orig /boot/firmware/meta-data.rooted-orig /boot/firmware/cmdline.txt.rooted-orig /boot/firmware/cmdline.txt.rooted-bak /boot/firmware/user-data.full /boot/firmware/user-data.pre-sshfix /boot/firmware/rooted-diag.txt'" >/dev/null 2>&1
+# AppleDouble junk. The boot partition is FAT32, so every time it is mounted on
+# a Mac - which is how the config gets written in the first place - macOS leaves
+# a ._<name> sidecar next to each file it touches. They hold extended attributes
+# rather than file contents, so nothing leaks, but they ship to every machine
+# and ._user-data.full matches the stray pattern below, which would report a
+# leftover config that is not actually there.
+#
+# A blanket ._* is safe here in a way a blanket *.bak is not: AppleDouble files
+# are always macOS artifacts and never something Ubuntu put on the partition.
+sudox "bash -c 'rm -f /boot/firmware/._*'" >/dev/null 2>&1
+APPLEDOUBLE=$(sshx "ls -a /boot/firmware/ 2>/dev/null | grep -c '^\._'" 2>/dev/null | tr -d '\r')
+if [ "${APPLEDOUBLE:-0}" = "0" ]; then
+    ok "macOS AppleDouble sidecars removed from the boot partition"
+else
+    warn "${APPLEDOUBLE} ._* sidecar(s) still on the boot partition"
+fi
+
 STRAY=$(sshx "ls /boot/firmware/ 2>/dev/null | grep -cE '(rooted-orig|user-data\.full|pre-sshfix|rooted-diag)'" 2>/dev/null | tr -d '\r')
 if [ "${STRAY:-0}" = "0" ]; then
     ok "stray cloud-init config copies removed"
