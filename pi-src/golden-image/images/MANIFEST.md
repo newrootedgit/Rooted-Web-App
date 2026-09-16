@@ -6,7 +6,60 @@ The image files are gitignored (\*.img.gz). This manifest is committed so the
 provenance and checksums are versioned even though the bytes are not.
 Verify a copy before trusting it:  shasum -a 256 -c <(grep <name> MANIFEST.md)
 
-## rooted-golden-20260911  (DO NOT SHIP - contains the office WiFi credential)
+## rooted-golden-20260916  (BLOCKED on the office WiFi password being rotated)
+
+- sha256: d76bd425298b1747e8217dd5c82596c2126ea966e3d3279ff4d5cd0e767130bf
+- size: 2,133,879,775 bytes compressed; decompresses to exactly 31,268,536,320
+  bytes, which is the eMMC's byte size - verified, so the image is complete and
+  not truncated.
+- built: 2026-09-16 from the HARVESTER-koppert-1 reference build, repo d96f049.
+  Clean pre-capture audit, both watchdog units enabled, BLE watchdog present.
+- **First image carrying the te-cli toolchain** (Grayhill te-cli pinned at
+  0074c49bc150, venv, hid bindings, 99-gh-te.rules udev rules), so seeders no
+  longer need ~10 minutes of manual install. Also carries the eth0
+  RequiredForOnline fix that v2 predates.
+
+### Why it is blocked
+
+The live filesystem is clean: `/etc/netplan` holds no credential, only the
+setup hotspot profile survives, and a machine flashed from this will expose
+nothing through its files. The capture verified all of that and refused to
+proceed until it passed.
+
+The RAW image is a different story. Scanning it returns:
+
+```
+241  urbanfarms                          (v2 returned 272)
+  8  50-cloud-init.yaml.bak-<epoch>      (the deleted backups, by name)
+ 12  password: "<value present>"
+  2  key-management: "psk"
+```
+
+Deleting a file unlinks it; it does not erase its blocks. The zero-fill
+(`dd if=/dev/zero of=/ZEROFILL`) reclaims *free space*, but cannot touch the
+ext4 **journal**, which is a fixed allocated region and is exactly where
+recently-deleted directory entries and small-file data live. Four hits per
+deleted filename is the signature of journal residue.
+
+So verifying at the filesystem layer - which is what the capture does - proves
+what a running machine exposes and says nothing about what is carvable from the
+raw bytes. The raw bytes are what ships in an image file and onto every eMMC
+flashed from it.
+
+**Unblocking it:** rotate the office WiFi password. That makes all 241 traces
+worthless in v2 and v3 alike, and this image becomes shippable with no
+recapture. Until then, bench use only.
+
+**Preventing it:** the root cause is that the reference machine was ever joined
+to the office WiFi. Provision the next reference build over ethernet only, so
+no office credential touches it and there is nothing for the journal to retain.
+A capture-time scrub cannot reliably fix this after the fact - the journal is
+not free space, so no amount of zero-filling a mounted root filesystem reaches
+it.
+
+---
+
+## rooted-golden-20260911  (SUPERSEDED - contains the office WiFi credential)
 
 > **Withdrawn 2026-09-16.** This image carries the office WiFi network. Scanning
 > the released `.img.gz` returns 272 hits for the office SSID, and both
