@@ -579,7 +579,12 @@ IS_SEEDER=false
 case "$(echo "${DEVICE_NAME:-}" | tr '[:lower:]' '[:upper:]')" in
     SEEDER*) IS_SEEDER=true ;;
 esac
-if [ "$IS_SEEDER" = "true" ] || [ -d "$TE_DIR" ]; then
+# The second clause tests for a NON-EMPTY directory, not merely a present one.
+# bake-common.sh mkdir -p's /home/rooted/te-cli, so every machine from the
+# golden image carries an empty one. Testing -d alone put seven failures on a
+# healthy harvester - a verifier that cries wolf on a good machine teaches
+# people to skim past it, which costs more than the check is worth.
+if [ "$IS_SEEDER" = "true" ] || [ -n "$(ls -A "$TE_DIR" 2>/dev/null)" ]; then
     echo "SECTION|Seeder machine code"
 
     # The units run the venv interpreter by absolute path, so a missing venv is
