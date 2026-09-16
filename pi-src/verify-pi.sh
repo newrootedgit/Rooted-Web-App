@@ -570,19 +570,52 @@ fi
 # enabled but with no journal entries at all - they had been enabled after the
 # last boot and had therefore never executed once. "enabled" is not "works".
 TE_DIR=/home/rooted/te-cli
-if [ -d "$TE_DIR" ]; then
+# Keyed off the machine NAME, not off the directory existing. Keying off the
+# directory meant a seeder with no te-cli at all skipped this whole section in
+# silence and still printed "All checks passed" - the same silent-pass shape as
+# the telemetry check that counted records on a log nothing could write to.
+# A machine called SEEDER_* must have the toolchain; anything else may not.
+IS_SEEDER=false
+case "$(echo "${DEVICE_NAME:-}" | tr '[:lower:]' '[:upper:]')" in
+    SEEDER*) IS_SEEDER=true ;;
+esac
+if [ "$IS_SEEDER" = "true" ] || [ -d "$TE_DIR" ]; then
     echo "SECTION|Seeder machine code"
 
     # The units run the venv interpreter by absolute path, so a missing venv is
     # a start failure at boot rather than an import error you can see.
     if [ -x "$TE_DIR/venv/bin/python" ]; then
+        # Both imports, not just te: hid is what actually talks to the encoder,
+        # and it comes from a separate pip install that can be missed on its own.
         if "$TE_DIR/venv/bin/python" -c "import te" 2>/dev/null; then
             pass "te-cli venv imports the te package"
         else
-            fail "te-cli venv cannot import 'te'" "reinstall: cd $TE_DIR && ./venv/bin/pip install -e ."
+            fail "te-cli venv cannot import 'te'" "reinstall with golden-image/install-te-cli.sh"
+        fi
+        if "$TE_DIR/venv/bin/python" -c "import hid" 2>/dev/null; then
+            pass "te-cli venv imports hid (encoder transport)"
+        else
+            fail "te-cli venv cannot import 'hid'" "the encoder cannot be opened; reinstall with golden-image/install-te-cli.sh"
         fi
     else
-        fail "no te-cli venv at $TE_DIR/venv" "the seeder units run this interpreter by absolute path and will fail at boot"
+        fail "no te-cli venv at $TE_DIR/venv" "the seeder units run this interpreter by absolute path and will fail at boot; install with golden-image/install-te-cli.sh"
+    fi
+
+    # Without these rules the rooted user cannot open the encoder's hidraw node,
+    # so poll fails against hardware that is physically fine - and the setup
+    # guide lists them last, where they read as optional cleanup.
+    if ls /etc/udev/rules.d/ 2>/dev/null | grep -qiE 'grayhill|te-cli|hidraw'; then
+        pass "te-cli udev rules installed"
+    else
+        fail "no te-cli udev rules in /etc/udev/rules.d" "the encoder will be permission-blocked for the service user"
+    fi
+
+    # Which toolchain this machine carries. Unpinned clones used to split the
+    # fleet along build-date lines with nothing on the machine recording it.
+    if [ -f /etc/rooted-te-cli-release ]; then
+        pass "te-cli provenance: $(grep -m1 '^TE_CLI_REF=' /etc/rooted-te-cli-release | cut -d= -f2 | cut -c1-12)"
+    else
+        warn "no /etc/rooted-te-cli-release" "te-cli was installed by hand rather than by install-te-cli.sh; its version is unrecorded"
     fi
 
     for script in autoadjust_seeder_poll.py autoadjust_seeder_tcp_server.py; do

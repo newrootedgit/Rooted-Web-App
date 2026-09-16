@@ -39,6 +39,34 @@ already has the NetworkManager handover baked in, so nothing can drop your
 session. WiFi is provisioned on site by the customer over BLE or the captive
 portal, which is how the product works anyway.
 
+#### Building the image itself (rarely — only when the reference changes)
+
+Order matters; `build-golden-image.sh` refuses to capture if a step is missing.
+
+```
+on the reference Pi, once:
+  golden-image/install-te-cli.sh --host <pi>    te-cli + venv + udev, pinned
+  golden-image/harden-updates.sh --host <pi>    apt holds, sshd watchdog
+then:
+  golden-image/build-golden-image.sh            audits, strips, captures
+```
+
+`install-te-cli.sh` pins the Grayhill commit rather than tracking `main`, and
+records it in `/etc/rooted-te-cli-release`. An unpinned clone splits the fleet
+along build-date lines with nothing on the machine saying so.
+
+The capture **keeps** the te-cli toolchain and **strips** everything a deployed
+machine wrote into that directory — tuned presets, the operator PIN, and the
+customer's seeder scripts, plus `/opt/rooted/pristine` so the integrity service
+cannot restore the previous customer's scripts on first boot. Per-machine
+seeder code goes back on with `deploy-seeder.sh` from the machines-code repo.
+
+Presets are per-site and exist in exactly one place: the machine. The webapp
+reads them from the device and never stores them, so **before replacing a Pi,
+copy `TE_Variable_Values.json` and `PIN_Values.json` off the machine it
+replaces** — a fresh Pi starts with defaults and every preset has to be
+re-entered on the encoder.
+
 ## Directory map
 
 | Path | What it is |
@@ -48,7 +76,7 @@ portal, which is how the product works anyway.
 | `finish-pi-setup.sh` | Recovery for a `deploy-to-pi-two.sh` that died mid-run. Duplicates its step 7 — superseded by path C. |
 | `verify-pi.sh` | **Shared by all paths.** 25 checks incl. a real mTLS handshake to AWS IoT. Exit 0 only if everything passes. |
 | `provisioning/` | Path B. The cloud-init stamp. |
-| `golden-image/` | Path C. `bake-common.sh` (once), `build-golden-image.sh` (de-personalize + capture), `personalize-pi.sh` (per machine). |
+| `golden-image/` | Path C. `bake-common.sh` (once), `install-te-cli.sh` (once, on the reference Pi), `harden-updates.sh` (once), `build-golden-image.sh` (de-personalize + capture), `personalize-pi.sh` (per machine). |
 | `setup-scripts/` | Run on the Pi: `setup-nm.sh`, `setup-ethernet.sh`, `provision-iot-device.sh`. |
 | `wifi-setup/`, `captive-portal/` | Captive portal + hotspot. |
 | `aws/` | Runs on the Pi: `telemetry_ingest.py`, `command_handler.py`. |

@@ -156,6 +156,29 @@ else
     die "provisioner.py has no BLE advertising watchdog - a dropped advert would need a manual restart"
 fi
 
+# te-cli is the toolchain every seeder needs and nothing else installs. Before
+# install-te-cli.sh existed it was ~10 minutes of manual apt/clone/venv/pip/udev
+# per machine, documented only in one customer's folder - so an image captured
+# without it silently pushed that work onto whoever assembled the machine.
+#
+# Checking the imports rather than the directory: a half-finished install leaves
+# the tree and the venv in place while `import te` still fails, and the poll
+# service runs the venv interpreter by absolute path, so that failure surfaces
+# at boot on an assembled machine rather than here.
+if sshx "/home/rooted/te-cli/venv/bin/python -c 'import te, hid'" >/dev/null 2>&1; then
+    TE_REF=$(sshx "git -C /home/rooted/te-cli rev-parse --short HEAD 2>/dev/null" 2>/dev/null | tr -d '\r')
+    ok "te-cli venv imports te and hid (${TE_REF:-unknown})"
+else
+    die "te-cli is missing or broken on the Pi - run golden-image/install-te-cli.sh first"
+fi
+# The rules are what let the rooted user open the encoder's hidraw node. Without
+# them the poll service fails against hardware that is physically fine.
+if sshx "ls /etc/udev/rules.d/ | grep -qiE 'grayhill|te-cli|hidraw'" >/dev/null 2>&1; then
+    ok "te-cli udev rules installed"
+else
+    die "no te-cli udev rules in /etc/udev/rules.d - the encoder will be permission-blocked"
+fi
+
 # -----------------------------------------------------------------------------
 stage "Stopping services"
 # -----------------------------------------------------------------------------
@@ -332,8 +355,40 @@ stage "Runtime data and logs"
 # -----------------------------------------------------------------------------
 sudox "rm -rf /var/lib/vector/*"
 sudox "rm -f /home/rooted/telemetry_log.jsonl"
-sudox "rm -f /home/rooted/te-cli/TE_Variable_Values.json.lock"
 ok "Vector buffers and telemetry log cleared"
+
+# te-cli itself STAYS - the toolchain is customer-neutral and is the whole point
+# of baking it in. What must not travel is anything a deployed machine wrote
+# into that directory: tuned presets, the operator PIN, and the customer's own
+# seeder scripts. Baking refarm Dubai's variety table into the image would ship
+# it to Koppert and to every machine after that, and because the poll service
+# reads presets from this file rather than being told them, nobody downstream
+# would see a reason to doubt the values.
+#
+# deploy-seeder.sh puts the right scripts back per machine; the presets are
+# per-site by definition and have no defensible value here.
+sudox "rm -f /home/rooted/te-cli/TE_Variable_Values.json \
+             /home/rooted/te-cli/TE_Variable_Values.json.bak \
+             /home/rooted/te-cli/TE_Variable_Values.json.lock \
+             /home/rooted/te-cli/TE_Variable_Values.seed.json \
+             /home/rooted/te-cli/PIN_Values.json \
+             /home/rooted/te-cli/PIN_Values.json.bak \
+             /home/rooted/te-cli/PIN_Values.json.lock"
+sudox "rm -f /home/rooted/te-cli/autoadjust_seeder_*.py /home/rooted/te-cli/tabletop_seeder_*.py"
+# The integrity service restores seeder scripts from here, so a stale pristine
+# copy would re-create the previous customer's scripts on first boot - undoing
+# the removal above at exactly the moment nobody is watching.
+sudox "rm -rf /opt/rooted/pristine"
+ok "te-cli toolchain kept; customer presets, PIN and seeder scripts stripped"
+
+# Prove the strip rather than trusting the rm, and prove te-cli survived it.
+LEFTOVER=$(sshx "ls /home/rooted/te-cli/*.json /home/rooted/te-cli/*seeder*.py 2>/dev/null | wc -l" 2>/dev/null | tr -d '\r ')
+if [ "${LEFTOVER:-0}" -ne 0 ]; then
+    die "${LEFTOVER} customer file(s) still in /home/rooted/te-cli - refusing to capture"
+fi
+sshx "/home/rooted/te-cli/venv/bin/python -c 'import te, hid'" >/dev/null 2>&1 \
+    || die "te-cli stopped importing after the strip - refusing to capture"
+ok "verified: no customer data left in te-cli, toolchain still imports"
 sudox "journalctl --rotate" >/dev/null 2>&1
 sudox "journalctl --vacuum-time=1s" >/dev/null 2>&1
 sudox "bash -c 'rm -rf /var/log/*.gz /var/log/*.1 /var/tmp/* /tmp/*'" >/dev/null 2>&1
