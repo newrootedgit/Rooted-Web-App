@@ -256,6 +256,38 @@ fi
 # -----------------------------------------------------------------------------
 stage "Device configuration"
 # -----------------------------------------------------------------------------
+# Refresh the BLE provisioner from the repo before anything else.
+#
+# The image is a BASE, not the final word on Pi-side code. Without this, a fix
+# to provisioner.py only reaches machines built after the next full image
+# rebuild - so a two-line fix would mean recapturing and re-verifying a 2GB
+# artifact, and every machine flashed from the older image carries the bug
+# silently.
+#
+# That is not hypothetical. Golden image v3 was captured with a provisioner
+# that could never complete BLE WiFi setup: the captive-portal hotspot holds
+# wlan0 in AP mode, so `nmcli device wifi connect` only ever saw the machine's
+# own hotspot and returned "No network with SSID 'X' found" regardless of the
+# credentials. Every machine from that image would have failed a customer's
+# first interaction with it. Syncing here makes the image's age stop being a
+# correctness risk.
+#
+# Only the file, not a restart: rooted-ble is restarted in the Services stage
+# below, once the identity it reads actually exists.
+if [ -f "${PI_SRC}/provisioner.py" ]; then
+    scpx "${PI_SRC}/provisioner.py" "${PI_USER}@${PI_HOST}:/tmp/provisioner.py" >/dev/null \
+        && sudox "install -o root -g root -m 644 /tmp/provisioner.py ${REMOTE_DIR}/provisioner.py" \
+        && sshx "rm -f /tmp/provisioner.py" >/dev/null 2>&1
+    PV=$(sshx "grep -c HOTSPOT_CONNECTION ${REMOTE_DIR}/provisioner.py 2>/dev/null" 2>/dev/null | tr -d '\r')
+    if [ "${PV:-0}" -gt 0 ]; then
+        ok "provisioner.py synced from the repo (hotspot-aware WiFi join present)"
+    else
+        warn "provisioner.py synced but has no HOTSPOT_CONNECTION" "this build predates the AP-blocks-scan fix; BLE WiFi setup will fail for the customer"
+    fi
+else
+    warn "no ${PI_SRC}/provisioner.py to sync" "the machine keeps whatever the image shipped"
+fi
+
 CFG="/tmp/rooted-device-config-$$.json"
 if [ -n "$IOT_ENDPOINT" ]; then
     printf '{\n    "device_name": "%s",\n    "device_id": "%s",\n    "aws_iot_endpoint": "%s",\n    "aws_region": "us-west-2"\n}\n' \

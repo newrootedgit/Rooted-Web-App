@@ -14,6 +14,11 @@ import dbus
 SERVICE_UUID = "322486ee-3b18-476d-86ae-2481eafaea9a"
 SSID_UUID    = "322486ee-3b18-476d-86ae-2481eafaea9b"
 PASS_UUID    = "322486ee-3b18-476d-86ae-2481eafaea9c"
+
+# The captive-portal access point, created by wifi-setup/setup-captive-portal.sh.
+# Must match the con-name there: connect_to_wifi() takes this down to free the
+# radio for scanning, and puts it back if the join fails.
+HOTSPOT_CONNECTION = "Rooted-Robotics-Setup"
 STATUS_UUID  = "322486ee-3b18-476d-86ae-2481eafaea9d"
 
 ONBOARD_UUID     = "322486ee-3b18-476d-86ae-2481eafaea9e"
@@ -260,7 +265,72 @@ class MachineBLE:
         thread = threading.Thread(target=self.connect_to_wifi)
         thread.start()
 
+    def _hotspot_active(self):
+        """Is wlan0 currently serving the setup hotspot?"""
+        try:
+            out = subprocess.run(
+                ["nmcli", "-t", "-f", "NAME,DEVICE", "connection", "show", "--active"],
+                capture_output=True, text=True, timeout=15,
+            ).stdout
+            return any(
+                line.startswith(f"{HOTSPOT_CONNECTION}:") for line in out.splitlines()
+            )
+        except Exception as exc:
+            print(f"could not determine hotspot state, assuming it is up: {exc}")
+            return True
+
+    def _set_hotspot(self, up):
+        verb = "up" if up else "down"
+        try:
+            subprocess.run(
+                ["sudo", "nmcli", "connection", verb, HOTSPOT_CONNECTION],
+                capture_output=True, text=True, timeout=45,
+            )
+            print(f"setup hotspot brought {verb}")
+        except Exception as exc:
+            print(f"failed to bring hotspot {verb}: {exc}")
+
+    def _ssid_visible(self, attempts=3):
+        """Rescan and report whether the target SSID is in range.
+
+        One rescan is not enough: the radio has just left AP mode and the first
+        scan often comes back before the driver has results.
+        """
+        for i in range(attempts):
+            try:
+                subprocess.run(["sudo", "nmcli", "device", "wifi", "rescan"],
+                               capture_output=True, text=True, timeout=45)
+            except Exception:
+                pass
+            time.sleep(3)
+            try:
+                out = subprocess.run(["nmcli", "-t", "-f", "SSID", "device", "wifi", "list"],
+                                     capture_output=True, text=True, timeout=30).stdout
+                if any(line == self.ssid for line in out.splitlines()):
+                    return True
+                print(f"scan {i + 1}/{attempts}: {self.ssid!r} not visible yet")
+            except Exception as exc:
+                print(f"scan {i + 1}/{attempts} failed: {exc}")
+        return False
+
     def connect_to_wifi(self):
+        # THE HOTSPOT OWNS THE RADIO.
+        #
+        # wlan0 cannot serve an access point and scan for networks at the same
+        # time. On a machine straight from the golden image there is no saved
+        # WiFi, so the captive portal brings up Rooted-Robotics-Setup in AP
+        # mode - and then `nmcli device wifi connect` fails with
+        #     Error: No network with SSID 'X' found.
+        # no matter how correct the credentials are, because the only network
+        # the radio can see is the one it is broadcasting itself.
+        #
+        # This is the customer's very first interaction with the machine, and
+        # it failed on HARVESTER-koppert-1 exactly this way: BLE handed over
+        # the SSID and password perfectly, and the join could never succeed.
+        #
+        # So drop the AP, scan, join - and put the AP back if the join fails,
+        # because a customer who mistypes a password must not be left with
+        # neither WiFi nor the captive-portal fallback.
         if not self.is_onboarded:
             print("Device not onboarded. Cannot connect to Wi-Fi.")
             return
@@ -271,18 +341,39 @@ class MachineBLE:
 
         self._safe_notify([0x01])  # Connecting
 
-        cmd = ["sudo", "nmcli", "device", "wifi", "connect", self.ssid, "password", self.password]
+        restore_hotspot = self._hotspot_active()
+        if restore_hotspot:
+            print("setup hotspot is holding wlan0 - taking it down to scan")
+            self._set_hotspot(False)
+            time.sleep(2)
+
         try:
+            if not self._ssid_visible():
+                print(f"Failed: {self.ssid!r} is not in range after rescanning")
+                self._safe_notify([0x03])
+                return
+
+            cmd = ["sudo", "nmcli", "device", "wifi", "connect", self.ssid,
+                   "password", self.password]
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
             if result.returncode == 0:
                 print("Success!")
+                # Joined: leave the AP down. Bringing it back would take the
+                # radio away from the network we just joined.
+                restore_hotspot = False
                 self._safe_notify([0x02])  # Success
             else:
-                print(f"Failed: {result.stderr}")
+                print(f"Failed: {result.stderr.strip()}")
                 self._safe_notify([0x03])  # Failure
         except Exception as e:
             print(f"Error: {e}")
             self._safe_notify([0x03])
+        finally:
+            # finally, not the failure branch: an exception mid-join must not
+            # cost the customer their fallback either.
+            if restore_hotspot:
+                print("join did not succeed - restoring the setup hotspot")
+                self._set_hotspot(True)
 
 
 def start_ble():
