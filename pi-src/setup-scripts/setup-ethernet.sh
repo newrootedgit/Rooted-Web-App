@@ -72,12 +72,11 @@ EOF
 # behind systemd-time-wait-sync, while NetworkManager reported "connected:full".
 # Note this only bites once wlan0 is handed to NetworkManager (setup-nm.sh),
 # because networkd then manages no other link that could be online.
-mkdir -p /etc/systemd/network/10-netplan-eth0.network.d
-cat > /etc/systemd/network/10-netplan-eth0.network.d/10-rooted-not-required.conf <<'EOF'
-[Link]
-RequiredForOnline=no
-EOF
-echo "✓ eth0 marked not-required-for-online (keeps timesyncd working with no cable)"
+# The drop-in that implements this is written AFTER `netplan apply` further
+# down, not here. netplan apply clears /etc/systemd/network of anything it did
+# not generate, so a drop-in written at this point is deleted a few lines later
+# and the fix silently does not apply. Observed on HARVESTER-koppert-1: the
+# script reported success, and eth0 was still Required-For-Online=yes.
 
 chmod 600 "${NETPLAN_FILE}"
 
@@ -95,9 +94,48 @@ echo ""
 
 echo "Step 3: Applying netplan configuration..."
 
-netplan apply
+# netplan apply STOPS NetworkManager and flushes the interfaces it manages. On
+# a Pi whose wlan0 has already been handed to NetworkManager by setup-nm.sh that
+# takes WiFi down, and it does not always come back: observed on
+# HARVESTER-koppert-1, where apply also aborted part-way with
+#   CalledProcessError: ['ip', 'addr', 'flush', 'wlan0']
+# leaving NetworkManager inactive, wlan0 DOWN and Tailscale unreachable. If you
+# are connected over WiFi rather than the cable, that is your session.
+#
+# So record whether NetworkManager was running and put it back afterwards.
+NM_WAS_ACTIVE=no
+systemctl is-active --quiet NetworkManager 2>/dev/null && NM_WAS_ACTIVE=yes
+
+netplan apply || echo "⚠ netplan apply reported an error - continuing to restore state"
+
+if [ "$NM_WAS_ACTIVE" = "yes" ] && ! systemctl is-active --quiet NetworkManager 2>/dev/null; then
+    echo "netplan apply stopped NetworkManager - restarting it"
+    systemctl start NetworkManager || true
+    sleep 5
+fi
 
 echo "✓ Netplan configuration applied"
+echo ""
+
+# Written HERE, after apply, because apply clears /etc/systemd/network of files
+# it did not generate. netplan's `optional: true` does not emit this itself, and
+# without it an unplugged eth0 pins networkd offline forever - see the long note
+# above the netplan file for what that does to the clock.
+mkdir -p /etc/systemd/network/10-netplan-eth0.network.d
+cat > /etc/systemd/network/10-netplan-eth0.network.d/10-rooted-not-required.conf <<'EOF'
+[Link]
+RequiredForOnline=no
+EOF
+networkctl reload 2>/dev/null || true
+sleep 2
+# Confirm rather than assume - this is precisely the step that silently did not
+# take before, and it reports success either way if nobody looks.
+if networkctl status "${ETH_INTERFACE}" --no-pager 2>/dev/null | grep -qi "Required For Online: no"; then
+    echo "✓ eth0 marked not-required-for-online (keeps timesyncd working with no cable)"
+else
+    echo "⚠ eth0 is still Required-For-Online - the drop-in did not take; check"
+    echo "  /etc/systemd/network/10-netplan-eth0.network.d/ and re-run networkctl reload"
+fi
 echo ""
 
 echo "Waiting for interface to come up..."

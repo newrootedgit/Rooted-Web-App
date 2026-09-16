@@ -173,10 +173,15 @@ else
 fi
 # The rules are what let the rooted user open the encoder's hidraw node. Without
 # them the poll service fails against hardware that is physically fine.
-if sshx "ls /etc/udev/rules.d/ | grep -qiE 'grayhill|te-cli|hidraw'" >/dev/null 2>&1; then
-    ok "te-cli udev rules installed"
+#
+# Compared against what te-cli actually ships rather than matched by pattern:
+# the rule is called 99-gh-te.rules - "gh" for Grayhill - so a pattern looking
+# for 'grayhill|te-cli|hidraw' reports it absent on a machine where it is
+# correctly installed, which would block a capture for no reason.
+if sshx "for r in /home/rooted/te-cli/udev/*; do [ -f \"/etc/udev/rules.d/\$(basename \$r)\" ] || exit 1; done" >/dev/null 2>&1; then
+    ok "te-cli udev rules installed ($(sshx "ls /home/rooted/te-cli/udev 2>/dev/null | tr '\n' ' '" 2>/dev/null | tr -d '\r'))"
 else
-    die "no te-cli udev rules in /etc/udev/rules.d - the encoder will be permission-blocked"
+    die "te-cli udev rules not installed in /etc/udev/rules.d - the encoder will be permission-blocked; run golden-image/install-te-cli.sh"
 fi
 
 # -----------------------------------------------------------------------------

@@ -570,28 +570,39 @@ fi
 # enabled but with no journal entries at all - they had been enabled after the
 # last boot and had therefore never executed once. "enabled" is not "works".
 TE_DIR=/home/rooted/te-cli
-# Keyed off the machine NAME, not off the directory existing. Keying off the
-# directory meant a seeder with no te-cli at all skipped this whole section in
-# silence and still printed "All checks passed" - the same silent-pass shape as
-# the telemetry check that counted records on a log nothing could write to.
-# A machine called SEEDER_* must have the toolchain; anything else may not.
+
+# Two separate concerns, deliberately split, because they have different
+# audiences:
+#
+#   te-cli toolchain     - now baked into the golden image, so EVERY machine
+#                          carries it and every machine should prove it works.
+#   Seeder machine code  - the customer scripts, units and ClearCore bridge.
+#                          Only a seeder has these; a harvester that ran them
+#                          would collect failures for things it neither has
+#                          nor needs.
+#
+# Getting this gate wrong has already cost twice. Keying on `-d "$TE_DIR"` put
+# seven failures on a healthy harvester, because bake-common.sh mkdir -p's that
+# directory into every image. Then keying the seeder half on the toolchain
+# being present did it again the moment te-cli was baked in. A verifier that
+# cries wolf on a good machine teaches people to skim it, and the next real
+# failure goes past them.
 IS_SEEDER=false
 case "$(echo "${DEVICE_NAME:-}" | tr '[:lower:]' '[:upper:]')" in
     SEEDER*) IS_SEEDER=true ;;
 esac
-# The second clause tests for a NON-EMPTY directory, not merely a present one.
-# bake-common.sh mkdir -p's /home/rooted/te-cli, so every machine from the
-# golden image carries an empty one. Testing -d alone put seven failures on a
-# healthy harvester - a verifier that cries wolf on a good machine teaches
-# people to skim past it, which costs more than the check is worth.
-if [ "$IS_SEEDER" = "true" ] || [ -n "$(ls -A "$TE_DIR" 2>/dev/null)" ]; then
-    echo "SECTION|Seeder machine code"
+TE_INSTALLED=false
+[ -x "$TE_DIR/venv/bin/python" ] && TE_INSTALLED=true
 
-    # The units run the venv interpreter by absolute path, so a missing venv is
-    # a start failure at boot rather than an import error you can see.
-    if [ -x "$TE_DIR/venv/bin/python" ]; then
-        # Both imports, not just te: hid is what actually talks to the encoder,
-        # and it comes from a separate pip install that can be missed on its own.
+# =============================================================================
+# te-cli toolchain
+# =============================================================================
+if [ "$IS_SEEDER" = "true" ] || [ "$TE_INSTALLED" = "true" ]; then
+    echo "SECTION|te-cli toolchain"
+
+    if [ "$TE_INSTALLED" = "true" ]; then
+        # Both imports, not just te: hid is what actually opens the encoder and
+        # it comes from a separate pip install that can be missed on its own.
         if "$TE_DIR/venv/bin/python" -c "import te" 2>/dev/null; then
             pass "te-cli venv imports the te package"
         else
@@ -606,13 +617,23 @@ if [ "$IS_SEEDER" = "true" ] || [ -n "$(ls -A "$TE_DIR" 2>/dev/null)" ]; then
         fail "no te-cli venv at $TE_DIR/venv" "the seeder units run this interpreter by absolute path and will fail at boot; install with golden-image/install-te-cli.sh"
     fi
 
-    # Without these rules the rooted user cannot open the encoder's hidraw node,
-    # so poll fails against hardware that is physically fine - and the setup
-    # guide lists them last, where they read as optional cleanup.
-    if ls /etc/udev/rules.d/ 2>/dev/null | grep -qiE 'grayhill|te-cli|hidraw'; then
-        pass "te-cli udev rules installed"
-    else
-        fail "no te-cli udev rules in /etc/udev/rules.d" "the encoder will be permission-blocked for the service user"
+    # Compare against what te-cli actually ships rather than guessing at names.
+    # The rule is called 99-gh-te.rules - "gh" for Grayhill - which a pattern
+    # matching 'grayhill|te-cli|hidraw' misses entirely, reporting the rules
+    # absent on a machine where they were correctly installed.
+    if [ -d "$TE_DIR/udev" ]; then
+        MISSING_RULES=""
+        for r in "$TE_DIR"/udev/*; do
+            [ -e "$r" ] || continue
+            [ -f "/etc/udev/rules.d/$(basename "$r")" ] || MISSING_RULES="${MISSING_RULES} $(basename "$r")"
+        done
+        if [ -z "$MISSING_RULES" ]; then
+            pass "te-cli udev rules installed ($(ls "$TE_DIR"/udev | tr '\n' ' '))"
+        else
+            fail "te-cli udev rules missing:${MISSING_RULES}" "without them the service user cannot open the encoder's hidraw node; fix: sudo cp ${TE_DIR}/udev/* /etc/udev/rules.d/ && sudo udevadm control --reload-rules"
+        fi
+    elif [ "$TE_INSTALLED" = "true" ]; then
+        warn "no ${TE_DIR}/udev to compare against" "cannot tell whether the encoder rules are installed"
     fi
 
     # Which toolchain this machine carries. Unpinned clones used to split the
@@ -622,12 +643,19 @@ if [ "$IS_SEEDER" = "true" ] || [ -n "$(ls -A "$TE_DIR" 2>/dev/null)" ]; then
     else
         warn "no /etc/rooted-te-cli-release" "te-cli was installed by hand rather than by install-te-cli.sh; its version is unrecorded"
     fi
+fi
+
+# =============================================================================
+# Seeder machine code - seeders only
+# =============================================================================
+if [ "$IS_SEEDER" = "true" ]; then
+    echo "SECTION|Seeder machine code"
 
     for script in autoadjust_seeder_poll.py autoadjust_seeder_tcp_server.py; do
         if [ -f "$TE_DIR/$script" ]; then
             pass "$script present"
         else
-            fail "$script missing from $TE_DIR" "the seeder cannot run without it"
+            fail "$script missing from $TE_DIR" "deploy it with deploy-seeder.sh from the machines-code repo"
         fi
     done
 
