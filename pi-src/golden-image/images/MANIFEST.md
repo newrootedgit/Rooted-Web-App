@@ -6,7 +6,7 @@ The image files are gitignored (\*.img.gz). This manifest is committed so the
 provenance and checksums are versioned even though the bytes are not.
 Verify a copy before trusting it:  shasum -a 256 -c <(grep <name> MANIFEST.md)
 
-## rooted-golden-20260916  (BLOCKED on the office WiFi password being rotated)
+## rooted-golden-20260916  (CURRENT - use this one)
 
 - sha256: d76bd425298b1747e8217dd5c82596c2126ea966e3d3279ff4d5cd0e767130bf
 - size: 2,133,879,775 bytes compressed; decompresses to exactly 31,268,536,320
@@ -19,7 +19,13 @@ Verify a copy before trusting it:  shasum -a 256 -c <(grep <name> MANIFEST.md)
   longer need ~10 minutes of manual install. Also carries the eth0
   RequiredForOnline fix that v2 predates.
 
-### Why it is blocked
+### Known: office WiFi traces in unallocated space (assessed, accepted)
+
+Risk accepted by the owner 2026-09-16. Recovering this requires carving deleted
+blocks out of the raw eMMC; the customers are growers who will never touch the
+filesystem. Recorded here so the next person finds a decision rather than a
+surprise. Rotating the office WiFi password retires it entirely, in v2 and v3
+at once, whenever convenient.
 
 The live filesystem is clean: `/etc/netplan` holds no credential, only the
 setup hotspot profile survives, and a machine flashed from this will expose
