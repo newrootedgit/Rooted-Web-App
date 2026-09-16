@@ -6,7 +6,23 @@ The image files are gitignored (\*.img.gz). This manifest is committed so the
 provenance and checksums are versioned even though the bytes are not.
 Verify a copy before trusting it:  shasum -a 256 -c <(grep <name> MANIFEST.md)
 
-## rooted-golden-20260911  (CURRENT - use this one)
+## rooted-golden-20260911  (DO NOT SHIP - contains the office WiFi credential)
+
+> **Withdrawn 2026-09-16.** This image carries the office WiFi network. Scanning
+> the released `.img.gz` returns 272 hits for the office SSID, and both
+> `/etc/netplan/50-cloud-init.yaml.bak-1788912236` and `...-1789074772` are
+> present in it. Those are backups `setup-nm.sh` / `setup-ethernet.sh` take of
+> the cloud-init netplan before rewriting it, so they hold the passphrase in
+> plaintext at mode 600. Nothing cleaned them up and the capture never looked
+> in `/etc/netplan` - it verified only `/boot/firmware`, and only for a 64-char
+> hex PSK, which a plaintext passphrase does not match.
+>
+> The same applies to the Google Drive copy. Fixed in `build-golden-image.sh`
+> (2d64f13): the capture now removes those backups and fails, rather than warns,
+> if any file under `/etc/netplan` still carries a password/psk/passphrase key.
+>
+> Usable for internal bench work. Do not flash it for a customer machine, and
+> rotate the office WiFi password. Superseded by v3 once captured.
 
 - sha256: 3d518c0910edea217c7bfff0edfcfb68e68c75f0500b75e0a4b71009f8c8a1d3
 - offsite backup: Google Drive, Urban Farms / Quality Control / Golden Images.
