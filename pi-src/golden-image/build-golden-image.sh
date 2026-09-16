@@ -225,6 +225,36 @@ sudox "bash -c \"nmcli -t -f NAME,TYPE connection show | grep ':802-11-wireless'
 REMAIN=$(sshx "nmcli -t -f NAME,TYPE connection show 2>/dev/null | grep ':802-11-wireless' | cut -d: -f1 | tr '\n' ' '" 2>/dev/null | tr -d '\r')
 ok "WiFi profiles removed (remaining: ${REMAIN:-none})"
 
+# On Ubuntu the NetworkManager profiles live in /etc/netplan as 90-NM-*.yaml,
+# NOT in /etc/NetworkManager/system-connections - so anything that checks only
+# the latter finds an empty directory and concludes the machine is clean.
+#
+# Worse, setup-nm.sh and setup-ethernet.sh both take timestamped backups of
+# 50-cloud-init.yaml before rewriting it, and the file they are copying is the
+# one cloud-init rendered from network-config - which contains the WiFi
+# passphrase. Those backups are never cleaned up by anything, sit at mode 600
+# where nobody looks, and predate the capture.
+#
+# HARVESTER-koppert-1 carried three copies of the office credential: the live
+# 90-NM profile plus two 50-cloud-init.yaml.bak-<epoch> files from Sep 8 and
+# Sep 10. Deleting the nmcli connection removes only the first.
+sudox "bash -c 'rm -f /etc/netplan/50-cloud-init.yaml.bak-* /etc/netplan/*.yaml.rooted-orig /etc/netplan/backup/50-cloud-init.yaml.bak-*'" >/dev/null 2>&1
+
+# Verify by content rather than by filename: any netplan file still carrying a
+# password/psk/passphrase key is a credential that would ship to every machine.
+# The setup hotspot's own profile is the one legitimate exception - its
+# passphrase is the documented fleet password and is meant to be there.
+# The whole loop runs under one sudo. Piping a sudo'd grep into an un-sudo'd
+# one silently inverts the result: every file fails the exclusion test with
+# "Permission denied" (netplan files are mode 600), so the hotspot profile is
+# reported as a leak and a genuinely clean machine can never pass.
+NETPLAN_CREDS=$(sshx "sudo sh -c 'for f in \$(grep -rliE \"^[[:space:]]*(password|psk|passphrase)[[:space:]]*:\" /etc/netplan/ 2>/dev/null); do grep -qi \"Rooted-Robotics-Setup\" \"\$f\" || echo \"\$f\"; done' | tr '\n' ' '" 2>/dev/null | tr -d '\r')
+if [ -z "${NETPLAN_CREDS// /}" ]; then
+    ok "no WiFi credentials left in /etc/netplan (hotspot profile excepted)"
+else
+    die "credentials still in /etc/netplan: ${NETPLAN_CREDS}- these would ship to every customer site. Remove them and re-run."
+fi
+
 # cloud-init leaves the WiFi PSK in plaintext on the boot partition. It is not
 # used again after first boot, but it would ship on every machine.
 sudox "bash -c 'if [ -f /boot/firmware/network-config ]; then printf \"version: 2\n\" > /boot/firmware/network-config; fi'" >/dev/null 2>&1
@@ -321,12 +351,30 @@ EOF'" || die "writing golden user-data"
 UD_OK=$(sshx "head -2 /boot/firmware/user-data | grep -c 'cloud-config'" 2>/dev/null | tr -d '\r')
 [ "${UD_OK:-0}" = "1" ] && ok "clean golden-image user-data written" || die "user-data verification failed"
 
-# Verify no plaintext PSK survives anywhere on the boot partition.
+# Verify no WiFi credential survives anywhere on the boot partition.
+#
+# Two patterns, because the hex one alone is not enough. Raspberry Pi Imager
+# writes the pre-computed 64-char hex PSK, but network-config.template accepts
+# a plaintext passphrase too and passes it through as-is - so an office
+# passphrase like a real word would sail straight past a [0-9a-f]{64} grep and
+# ship to every customer site. That is the single worst thing this script is
+# supposed to prevent, so it checks for the key as well as the value.
 PSK_HITS=$(sshx "sudo grep -rlE '[0-9a-f]{64}' /boot/firmware/*.yaml /boot/firmware/user-data* /boot/firmware/network-config* 2>/dev/null | wc -l" 2>/dev/null | tr -d '\r')
-if [ "${PSK_HITS:-0}" = "0" ]; then
-    ok "no plaintext WiFi PSK left on the boot partition"
+CRED_HITS=$(sshx "sudo grep -rliE '^[[:space:]]*(password|psk|passphrase)[[:space:]]*:' /boot/firmware/*.yaml /boot/firmware/user-data* /boot/firmware/network-config* 2>/dev/null | wc -l" 2>/dev/null | tr -d '\r')
+if [ "${PSK_HITS:-0}" = "0" ] && [ "${CRED_HITS:-0}" = "0" ]; then
+    ok "no WiFi credential (hex PSK or plaintext passphrase) left on the boot partition"
 else
-    warn "possible PSK still present in ${PSK_HITS} boot-partition file(s) - check before shipping"
+    warn "possible credential in ${PSK_HITS} hex / ${CRED_HITS} plaintext boot-partition file(s) - check before shipping"
+fi
+
+# The saved NetworkManager profiles are the other copy, and the one that
+# actually reconnects. Deleting the connections above should have removed them;
+# confirm rather than assume, since this is the office password.
+NM_LEFT=$(sshx "sudo ls /etc/NetworkManager/system-connections/ 2>/dev/null | grep -v '^Rooted-Robotics-Setup' | grep -c . " 2>/dev/null | tr -d '\r')
+if [ "${NM_LEFT:-0}" = "0" ]; then
+    ok "no saved WiFi profiles left besides the setup hotspot"
+else
+    warn "${NM_LEFT} saved WiFi profile(s) still in /etc/NetworkManager/system-connections - the office password would ship with the image"
 fi
 
 # -----------------------------------------------------------------------------
