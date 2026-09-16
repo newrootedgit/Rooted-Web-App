@@ -402,7 +402,16 @@ if command -v btmgmt &>/dev/null; then
 
     # The watchdog is what makes this self-healing in the field. Its absence is
     # not fatal, but the machine then needs a human to recover.
-    if printf '' | sudo journalctl -u rooted-ble.service --no-pager 2>/dev/null | grep -q "Advertising watchdog started"; then
+    # grep -c, not grep -q, and scoped to this boot. `journalctl | grep -q` under
+    # `set -o pipefail` reports FAILURE when it succeeds: grep exits at the first
+    # match, journalctl takes SIGPIPE writing the rest, and pipefail promotes that
+    # to the pipeline's status. So a machine whose watchdog started early in a
+    # long journal was told it had no watchdog - the check failed *because* it
+    # found the line. HARVESTER-koppert-1 reported exactly that while
+    # "Advertising watchdog started (checks every 30s)" sat in its log.
+    # grep -c consumes all input, so there is no early exit and no SIGPIPE.
+    WD_HITS=$(printf '' | sudo journalctl -u rooted-ble.service -b --no-pager 2>/dev/null | grep -c "Advertising watchdog started" || true)
+    if [ "${WD_HITS:-0}" -gt 0 ]; then
         pass "BLE advertising watchdog running"
     else
         warn "no BLE advertising watchdog" "this Pi runs an older provisioner.py; a dropped advert will need a manual restart"
@@ -507,7 +516,9 @@ if [ -n "$IOT_ENDPOINT" ] && [ -f "${REMOTE_DIR}/certs/certificate.pem.crt" ]; t
             -CAfile "${REMOTE_DIR}/certs/AmazonRootCA1.pem" \
             -cert "${REMOTE_DIR}/certs/certificate.pem.crt" \
             -key "${REMOTE_DIR}/certs/private.pem.key" 2>&1)
-        if echo "$TLS_OUT" | grep -q "Verify return code: 0"; then
+        # grep -c rather than -q: same pipefail/SIGPIPE trap as the watchdog
+        # check above. openssl's output is long enough for it to matter.
+        if [ "$(echo "$TLS_OUT" | grep -c "Verify return code: 0" || true)" -gt 0 ]; then
             pass "mutual-TLS handshake with AWS IoT succeeded"
         else
             REASON=$(echo "$TLS_OUT" | grep -m1 "Verify return code:" || echo "connection failed")
