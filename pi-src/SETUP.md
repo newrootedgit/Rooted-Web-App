@@ -208,6 +208,29 @@ networkctl status eth0 | grep 'Required For Online'  # must be no
 
 ## Known issues, not yet fixed
 
+- **The setup hotspot does not come back by itself when WiFi is lost** — it
+  needs a power cycle. Measured 2026-09-17 on a v4 machine: delete the WiFi
+  connection and `wlan0` goes to `disconnected` and **stays** there.
+  `connection.autoconnect` is `yes` on `Rooted-Robotics-Setup`, but
+  NetworkManager does not autoconnect an AP-mode profile, logs nothing about
+  it, and brings it up instantly when told explicitly. `connect_to_wifi()` also
+  deliberately leaves the AP down after a successful join, so this is the normal
+  resting state of every provisioned machine.
+
+  Why it is not urgent: **BLE keeps advertising throughout** (verified, 1
+  instance), so the primary re-provisioning path is unaffected — a customer
+  whose WiFi password changes can still fix it from the app. And a **power
+  cycle restores the hotspot** (verified: rebooted with the AP down and no
+  saved WiFi, and it came up `connected`). So there are two independent
+  recoveries and no machine can be stranded.
+
+  What it costs: the captive-portal fallback is unavailable on a running
+  machine that has lost WiFi, until it is rebooted. For support, "power cycle
+  it" restores the portal; BLE needs nothing. A real fix would be a timer that
+  raises the AP when `wlan0` has had no connection for a few minutes —
+  `wifi-setup/wifi-manager-nmcli.sh` was written for roughly this and is not
+  installed on any machine.
+
 - **BLE advertising dies after a client disconnects** (FIXED in provisioner.py,
   needs a golden image rebuild to ship). The mgmt advertising instance is torn
   down when a central disconnects - including a failed pairing attempt - and
