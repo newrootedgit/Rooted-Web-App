@@ -111,7 +111,15 @@ it.
 
 ---
 
-## rooted-golden-20260911  (SUPERSEDED - contains the office WiFi credential)
+## rooted-golden-20260911  (SUPERSEDED - local copy deleted, Drive copy kept)
+
+> **Local binary deleted 2026-09-17** to reclaim 2.18 GB; the Mac was at 93%.
+> Deliberate, not lost. The Google Drive copy was confirmed present at the same
+> byte size immediately before deleting, and it was verified byte-identical on
+> 2026-09-15 by streaming the whole file back and re-hashing. The checksum and
+> provenance below still identify it.
+>
+> Restore from: Google Drive, Urban Farms / Quality Control / Golden Images.
 
 > **Withdrawn 2026-09-16.** This image carries the office WiFi network. Scanning
 > the released `.img.gz` returns 272 hits for the office SSID, and both
