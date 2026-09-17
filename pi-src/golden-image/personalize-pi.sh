@@ -36,6 +36,21 @@
 #   --tailscale-key KEY  reusable, pre-authorized, tagged auth key
 #   --skip-iot           do not provision AWS IoT
 #   --hostname NAME      system hostname (default: lowercased machine name)
+#   --office-wifi        join the bench network from ~/.rooted-office-wifi, so
+#                        the clock can sync and services start rather than
+#                        queueing behind time-sync.target. REMOVE THE PROFILE
+#                        BEFORE SHIPPING - the script reminds you.
+#   --test-wifi          gate on onboarding actually working: runs the real
+#                        customer path (join, wrong password, absent SSID,
+#                        retry) via test-wifi-provisioning.sh and REFUSES to
+#                        write the deployment ledger if it fails. Implies
+#                        --office-wifi, since it needs a network to test
+#                        against. Adds ~1 minute. Use it for every machine you
+#                        intend to ship.
+#   --reboot             cold-boot test, then verify - proves it survives power
+#
+# Recommended for a machine you are going to ship:
+#   ./personalize-pi.sh --machine HARVESTER-koppert-1 --test-wifi
 # =============================================================================
 
 set -uo pipefail
@@ -47,7 +62,7 @@ REMOTE_DIR="/opt/rooted-ble"
 
 PI_HOST="192.168.10.1"; PI_USER="rooted"; MACHINE_NAME=""
 TAILSCALE_KEY=""; SKIP_IOT="false"; SYS_HOSTNAME=""
-OFFICE_WIFI="false"; DO_REBOOT="false"
+OFFICE_WIFI="false"; DO_REBOOT="false"; TEST_WIFI="false"
 OFFICE_WIFI_FILE="${HOME}/.rooted-office-wifi"
 
 while [[ $# -gt 0 ]]; do
@@ -59,8 +74,9 @@ while [[ $# -gt 0 ]]; do
         --hostname)      SYS_HOSTNAME="$2"; shift 2 ;;
         --skip-iot)      SKIP_IOT="true"; shift ;;
         --office-wifi)   OFFICE_WIFI="true"; shift ;;
+        --test-wifi)     TEST_WIFI="true"; OFFICE_WIFI="true"; shift ;;
         --reboot)        DO_REBOOT="true"; shift ;;
-        -h|--help)       sed -n '2,40p' "${BASH_SOURCE[0]}"; exit 0 ;;
+        -h|--help)       sed -n '2,54p' "${BASH_SOURCE[0]}"; exit 0 ;;
         *) echo -e "${RED}Unknown option: $1${NC}"; exit 1 ;;
     esac
 done
@@ -465,6 +481,54 @@ stage "Cold-boot test"
     else
         die "did not come back within 5 minutes - check it on HDMI"
     fi
+fi
+
+# -----------------------------------------------------------------------------
+stage "WiFi provisioning gate"
+# -----------------------------------------------------------------------------
+# Run BEFORE the ledger on purpose: a machine that cannot onboard a customer is
+# not commissioned, so it should not be recorded as deployed.
+#
+# WHY GATE ON THIS. Every structural check can pass on a machine whose first
+# customer interaction is guaranteed to fail. That is not hypothetical - v3
+# passed 36 checks with a provisioner whose WiFi join could never succeed,
+# because the captive-portal hotspot holds wlan0 in AP mode and the join only
+# ever saw the machine's own hotspot. verify-pi.sh could not see it: the file
+# was present, the service was enabled, the cert handshake worked. Only
+# behaviour catches behaviour.
+#
+# Delegates to pi-src/test-wifi-provisioning.sh rather than reimplementing it.
+# A gate that reimplements the thing it guards proves only that two copies
+# agree - and would drift from the real test the first time either changed.
+#
+# One happy-path run here, not five. Five was for establishing confidence in
+# the code; per machine the question is narrower: does THIS board join, and
+# does it restore the hotspot when the join fails? That keeps the gate near a
+# minute instead of five.
+if [ "$TEST_WIFI" = "true" ]; then
+    TEST_SCRIPT="${PI_SRC}/test-wifi-provisioning.sh"
+    if [ ! -x "$TEST_SCRIPT" ]; then
+        warn "no executable ${TEST_SCRIPT} - cannot gate on provisioning behaviour"
+    elif [ -z "${OW_SSID:-}" ] || [ -z "${OW_PSK:-}" ]; then
+        # OW_SSID/OW_PSK are set by the Office WiFi stage. --test-wifi implies
+        # --office-wifi, so this means that stage did not run or found no file.
+        warn "no test network available - ${OFFICE_WIFI_FILE} is missing SSID=/PSK="
+        warn "skipping the provisioning gate; this machine is UNVERIFIED for onboarding"
+    else
+        echo "  running the real customer path (join, wrong password, absent SSID, retry)..."
+        # PSK by environment, never as an argv - it would otherwise be visible
+        # in ps on this machine and in the Pi's sudo log.
+        if ROOTED_TEST_PSK="$OW_PSK" "$TEST_SCRIPT" \
+                --host "$PI_HOST" --user "$PI_USER" --ssid "$OW_SSID" --runs 1 2>&1 \
+                | sed 's/^/    /'; then
+            ok "provisioning gate PASSED - this machine can onboard a customer"
+        else
+            echo ""
+            die "provisioning GATE FAILED - do not ship this machine. Output above. Nothing was written to the deployment ledger."
+        fi
+    fi
+else
+    warn "provisioning gate skipped (pass --test-wifi to prove onboarding works)"
 fi
 
 # -----------------------------------------------------------------------------
