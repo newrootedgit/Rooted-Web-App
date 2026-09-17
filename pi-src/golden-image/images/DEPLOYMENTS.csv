@@ -2,3 +2,4 @@ date,machine_name,device_id,image_id,notes
 2026-09-10,HARVESTER-koppert-1 (RETIRED),f6dd1637-2ff5-4f7b-913f-e81cd8cb0c6b,rooted-golden-20260910,DESTROYED 2026-09-11 when this board was captured as golden image v2; AWS IoT Thing should be deleted. Superseded by eb69ddfd on the same hardware.
 2026-09-11,HARVESTER-koppert-1 (RETIRED),eb69ddfd-cf80-44db-a9d0-da7a921adef6,rooted-golden-20260911,DESTROYED 2026-09-16 when this board was re-captured as v3; IoT Thing and webapp row deleted. Superseded by b8104e8b on the same hardware.
 2026-09-16,HARVESTER-koppert-1 (RETIRED),b8104e8b-fe59-40a2-a8fe-0cf8252e8c77,rooted-golden-20260916,"Built from v3; proved the golden-image chain end to end (BLE onboard, WiFi join, online in webapp) and exposed the hotspot-blocks-scan bug. DESTROYED same day when this board was de-personalized for v4; IoT Thing and webapp row deleted."
+2026-09-17,HARVESTER-koppert-1,4f737de3-88df-40f0-8bdf-21a504ea515d,rooted-golden-20260916,
