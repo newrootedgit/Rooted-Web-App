@@ -414,7 +414,17 @@ stage "Image identity"
 # (cat /etc/rooted-image-release in the field), and personalize-pi.sh reads it
 # to append the machine to golden-image/images/DEPLOYMENTS.csv, so "which image is
 # that customer's machine running?" is answerable from git instead of memory.
-IMAGE_ID="rooted-golden-$(date +%Y%m%d)"
+# Minutes, not just the date. Two images captured on the same day used to get
+# the same IMAGE_ID, and that is not hypothetical - v3 and v4 were both built
+# on 2026-09-16 and both baked "rooted-golden-20260916" into
+# /etc/rooted-image-release. A machine reporting that ID could be either one,
+# so the field that exists to answer "which image is this machine from?"
+# answered it ambiguously, and you could not tell whether a unit carried the
+# hotspot-aware provisioner fix without checking REPO_SHA separately.
+#
+# A rebuild on the same day is exactly when you MOST need to tell two images
+# apart: it means something was wrong with the first one.
+IMAGE_ID="rooted-golden-$(date +%Y%m%d-%H%M)"
 GIT_SHA=$(git -C "${PI_SRC}" rev-parse --short HEAD 2>/dev/null || echo unknown)
 sudox "bash -c \"printf 'IMAGE_ID=%s\nBUILD_DATE=%s\nREPO_SHA=%s\n' '${IMAGE_ID}' '$(date -u +%Y-%m-%dT%H:%M:%SZ)' '${GIT_SHA}' > /etc/rooted-image-release\"" \
     || die "writing /etc/rooted-image-release"
@@ -628,7 +638,11 @@ cat <<'NEXTSTEPS'
    (/dev/rdiskN) - it is far faster than /dev/diskN:
 
      diskutil unmountDisk /dev/diskN
-     sudo dd if=/dev/rdiskN bs=4m | gzip -1 > rooted-golden-$(date +%Y%m%d).img.gz
+     sudo dd if=/dev/rdiskN bs=4m | gzip -1 > <IMAGE_ID>.img.gz
+
+   The exact command, with this image's id filled in, is printed below.
+   Name the file after the id baked into /etc/rooted-image-release - that is
+   what makes a machine's self-reported lineage match a file you can find.
 
    Ctrl-T shows progress. Free space was zeroed, so this compresses well.
 
@@ -662,3 +676,11 @@ cat <<'NEXTSTEPS'
    filesystem is small relative to the disk.
 
 NEXTSTEPS
+
+# Printed outside the quoted heredoc so IMAGE_ID actually expands. The file
+# name must match the id baked into /etc/rooted-image-release, or a machine's
+# self-reported lineage points at an image nobody can find.
+echo "  Capture this image as:"
+echo ""
+echo "    sudo dd if=/dev/rdiskN bs=4m | gzip -1 > ${IMAGE_ID}.img.gz"
+echo ""
