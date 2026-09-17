@@ -6,7 +6,7 @@ The image files are gitignored (\*.img.gz). This manifest is committed so the
 provenance and checksums are versioned even though the bytes are not.
 Verify a copy before trusting it:  shasum -a 256 -c <(grep <name> MANIFEST.md)
 
-## rooted-golden-20260916-v4  (CAPTURED - not yet validated, do not flash for a customer)
+## rooted-golden-20260916-v4  (CURRENT - use this one)
 
 - file: `rooted-golden-20260916-v4.img.gz`
 - sha256: 3f375dd4b648bf8c769e2b088d5249f79ecba8de1f636c1621cfe13e8fc4e880
@@ -23,9 +23,9 @@ mode, so the join only ever saw the machine's own hotspot and returned
 "No network with SSID 'X' found" regardless of the credentials. Every machine
 from v3 would have failed a customer's first interaction with it.
 
-`personalize-pi.sh` now syncs provisioner.py from the repo, so v3 machines do
-get the fix - but as a patch rather than from the image. v4 is meant to carry
-it natively.
+`personalize-pi.sh` also syncs provisioner.py from the repo, so v3 machines do
+get the fix - but as a patch rather than from the image. v4 carries it natively
+(confirmed below), so that sync is now a safety net rather than load-bearing.
 
 ### CAUTION: its IMAGE_ID collides with v3
 
@@ -42,17 +42,26 @@ Fixed for future builds in 021d5e6 - IMAGE_ID now carries minutes, so a
 same-day rebuild cannot collide again. That is exactly when it matters: you
 only rebuild the same day because something was wrong with the first attempt.
 
-### Still to prove
+### Validated 2026-09-17 by flashing it
 
-Verified as a FILE, not yet as an IMAGE. Nothing has been flashed from it. The
-outstanding test is booting a machine from v4 and confirming BLE WiFi setup
-works **without** personalize-pi.sh patching the provisioner - that is the
-whole point of the rebuild, and until it passes, v3 plus the sync is the
-known-good path.
+Restored onto a CM5 and booted BEFORE personalizing anything, so nothing could
+have patched the machine:
+
+```
+REPO_SHA=7ed9ab8            confirms v4, not the v3 that was on this board an hour earlier
+HOTSPOT_CONNECTION present  the WiFi-join fix is ON THE IMAGE, natively
+7 helper methods            _hotspot_active, _ssid_visible, _set_hotspot
+te + hid import OK          toolchain survived a second image round-trip
+device_config.json absent   correctly de-personalized
+3 SSH host keys             regenerated on first boot by rooted-sshd-keygen
+```
+
+Checking REPO_SHA mattered here rather than being ceremony: v3 and v4 share an
+IMAGE_ID, so "it booted" alone would not have proved which image was running.
 
 ---
 
-## rooted-golden-20260916  (CURRENT until v4 is validated)
+## rooted-golden-20260916  (SUPERSEDED by v4 - cannot complete BLE WiFi setup unaided)
 
 - sha256: d76bd425298b1747e8217dd5c82596c2126ea966e3d3279ff4d5cd0e767130bf
 - size: 2,133,879,775 bytes compressed; decompresses to exactly 31,268,536,320
