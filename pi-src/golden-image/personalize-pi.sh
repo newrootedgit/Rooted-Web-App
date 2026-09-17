@@ -389,8 +389,33 @@ fi
 
 if [ -n "$TAILSCALE_KEY" ]; then
     if sshx "command -v tailscale >/dev/null" 2>/dev/null; then
-        if sudox "tailscale up --authkey=${TAILSCALE_KEY} --hostname=${SYS_HOSTNAME} --accept-dns=false"; then
+        # timeout, because `tailscale up` NEVER gives up on its own. On a
+        # machine with no route to the internet it retries bootstrapDNS
+        # forever -
+        #   failed to resolve "controlplane.tailscale.com":
+        #   no DNS fallback candidates remain
+        # - and personalize-pi.sh hangs with it. Observed on the first v4
+        # machine: everything up to this point had completed in ~40s, then the
+        # run sat here for over ten minutes with no output.
+        #
+        # A golden-image machine legitimately has NO WiFi (that is the point -
+        # the customer provides it over BLE), so no-internet is the NORMAL
+        # state at this stage unless --office-wifi was passed. Hanging on the
+        # normal case is unacceptable for a step meant to take two minutes.
+        #
+        # 90s is generous for a reachable control plane and short enough that
+        # the failure is obvious. Tailscale is not required for the machine to
+        # work - it is remote-support access - so failing here is a warning and
+        # the run continues to the ledger.
+        if sudox "timeout 90 tailscale up --authkey=${TAILSCALE_KEY} --hostname=${SYS_HOSTNAME} --accept-dns=false"; then
             ok "joined the tailnet as ${SYS_HOSTNAME}"
+        elif ! sshx "ping -c1 -W2 8.8.8.8 >/dev/null 2>&1" 2>/dev/null; then
+            # Distinguish "no internet yet" from "your key is bad". They look
+            # identical in tailscale's output and need completely different fixes.
+            warn "tailscale up timed out - this machine has NO INTERNET yet."
+            warn "That is EXPECTED on a golden-image machine: WiFi arrives over BLE"
+            warn "from the customer. For bench work, pass --office-wifi."
+            warn "Re-run this script once it is online; it skips what is already done."
         else
             warn "tailscale up FAILED."
             if [ -n "$TS_KEY_AGE" ] && [ "$TS_KEY_AGE" -ge 85 ]; then
