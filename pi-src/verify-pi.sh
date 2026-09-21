@@ -599,16 +599,24 @@ TE_DIR=/home/rooted/te-cli
 # cries wolf on a good machine teaches people to skim it, and the next real
 # failure goes past them.
 IS_SEEDER=false
+MACHINE_KIND=""
 case "$(echo "${DEVICE_NAME:-}" | tr '[:lower:]' '[:upper:]')" in
-    SEEDER*) IS_SEEDER=true ;;
+    SEEDER*)    IS_SEEDER=true; MACHINE_KIND=seeder ;;
+    HARVESTER*) MACHINE_KIND=harvester ;;
 esac
+# Both kinds run autoadjust_<kind>_poll.py + autoadjust_<kind>_tcp_server.py
+# against a Touch Encoder and a ClearCore. Harvesters used to be skipped here
+# entirely, so a harvester with no machine code - or with services that never
+# started - passed every check. Naming everything from MACHINE_KIND keeps one
+# set of checks honest for both, instead of two copies that drift.
+PFX="autoadjust_${MACHINE_KIND}"
 TE_INSTALLED=false
 [ -x "$TE_DIR/venv/bin/python" ] && TE_INSTALLED=true
 
 # =============================================================================
 # te-cli toolchain
 # =============================================================================
-if [ "$IS_SEEDER" = "true" ] || [ "$TE_INSTALLED" = "true" ]; then
+if [ -n "$MACHINE_KIND" ] || [ "$TE_INSTALLED" = "true" ]; then
     echo "SECTION|te-cli toolchain"
 
     if [ "$TE_INSTALLED" = "true" ]; then
@@ -657,16 +665,16 @@ if [ "$IS_SEEDER" = "true" ] || [ "$TE_INSTALLED" = "true" ]; then
 fi
 
 # =============================================================================
-# Seeder machine code - seeders only
+# Machine code - seeders and harvesters
 # =============================================================================
-if [ "$IS_SEEDER" = "true" ]; then
-    echo "SECTION|Seeder machine code"
+if [ -n "$MACHINE_KIND" ]; then
+    echo "SECTION|${MACHINE_KIND^} machine code"
 
-    for script in autoadjust_seeder_poll.py autoadjust_seeder_tcp_server.py; do
+    for script in ${PFX}_poll.py ${PFX}_tcp_server.py; do
         if [ -f "$TE_DIR/$script" ]; then
             pass "$script present"
         else
-            fail "$script missing from $TE_DIR" "deploy it with deploy-seeder.sh from the machines-code repo"
+            fail "$script missing from $TE_DIR" "deploy it with deploy-${MACHINE_KIND}.sh from the machines-code repo"
         fi
     done
 
@@ -675,15 +683,15 @@ if [ "$IS_SEEDER" = "true" ]; then
     # that will overwrite a hand-edit at the next boot - worth knowing now.
     if [ -f /opt/rooted/pristine/manifest.sha256 ]; then
         if (cd /opt/rooted/pristine && sha256sum --status -c manifest.sha256 2>/dev/null); then
-            pass "pristine seeder copy matches its manifest"
+            pass "pristine ${MACHINE_KIND} copy matches its manifest"
         else
-            fail "pristine seeder copy does not match its manifest" "the integrity service restores from a corrupt reference; re-run deploy-seeder.sh"
+            fail "pristine ${MACHINE_KIND} copy does not match its manifest" "the integrity service restores from a corrupt reference; re-run deploy-${MACHINE_KIND}.sh"
         fi
     else
         warn "no /opt/rooted/pristine manifest" "the integrity self-heal has no reference copy to restore from"
     fi
 
-    for unit in autoadjust_seeder_poll autoadjust_seeder_tcp_server; do
+    for unit in ${PFX}_poll ${PFX}_tcp_server; do
         ENABLED=$(systemctl is-enabled "$unit" 2>/dev/null || echo unknown)
         ACTIVE=$(systemctl is-active "$unit" 2>/dev/null || echo unknown)
         if [ "$ENABLED" != "enabled" ]; then
@@ -705,7 +713,7 @@ if [ "$IS_SEEDER" = "true" ]; then
     if ss -tln 2>/dev/null | grep -q '192\.168\.10\.1:8888'; then
         pass "ClearCore bridge listening on 192.168.10.1:8888"
     else
-        fail "nothing listening on 192.168.10.1:8888" "the ClearCore dials this address; check eth0's static IP and autoadjust_seeder_tcp_server"
+        fail "nothing listening on 192.168.10.1:8888" "the ClearCore dials this address; check eth0's static IP and ${PFX}_tcp_server"
     fi
 
     # The settings file is this machine's tuned configuration and it is the only
@@ -720,7 +728,7 @@ if [ "$IS_SEEDER" = "true" ]; then
             warn "settings file has no saved variety presets" "defaults only - on a replacement Pi, copy TE_Variable_Values.json and PIN_Values.json from the machine it replaces, or every preset must be re-entered on the encoder"
         fi
     else
-        warn "no $SETTINGS yet" "created by autoadjust_seeder_poll on first run"
+        warn "no $SETTINGS yet" "created by ${PFX}_poll on first run"
     fi
 fi
 
